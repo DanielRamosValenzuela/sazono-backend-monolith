@@ -6,6 +6,10 @@
 2. [02 Backend Architecture](D:\Programacion\Sazono\sazono-backend-monolith\docs\02-backend-architecture.md)
 3. [03 Backend AI Context](D:\Programacion\Sazono\sazono-backend-monolith\docs\03-backend-ai-context.md)
 4. [04 Implementation Plan](D:\Programacion\Sazono\sazono-backend-monolith\docs\04-implementation-plan.md)
+5. [05 Auth and Restaurant Bootstrap](D:\Programacion\Sazono\sazono-backend-monolith\docs\05-auth-and-restaurant-bootstrap.md)
+6. [06 API Curl Examples](D:\Programacion\Sazono\sazono-backend-monolith\docs\06-api-curl-examples.md)
+7. [07 Staff Management](D:\Programacion\Sazono\sazono-backend-monolith\docs\07-staff-management.md)
+8. [08 Floor and Table Sessions](D:\Programacion\Sazono\sazono-backend-monolith\docs\08-floor-and-table-sessions.md)
 
 ## Objetivo
 

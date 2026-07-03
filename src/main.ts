@@ -9,7 +9,7 @@ import { AppModule } from './app.module';
 import { startTelemetry } from './common/observability/tracing';
 
 async function bootstrap() {
-  await startTelemetry();
+  startTelemetry();
 
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,

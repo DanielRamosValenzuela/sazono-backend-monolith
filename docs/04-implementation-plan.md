@@ -100,20 +100,20 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 
 ## 6. Tareas backend
 
-- [ ] Definir SQL inicial para `restaurants`, `branches`, `branch_settings`
-- [ ] Definir SQL para `platform_admins`
-- [ ] Definir SQL para `staff_users` y `staff_user_branch_roles`
-- [ ] Conectar `platform_admins` y `staff_users` a la identidad base compartida
-- [ ] Definir SQL para `tables` y `table_sessions`
+- [x] Definir SQL inicial para `restaurants`, `branches`, `branch_settings`
+- [x] Definir SQL para `platform_admins`
+- [x] Definir SQL para `staff_users` y `staff_user_branch_roles`
+- [x] Conectar `platform_admins` y `staff_users` a la identidad base compartida
+- [x] Definir SQL para `tables` y `table_sessions`
 - [ ] Definir SQL para `menus`, `menu_categories`, `menu_items`, `translations`
 - [ ] Definir SQL para assets multimedia de la carta
 - [ ] Definir SQL para `preparation_stations`
 - [ ] Definir SQL para `bills`, `bill_items`, `bill_splits`, `bill_split_participants`
 - [ ] Definir SQL para `orders`, `order_items`, `station_tickets`, `station_ticket_items`
 - [ ] Definir SQL para `payments` y `payment_attempts`
-- [ ] Crear modulo de auth interna
-- [ ] Implementar caso de uso para crear `Restaurant` y primer `Admin`
-- [ ] Crear modulo `staff` con roles por sucursal
+- [x] Crear modulo de auth interna
+- [x] Implementar caso de uso para crear `Restaurant` y primer `Admin`
+- [x] Crear modulo `staff` con roles por sucursal
 - [ ] Crear modulo `floor` con apertura y cierre de mesa
 - [ ] Crear modulo `menus` con constructor de carta y publicacion
 - [ ] Implementar ordenamiento de categorias y productos
@@ -123,13 +123,24 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [ ] Crear modulo `kitchen` con tickets por estacion
 - [ ] Crear modulo `billing` con cuenta unica por mesa
 - [ ] Crear modulo `payments` con prepago QR
-- [ ] Implementar validacion de una sola `TableSession` activa por mesa
+- [x] Implementar validacion de una sola `TableSession` activa por mesa
 - [ ] Implementar validacion de una sola `Bill` activa por sesion
 - [ ] Implementar regla QR no entra a produccion sin pago aprobado
 - [ ] Implementar cierre manual de mesa
 - [ ] Implementar resolucion de deuda o abandono por supervisor o caja
 
-## 7. Definition of Done backend MVP
+## 7. Estado actual
+
+- existe una migracion inicial Prisma en `prisma/migrations/20260703101000_init_foundation`
+- auth ya funciona con perfil resuelto sobre `platform_admins` y `staff_users`
+- el bootstrap SaaS crea restaurante y primer admin mediante Supabase Auth + Prisma
+- ya existe creacion de sucursal con asignacion automatica de rol `ADMIN` al creador
+- ya existe alta y listado de `staff_users` con roles activos por sucursal
+- ya existe `floor` inicial con mesas, apertura manual de `TableSession` y retoma de mesa
+- falta cerrar mesa y conectar `Bill` para completar el flujo operacional del salon
+- el siguiente bloque natural de trabajo pasa a ser `menus` y luego `billing`
+
+## 8. Definition of Done backend MVP
 
 El backend MVP esta listo cuando:
 

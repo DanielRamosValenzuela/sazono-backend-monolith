@@ -18,7 +18,7 @@ async function stopTelemetry() {
   telemetrySdk = undefined;
 }
 
-export async function startTelemetry() {
+export function startTelemetry() {
   if (process.env.OTEL_ENABLED !== 'true' || telemetrySdk) {
     return;
   }
@@ -34,8 +34,7 @@ export async function startTelemetry() {
   }
 
   telemetrySdk = new NodeSDK({
-    serviceName:
-      process.env.OTEL_SERVICE_NAME ?? 'sazono-backend-monolith',
+    serviceName: process.env.OTEL_SERVICE_NAME ?? 'sazono-backend-monolith',
     traceExporter: new OTLPTraceExporter({
       url: exporterUrl,
     }),
@@ -50,7 +49,7 @@ export async function startTelemetry() {
     ],
   });
 
-  await telemetrySdk.start();
+  telemetrySdk.start();
 
   process.once('SIGINT', () => {
     void stopTelemetry();

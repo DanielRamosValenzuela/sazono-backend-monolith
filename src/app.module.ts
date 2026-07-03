@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validateEnvironment } from './common/config/validate-environment';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { SupabaseModule } from './common/supabase/supabase.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { BranchesModule } from './modules/branches/branches.module';
@@ -56,13 +57,13 @@ import { StaffModule } from './modules/staff/staff.module';
       useFactory: (configService: ConfigService) => [
         {
           name: 'default',
-          ttl:
-            (configService.get<number>('THROTTLE_TTL_SECONDS') ?? 60) * 1000,
+          ttl: (configService.get<number>('THROTTLE_TTL_SECONDS') ?? 60) * 1000,
           limit: configService.get<number>('THROTTLE_LIMIT') ?? 100,
         },
       ],
     }),
     PrismaModule,
+    SupabaseModule,
     AuthModule,
     RestaurantsModule,
     BranchesModule,

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, type TransformFnParams } from 'class-transformer';
 import {
   IsEmail,
   IsEnum,
@@ -18,8 +18,8 @@ export class LoginDto {
   @ApiProperty({
     example: 'admin@sazono.cl',
   })
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  @Transform(({ value }: TransformFnParams) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : undefined,
   )
   @IsEmail()
   email!: string;
@@ -43,7 +43,7 @@ export class LoginDto {
   @ApiPropertyOptional({
     format: 'uuid',
     description:
-      'Selecciona el restaurante cuando la misma identidad tenga más de un perfil staff.',
+      'Selecciona el restaurante cuando la misma identidad tenga mas de un perfil staff.',
   })
   @IsOptional()
   @IsUUID()

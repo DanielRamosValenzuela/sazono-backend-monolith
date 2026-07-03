@@ -39,6 +39,7 @@ Si lo aplicaria en fronteras que probablemente cambien:
 - almacenamiento de media
 - autenticacion externa
 - notificaciones
+- observabilidad y trazas
 
 Ahi si conviene usar puertos y adapters.
 
@@ -95,12 +96,15 @@ module-name/
 - persistencia
 - integracion con Supabase/Postgres
 - gateways externos
+- provider de auth actual
+- exportacion de trazas
 
 ### `presentation`
 
 - controllers
 - dtos
 - mappers request/response
+- versionado de contratos HTTP
 
 ## Recomendacion concreta para NestJS
 
@@ -115,7 +119,19 @@ Pero no todo necesita interface desde el principio. Mi consejo:
 - interfaces en pagos y servicios externos
 - menos ceremonia en repos internos mientras el dominio aun se estabiliza
 
-## Reglas de diseño
+## Decision aplicada en este repo
+
+Hoy la arquitectura activa del backend sigue ese criterio pragmatica:
+
+- Prisma maneja persistencia del dominio en Postgres
+- Supabase Auth queda aislado detras de un puerto `AUTH_PROVIDER`
+- los modulos de negocio no dependen directamente del SDK de Supabase
+- OpenTelemetry queda como capa de observabilidad desacoplada del dominio
+- los endpoints HTTP salen versionados por URI como `/api/v1/...`
+
+Esto deja abierta una futura migracion de auth sin reescribir casos de uso ni contratos del dominio.
+
+## Reglas de diseno
 
 1. No poner toda la logica en services gigantes de Nest.
 2. No dejar las reglas de negocio solo en controllers o DTOs.

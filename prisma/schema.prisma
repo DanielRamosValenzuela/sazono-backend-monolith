@@ -11,11 +11,6 @@ enum RestaurantStatus {
   INACTIVE
 }
 
-enum AuthIdentityStatus {
-  ACTIVE
-  DISABLED
-}
-
 enum BranchStatus {
   ACTIVE
   INACTIVE
@@ -214,20 +209,6 @@ model Restaurant {
   @@map("restaurants")
 }
 
-model AuthIdentity {
-  id             String             @id @default(uuid()) @db.Uuid
-  email          String             @unique
-  passwordHash   String             @map("password_hash")
-  status         AuthIdentityStatus @default(ACTIVE)
-  lastLoginAt    DateTime?          @map("last_login_at") @db.Timestamptz(3)
-  platformAdmins PlatformAdmin[]
-  staffUsers     StaffUser[]
-  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  @@map("auth_identities")
-}
-
 model Branch {
   id                  String                @id @default(uuid()) @db.Uuid
   restaurantId        String                @map("restaurant_id") @db.Uuid
@@ -274,7 +255,6 @@ model StaffUser {
   firstName      String                @map("first_name")
   lastName       String                @map("last_name")
   status         StaffUserStatus       @default(INVITED)
-  authIdentity   AuthIdentity          @relation(fields: [authUserId], references: [id], onDelete: Cascade)
   restaurant     Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   branchRoles    StaffUserBranchRole[]
   openedSessions TableSession[]        @relation("TableSessionOpenedBy")
@@ -290,14 +270,13 @@ model StaffUser {
 }
 
 model PlatformAdmin {
-  id           String              @id @default(uuid()) @db.Uuid
-  authUserId   String              @map("auth_user_id") @db.Uuid
-  firstName    String              @map("first_name")
-  lastName     String              @map("last_name")
-  status       PlatformAdminStatus @default(INVITED)
-  authIdentity AuthIdentity        @relation(fields: [authUserId], references: [id], onDelete: Cascade)
-  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id         String              @id @default(uuid()) @db.Uuid
+  authUserId String              @map("auth_user_id") @db.Uuid
+  firstName  String              @map("first_name")
+  lastName   String              @map("last_name")
+  status     PlatformAdminStatus @default(INVITED)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([authUserId])
   @@map("platform_admins")

@@ -91,6 +91,15 @@ class EnvironmentVariables {
   @IsString()
   JWT_ACCESS_TOKEN_EXPIRES_IN = '15m';
 
+  @IsString()
+  SUPABASE_URL = '';
+
+  @IsString()
+  SUPABASE_ANON_KEY = '';
+
+  @IsString()
+  SUPABASE_SERVICE_ROLE_KEY = '';
+
   @Transform(({ value }) => toBoolean(value, false))
   @IsBoolean()
   OTEL_ENABLED = false;
