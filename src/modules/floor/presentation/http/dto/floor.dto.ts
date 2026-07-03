@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -74,6 +75,16 @@ export class OpenTableSessionDto {
   })
   @IsIn(INTERNAL_TABLE_SESSION_OPENED_BY_SOURCES)
   openedBySource!: TableSessionOpenedBySource;
+}
+
+export class CloseTableSessionDto {
+  @ApiPropertyOptional({
+    example: 'Cuenta cerrada manualmente por caja.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(250)
+  closeReason?: string;
 }
 
 export class TableSessionResponseDto {

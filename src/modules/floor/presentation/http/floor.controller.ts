@@ -16,10 +16,12 @@ import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
 import { CreateTableService } from '../../application/create-table.service';
+import { CloseTableSessionService } from '../../application/close-table-session.service';
 import { GetCurrentTableSessionService } from '../../application/get-current-table-session.service';
 import { ListTablesService } from '../../application/list-tables.service';
 import { OpenTableSessionService } from '../../application/open-table-session.service';
 import {
+  CloseTableSessionDto,
   CreateTableDto,
   ListTablesQueryDto,
   OpenTableSessionDto,
@@ -36,6 +38,7 @@ export class FloorController {
     private readonly listTablesService: ListTablesService,
     private readonly openTableSessionService: OpenTableSessionService,
     private readonly getCurrentTableSessionService: GetCurrentTableSessionService,
+    private readonly closeTableSessionService: CloseTableSessionService,
   ) {}
 
   @Post('tables')
@@ -90,5 +93,20 @@ export class FloorController {
     @Param('tableId') tableId: string,
   ): Promise<TableSessionResponseDto> {
     return this.getCurrentTableSessionService.execute(authUser, tableId);
+  }
+
+  @Post('table-sessions/:tableSessionId/close')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Cierra manualmente una mesa cuando la cuenta activa ya no tiene saldo pendiente.',
+  })
+  closeTableSession(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('tableSessionId') tableSessionId: string,
+    @Body() dto: CloseTableSessionDto,
+  ): Promise<TableSessionResponseDto> {
+    return this.closeTableSessionService.execute(authUser, tableSessionId, dto);
   }
 }

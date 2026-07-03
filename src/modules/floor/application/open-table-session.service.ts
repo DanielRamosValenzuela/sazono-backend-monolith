@@ -4,23 +4,19 @@ import {
   Injectable,
 } from '@nestjs/common';
 import {
+  BillStatus,
   Role,
   TableSessionOpenedBySource,
-  TableSessionStatus,
   TableStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { ACTIVE_TABLE_SESSION_STATUSES } from '../domain/active-table-session-statuses';
 import { FloorBranchAccessService } from './floor-branch-access.service';
 import type {
   OpenTableSessionDto,
   TableSessionResponseDto,
 } from '../presentation/http/dto/floor.dto';
-
-const ACTIVE_TABLE_SESSION_STATUSES = [
-  TableSessionStatus.OPEN,
-  TableSessionStatus.PAYMENT_COMPLETED,
-];
 
 @Injectable()
 export class OpenTableSessionService {
@@ -79,7 +75,14 @@ export class OpenTableSessionService {
           branchId: table.branchId,
           openedBySource: dto.openedBySource,
           openedByStaffUserId: context.staffUserId,
-          status: TableSessionStatus.OPEN,
+        },
+      });
+
+      await tx.bill.create({
+        data: {
+          tableSessionId: createdSession.id,
+          branchId: table.branchId,
+          status: BillStatus.OPEN,
         },
       });
 

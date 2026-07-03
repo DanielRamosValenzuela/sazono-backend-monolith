@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
+  BillStatus,
   Role,
   TableSessionOpenedBySource,
   TableSessionStatus,
@@ -10,6 +11,9 @@ import { OpenTableSessionService } from './open-table-session.service';
 import { FloorBranchAccessService } from './floor-branch-access.service';
 
 type TransactionClient = {
+  bill: {
+    create: jest.Mock<Promise<unknown>, [unknown]>;
+  };
   tableSession: {
     findFirst: jest.Mock<Promise<null | { id: string }>, [unknown]>;
     create: jest.Mock<
@@ -93,6 +97,9 @@ describe('OpenTableSessionService', () => {
         closeReason: null,
         closedAt: null,
       });
+    const createBillMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({});
     const updateTableMock = jest
       .fn<Promise<unknown>, [unknown]>()
       .mockResolvedValue({});
@@ -100,6 +107,9 @@ describe('OpenTableSessionService', () => {
     transactionMock.mockImplementation(
       (callback: (transactionClient: TransactionClient) => Promise<unknown>) =>
         callback({
+          bill: {
+            create: createBillMock,
+          },
           tableSession: {
             findFirst: findFirstSessionMock,
             create: createSessionMock,
@@ -125,6 +135,17 @@ describe('OpenTableSessionService', () => {
 
     expect(result.tableSessionId).toBe('session-1');
     expect(result.status).toBe(TableSessionStatus.OPEN);
+    const createBillArgs = createBillMock.mock.calls[0]?.[0] as {
+      data: {
+        tableSessionId: string;
+        branchId: string;
+        status: BillStatus;
+      };
+    };
+
+    expect(createBillArgs.data.tableSessionId).toBe('session-1');
+    expect(createBillArgs.data.branchId).toBe('branch-1');
+    expect(createBillArgs.data.status).toBe(BillStatus.OPEN);
   });
 
   it('rejects opening a session on a disabled table', async () => {
@@ -181,11 +202,15 @@ describe('OpenTableSessionService', () => {
       }>,
       [unknown]
     >();
+    const createBillMock = jest.fn<Promise<unknown>, [unknown]>();
     const updateTableMock = jest.fn<Promise<unknown>, [unknown]>();
 
     transactionMock.mockImplementation(
       (callback: (transactionClient: TransactionClient) => Promise<unknown>) =>
         callback({
+          bill: {
+            create: createBillMock,
+          },
           tableSession: {
             findFirst: findFirstSessionMock,
             create: createSessionMock,

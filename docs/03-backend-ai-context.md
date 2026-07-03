@@ -46,7 +46,8 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - ya existe un endpoint de bootstrap para crear restaurante y primer admin
 - ya existe un endpoint para crear la primera sucursal y autoasignar rol `ADMIN`
 - ya existen endpoints para listar y crear usuarios internos con roles por sucursal
-- ya existe `floor` inicial con mesas, apertura de sesion y retoma de mesa
+- `floor` ya cubre mesas, apertura de sesion, retoma y cierre manual
+- `billing` ya expone la cuenta operativa actual por `TableSession`
 
 ## Versionado HTTP actual
 
@@ -66,7 +67,7 @@ Eso implica un estado transitorio valido:
 
 ## Siguiente paso sugerido para este repo
 
-1. fortalecer `floor` con cierre manual de mesa
-2. despues construir `menus`
-3. recien ahi abrir `orders`, `billing` y `kitchen`
-4. dejar permisos finos y actualizacion de roles para una siguiente iteracion
+1. construir `menus` para que exista una fuente oficial de items y precios
+2. despues abrir `orders` para conectar `TableSession` + `Bill` + `MenuItem`
+3. luego levantar `kitchen` con `StationTicket`
+4. dejar `payments`, split bill e incidencias operativas para la siguiente iteracion

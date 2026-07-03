@@ -263,3 +263,70 @@ curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/open" \
 curl --request GET "http://localhost:3000/api/v1/floor/tables/<TABLE_ID>/current-session" \
   --header "Authorization: Bearer <TOKEN_STAFF>"
 ```
+
+## Respuesta esperada de floor get current table session
+
+```json
+{
+  "tableSessionId": "uuid",
+  "tableId": "uuid",
+  "branchId": "uuid",
+  "status": "OPEN",
+  "openedBySource": "WAITER",
+  "openedAt": "2026-07-03T12:00:00.000Z",
+  "closeReason": null,
+  "closedAt": null
+}
+```
+
+## Billing get current bill
+
+```bash
+curl --request GET "http://localhost:3000/api/v1/billing/table-sessions/<TABLE_SESSION_ID>/current-bill" \
+  --header "Authorization: Bearer <TOKEN_STAFF>"
+```
+
+## Respuesta esperada de billing get current bill
+
+```json
+{
+  "billId": "uuid",
+  "tableSessionId": "uuid",
+  "branchId": "uuid",
+  "status": "OPEN",
+  "subtotalAmount": "0",
+  "taxAmount": "0",
+  "tipAmount": "0",
+  "totalAmount": "0",
+  "remainingAmount": "0",
+  "openedAt": "2026-07-03T12:00:00.000Z",
+  "closedAt": null,
+  "closeReason": null
+}
+```
+
+## Floor close table session
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/<TABLE_SESSION_ID>/close" \
+  --header "Authorization: Bearer <TOKEN_STAFF>" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "closeReason": "Cuenta cerrada manualmente por caja."
+  }'
+```
+
+## Respuesta esperada de floor close table session
+
+```json
+{
+  "tableSessionId": "uuid",
+  "tableId": "uuid",
+  "branchId": "uuid",
+  "status": "CLOSED",
+  "openedBySource": "WAITER",
+  "openedAt": "2026-07-03T12:00:00.000Z",
+  "closeReason": "Cuenta cerrada manualmente por caja.",
+  "closedAt": "2026-07-03T13:00:00.000Z"
+}
+```

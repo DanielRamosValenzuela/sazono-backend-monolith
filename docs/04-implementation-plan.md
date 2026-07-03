@@ -114,19 +114,19 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Crear modulo de auth interna
 - [x] Implementar caso de uso para crear `Restaurant` y primer `Admin`
 - [x] Crear modulo `staff` con roles por sucursal
-- [ ] Crear modulo `floor` con apertura y cierre de mesa
+- [x] Crear modulo `floor` con apertura y cierre de mesa
 - [ ] Crear modulo `menus` con constructor de carta y publicacion
 - [ ] Implementar ordenamiento de categorias y productos
 - [ ] Implementar descripcion e imagen principal por producto
 - [ ] Implementar multi idioma basico de carta
 - [ ] Crear modulo `orders` con origen QR y mesero
 - [ ] Crear modulo `kitchen` con tickets por estacion
-- [ ] Crear modulo `billing` con cuenta unica por mesa
+- [x] Crear modulo `billing` con cuenta unica por mesa
 - [ ] Crear modulo `payments` con prepago QR
 - [x] Implementar validacion de una sola `TableSession` activa por mesa
-- [ ] Implementar validacion de una sola `Bill` activa por sesion
+- [x] Implementar validacion de una sola `Bill` activa por sesion
 - [ ] Implementar regla QR no entra a produccion sin pago aprobado
-- [ ] Implementar cierre manual de mesa
+- [x] Implementar cierre manual de mesa
 - [ ] Implementar resolucion de deuda o abandono por supervisor o caja
 
 ## 7. Estado actual
@@ -136,9 +136,10 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - el bootstrap SaaS crea restaurante y primer admin mediante Supabase Auth + Prisma
 - ya existe creacion de sucursal con asignacion automatica de rol `ADMIN` al creador
 - ya existe alta y listado de `staff_users` con roles activos por sucursal
-- ya existe `floor` inicial con mesas, apertura manual de `TableSession` y retoma de mesa
-- falta cerrar mesa y conectar `Bill` para completar el flujo operacional del salon
-- el siguiente bloque natural de trabajo pasa a ser `menus` y luego `billing`
+- `floor` ya soporta mesas, apertura manual de `TableSession`, retoma y cierre manual
+- abrir una `TableSession` ahora crea su `Bill` operativa en el mismo flujo
+- `billing` ya expone lectura de la cuenta activa por `TableSession`
+- el siguiente bloque natural de trabajo pasa a ser `menus`, luego `orders` y despues `kitchen`
 
 ## 8. Definition of Done backend MVP
 
