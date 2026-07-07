@@ -11,6 +11,8 @@
 7. [07 Staff Management](D:\Programacion\Sazono\sazono-backend-monolith\docs\07-staff-management.md)
 8. [08 Floor and Table Sessions](D:\Programacion\Sazono\sazono-backend-monolith\docs\08-floor-and-table-sessions.md)
 9. [09 Billing and Manual Table Close](D:\Programacion\Sazono\sazono-backend-monolith\docs\09-billing-and-manual-table-close.md)
+10. [10 Menus and Preparation Stations](D:\Programacion\Sazono\sazono-backend-monolith\docs\10-menus-and-preparation-stations.md)
+11. [11 Orders and Kitchen](D:\Programacion\Sazono\sazono-backend-monolith\docs\11-orders-and-kitchen.md)
 
 ## Objetivo
 

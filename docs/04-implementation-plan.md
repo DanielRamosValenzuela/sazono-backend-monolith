@@ -105,9 +105,9 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Definir SQL para `staff_users` y `staff_user_branch_roles`
 - [x] Conectar `platform_admins` y `staff_users` a la identidad base compartida
 - [x] Definir SQL para `tables` y `table_sessions`
-- [ ] Definir SQL para `menus`, `menu_categories`, `menu_items`, `translations`
-- [ ] Definir SQL para assets multimedia de la carta
-- [ ] Definir SQL para `preparation_stations`
+- [x] Definir SQL para `menus`, `menu_categories`, `menu_items`, `translations`
+- [x] Definir SQL para assets multimedia de la carta
+- [x] Definir SQL para `preparation_stations`
 - [ ] Definir SQL para `bills`, `bill_items`, `bill_splits`, `bill_split_participants`
 - [ ] Definir SQL para `orders`, `order_items`, `station_tickets`, `station_ticket_items`
 - [ ] Definir SQL para `payments` y `payment_attempts`
@@ -115,17 +115,17 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Implementar caso de uso para crear `Restaurant` y primer `Admin`
 - [x] Crear modulo `staff` con roles por sucursal
 - [x] Crear modulo `floor` con apertura y cierre de mesa
-- [ ] Crear modulo `menus` con constructor de carta y publicacion
+- [x] Crear modulo `menus` con constructor de carta y publicacion
 - [ ] Implementar ordenamiento de categorias y productos
 - [ ] Implementar descripcion e imagen principal por producto
 - [ ] Implementar multi idioma basico de carta
-- [ ] Crear modulo `orders` con origen QR y mesero
-- [ ] Crear modulo `kitchen` con tickets por estacion
+- [x] Crear modulo `orders` con origen QR y mesero
+- [x] Crear modulo `kitchen` con tickets por estacion
 - [x] Crear modulo `billing` con cuenta unica por mesa
 - [ ] Crear modulo `payments` con prepago QR
 - [x] Implementar validacion de una sola `TableSession` activa por mesa
 - [x] Implementar validacion de una sola `Bill` activa por sesion
-- [ ] Implementar regla QR no entra a produccion sin pago aprobado
+- [x] Implementar regla QR no entra a produccion sin pago aprobado (la orden QR queda `AWAITING_PAYMENT` sin tickets ni cargos; falta el caso de uso de aprobacion en `payments`)
 - [x] Implementar cierre manual de mesa
 - [ ] Implementar resolucion de deuda o abandono por supervisor o caja
 
@@ -139,7 +139,12 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - `floor` ya soporta mesas, apertura manual de `TableSession`, retoma y cierre manual
 - abrir una `TableSession` ahora crea su `Bill` operativa en el mismo flujo
 - `billing` ya expone lectura de la cuenta activa por `TableSession`
-- el siguiente bloque natural de trabajo pasa a ser `menus`, luego `orders` y despues `kitchen`
+- `menus` ya soporta estaciones de preparacion, versiones draft, categorias, items y publicacion por sucursal
+- `menus` ya expone lectura publica de la carta publicada por `qrToken`
+- `orders` ya soporta orden pospago de mesero (snapshot de precio, cargo a la `Bill` y ruteo a estaciones) y orden prepago QR en `AWAITING_PAYMENT`
+- `kitchen` ya lista tickets por estacion y avanza sus estados sincronizando items y orden
+- la politica de impuestos vive aislada en `billing/domain/tax-policy.ts` (precios con IVA incluido)
+- el siguiente bloque natural de trabajo es `payments`: aprobar pago QR, pagar cuenta abierta y split bill
 
 ## 8. Definition of Done backend MVP
 

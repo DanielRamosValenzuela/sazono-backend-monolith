@@ -48,6 +48,11 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - ya existen endpoints para listar y crear usuarios internos con roles por sucursal
 - `floor` ya cubre mesas, apertura de sesion, retoma y cierre manual
 - `billing` ya expone la cuenta operativa actual por `TableSession`
+- `menus` ya cubre estaciones de preparacion, versiones draft, categorias, items y publicacion por sucursal
+- `menus` expone lectura publica de carta por `qrToken` bajo `/api/v1/qr`
+- `orders` ya crea ordenes pospago de mesero (cargo a la cuenta + tickets) y ordenes prepago QR en `AWAITING_PAYMENT`
+- `kitchen` ya opera tickets por estacion con transiciones validadas y recomputo del estado de la orden
+- la politica de impuestos esta aislada en `billing/domain/tax-policy.ts`: los precios ya incluyen IVA
 
 ## Versionado HTTP actual
 
@@ -67,7 +72,8 @@ Eso implica un estado transitorio valido:
 
 ## Siguiente paso sugerido para este repo
 
-1. construir `menus` para que exista una fuente oficial de items y precios
-2. despues abrir `orders` para conectar `TableSession` + `Bill` + `MenuItem`
-3. luego levantar `kitchen` con `StationTicket`
-4. dejar `payments`, split bill e incidencias operativas para la siguiente iteracion
+1. integrar `payments`: aprobar el pago de una orden QR debe ejecutar el cargo a la `Bill` y el ruteo a estaciones en la misma transaccion (reutilizar `applyOrderChargeToBill` y `routeOrderToStations` del modulo `orders`)
+2. pago de cuenta abierta desde QR y transiciones reales a `PAYMENT_COMPLETED`
+3. split bill simple sobre la misma `Bill`
+4. resolucion de abandono y deuda por supervisor o caja
+5. dejar entrega (`DELIVERED`), multimedia avanzada y multi idioma para la siguiente iteracion
