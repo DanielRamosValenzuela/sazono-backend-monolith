@@ -15,6 +15,7 @@
 11. [11 Orders and Kitchen](D:\Programacion\Sazono\sazono-backend-monolith\docs\11-orders-and-kitchen.md)
 12. [12 Payments](D:\Programacion\Sazono\sazono-backend-monolith\docs\12-payments.md)
 13. [13 Payments Split and Resolution](D:\Programacion\Sazono\sazono-backend-monolith\docs\13-payments-split-and-resolution.md)
+14. [14 Platform Admin and Analytics](D:\Programacion\Sazono\sazono-backend-monolith\docs\14-platform-admin-and-analytics.md)
 
 ## Objetivo
 

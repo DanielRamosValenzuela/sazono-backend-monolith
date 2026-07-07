@@ -56,6 +56,9 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - `payments` ya cubre prepago QR con reintento, pago de cuenta abierta (QR y caja), propina y pagos parciales
 - el proveedor de pago vive tras el puerto `PAYMENT_PROVIDER`; el MVP usa un adapter manual que aprueba de inmediato
 - split bill, entrega, cancelacion de ordenes y abandono de mesa ya estan implementados
+- `platform_admin` ya puede listar, ver el detalle (con `branches` y `staff` con email resuelto) y editar cualquier restaurante, ademas de ver metricas agregadas de plataforma (ver doc 14)
+- `staff` ya puede listar y editar sucursales (`GET`/`PATCH /branches`), y editar staff existente (`PATCH /staff/:id`) con reglas de proteccion contra auto-desactivarse o dejar el restaurante sin `ADMIN`
+- existe un modulo `analytics` con `GET /analytics/branches/:id/summary` para el dashboard del restaurante (ver doc 14)
 
 ## Versionado HTTP actual
 
@@ -80,3 +83,5 @@ Eso implica un estado transitorio valido:
 3. multi idioma basico de carta (tabla `translations` ya existe)
 4. ordenamiento fino de categorias e items
 5. reembolsos y anulaciones con impacto financiero en ordenes prepagadas
+6. actualizar y publicar (o archivar) categorias/items existentes de la carta (hoy solo hay `create`)
+7. modelo de monetizacion de la plataforma (suscripcion o cobro de Sazono a los restaurantes); hoy no existe

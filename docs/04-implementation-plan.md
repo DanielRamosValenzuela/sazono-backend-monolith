@@ -128,6 +128,12 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Implementar regla QR no entra a produccion sin pago aprobado
 - [x] Implementar cierre manual de mesa
 - [x] Implementar resolucion de deuda o abandono por supervisor o caja
+- [x] Implementar listado y detalle de restaurantes para `platform_admin` (con sucursales y staff con email)
+- [x] Implementar edicion de restaurante y activar/desactivar (`platform_admin`)
+- [x] Implementar metricas agregadas de plataforma (`platform-metrics`)
+- [x] Implementar listado y edicion de sucursales para `staff` (`GET`/`PATCH /branches`)
+- [x] Implementar edicion de staff existente (`PATCH /staff/:id`) con reglas de proteccion de ultimo `ADMIN`
+- [x] Implementar modulo `analytics` con resumen por sucursal para el dashboard del restaurante
 
 ## 7. Estado actual
 
@@ -150,6 +156,11 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - split bill simple (`BY_AMOUNT`) dentro de la misma cuenta, con pago por participante via token QR
 - entrega de ordenes (`DELIVERED`), cancelacion antes/durante produccion y abandono de mesa por caja/supervisor
 - el backend MVP operacional esta completo; pendientes menores: multimedia de carta, multi idioma, pasarela de pago real
+- `restaurants` ahora expone CRUD de lectura/edicion para `platform_admin` (listar, detalle con equipo, editar, activar/desactivar) y metricas agregadas de plataforma
+- `branches` ahora expone listado y edicion (`PATCH`) para `staff`, incluyendo merge parcial de `branch_settings`
+- `staff` ahora expone edicion (`PATCH /staff/:id`) con reglas de proteccion: no auto-desactivarse, no dejar el restaurante sin `ADMIN`
+- nuevo modulo `analytics` con `GET /analytics/branches/:id/summary` (mesas, ventas de hoy, serie 7 dias, ordenes por estado, top productos) para el dashboard del restaurante
+- ver doc 14 para el detalle de este slice
 
 ## 8. Definition of Done backend MVP
 
