@@ -59,7 +59,4 @@ La politica tributaria del MVP vive aislada en `src/modules/billing/domain/tax-p
 
 ## Lo que falta despues
 
-- payments: aprobar pago QR y ejecutar cargo + ruteo de la orden prepago
-- pago de cuenta abierta y split bill
-- entrega (`DELIVERED`) y edicion o cancelacion de ordenes antes de produccion
-- resolucion de abandono y deuda por supervisor o caja
+- edicion de ordenes antes de produccion (solo cancelacion implementada por ahora)

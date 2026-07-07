@@ -61,6 +61,7 @@ describe('CreateWaiterOrderService', () => {
       status: TableSessionStatus.OPEN,
       bill: {
         id: 'bill-1',
+        tableSessionId: 'session-1',
         subtotalAmount: new Prisma.Decimal(0),
         tipAmount: new Prisma.Decimal(0),
         totalAmount: new Prisma.Decimal(0),
@@ -111,6 +112,9 @@ describe('CreateWaiterOrderService', () => {
     const stationTicketCreateMock = jest
       .fn<Promise<unknown>, [unknown]>()
       .mockResolvedValue({});
+    const tableSessionUpdateManyMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({ count: 0 });
 
     transactionMock.mockImplementation(
       (callback: (tx: unknown) => Promise<unknown>) =>
@@ -120,6 +124,7 @@ describe('CreateWaiterOrderService', () => {
           billItem: { createMany: billItemCreateManyMock },
           bill: { update: billUpdateMock },
           stationTicket: { create: stationTicketCreateMock },
+          tableSession: { updateMany: tableSessionUpdateManyMock },
         }),
     );
 

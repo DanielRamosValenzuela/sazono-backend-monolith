@@ -83,6 +83,14 @@ export class ListOrdersQueryDto {
   tableSessionId!: string;
 }
 
+export class CancelOrderDto {
+  @ApiPropertyOptional({ example: 'Cliente cambio de opinion.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(250)
+  reason?: string;
+}
+
 class OrderPreparationStationSummaryDto {
   @ApiProperty({ format: 'uuid' })
   preparationStationId!: string;

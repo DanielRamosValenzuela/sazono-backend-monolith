@@ -15,10 +15,13 @@ import { LoginProfileType } from '../../../auth/dto/login.dto';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
+import { CancelOrderService } from '../../application/cancel-order.service';
 import { CreateWaiterOrderService } from '../../application/create-waiter-order.service';
+import { DeliverOrderService } from '../../application/deliver-order.service';
 import { GetOrderDetailService } from '../../application/get-order-detail.service';
 import { ListSessionOrdersService } from '../../application/list-session-orders.service';
 import {
+  CancelOrderDto,
   CreateWaiterOrderDto,
   ListOrdersQueryDto,
   OrderResponseDto,
@@ -32,6 +35,8 @@ export class OrdersController {
     private readonly createWaiterOrderService: CreateWaiterOrderService,
     private readonly listSessionOrdersService: ListSessionOrdersService,
     private readonly getOrderDetailService: GetOrderDetailService,
+    private readonly deliverOrderService: DeliverOrderService,
+    private readonly cancelOrderService: CancelOrderService,
   ) {}
 
   @Post()
@@ -72,5 +77,33 @@ export class OrdersController {
     @Param('orderId') orderId: string,
   ): Promise<OrderResponseDto> {
     return this.getOrderDetailService.execute(authUser, orderId);
+  }
+
+  @Post(':orderId/deliver')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Marca como entregada una orden lista en todas sus estaciones.',
+  })
+  deliverOrder(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('orderId') orderId: string,
+  ): Promise<OrderResponseDto> {
+    return this.deliverOrderService.execute(authUser, orderId);
+  }
+
+  @Post(':orderId/cancel')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Cancela una orden: antes de produccion cualquier staff operativo; en produccion solo supervisor o admin con reverso de cargos.',
+  })
+  cancelOrder(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('orderId') orderId: string,
+    @Body() dto: CancelOrderDto,
+  ): Promise<OrderResponseDto> {
+    return this.cancelOrderService.execute(authUser, orderId, dto);
   }
 }

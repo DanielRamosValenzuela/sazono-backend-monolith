@@ -122,12 +122,12 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Crear modulo `orders` con origen QR y mesero
 - [x] Crear modulo `kitchen` con tickets por estacion
 - [x] Crear modulo `billing` con cuenta unica por mesa
-- [ ] Crear modulo `payments` con prepago QR
+- [x] Crear modulo `payments` con prepago QR
 - [x] Implementar validacion de una sola `TableSession` activa por mesa
 - [x] Implementar validacion de una sola `Bill` activa por sesion
-- [x] Implementar regla QR no entra a produccion sin pago aprobado (la orden QR queda `AWAITING_PAYMENT` sin tickets ni cargos; falta el caso de uso de aprobacion en `payments`)
+- [x] Implementar regla QR no entra a produccion sin pago aprobado
 - [x] Implementar cierre manual de mesa
-- [ ] Implementar resolucion de deuda o abandono por supervisor o caja
+- [x] Implementar resolucion de deuda o abandono por supervisor o caja
 
 ## 7. Estado actual
 
@@ -144,7 +144,12 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - `orders` ya soporta orden pospago de mesero (snapshot de precio, cargo a la `Bill` y ruteo a estaciones) y orden prepago QR en `AWAITING_PAYMENT`
 - `kitchen` ya lista tickets por estacion y avanza sus estados sincronizando items y orden
 - la politica de impuestos vive aislada en `billing/domain/tax-policy.ts` (precios con IVA incluido)
-- el siguiente bloque natural de trabajo es `payments`: aprobar pago QR, pagar cuenta abierta y split bill
+- `payments` ya aprueba el prepago QR (cargo + ruteo en la misma transaccion), paga cuenta abierta desde QR y desde caja, con propina, pagos parciales y reintento ante fallo
+- el proveedor de pago esta aislado tras el puerto `PAYMENT_PROVIDER` con un adapter manual; la pasarela real sera un nuevo adapter
+- al saldar la cuenta la sesion pasa a `PAYMENT_COMPLETED`; el cierre de mesa sigue siendo manual
+- split bill simple (`BY_AMOUNT`) dentro de la misma cuenta, con pago por participante via token QR
+- entrega de ordenes (`DELIVERED`), cancelacion antes/durante produccion y abandono de mesa por caja/supervisor
+- el backend MVP operacional esta completo; pendientes menores: multimedia de carta, multi idioma, pasarela de pago real
 
 ## 8. Definition of Done backend MVP
 

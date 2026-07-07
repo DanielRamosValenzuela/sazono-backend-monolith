@@ -568,6 +568,124 @@ curl --request GET "http://localhost:3000/api/v1/orders/<ORDER_ID>" \
   --header "Authorization: Bearer <TOKEN_STAFF>"
 ```
 
+## QR pay prepaid order (publico)
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/qr/tables/<QR_TOKEN>/orders/<ORDER_ID>/pay" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "tipAmount": "1000"
+  }'
+```
+
+## Respuesta esperada de QR pay prepaid order
+
+```json
+{
+  "paymentId": "uuid",
+  "billId": "uuid",
+  "amount": "12800",
+  "currency": "CLP",
+  "provider": "MANUAL",
+  "providerReference": "manual-uuid",
+  "status": "PAID",
+  "paidAt": "2026-07-07T12:00:00.000Z",
+  "bill": {
+    "billId": "uuid",
+    "status": "PAID",
+    "subtotalAmount": "11800",
+    "tipAmount": "1000",
+    "totalAmount": "12800",
+    "remainingAmount": "0"
+  },
+  "order": {
+    "orderId": "uuid",
+    "status": "ROUTED"
+  }
+}
+```
+
+## QR pay open bill (publico)
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/qr/tables/<QR_TOKEN>/bill/payments" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "amount": "10000",
+    "tipAmount": "1000"
+  }'
+```
+
+## Payments pay bill (staff)
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/payments/bills/<BILL_ID>" \
+  --header "Authorization: Bearer <TOKEN_STAFF_CASHIER>" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "amount": "13600"
+  }'
+```
+
+## Payments list bill payments (staff)
+
+```bash
+curl --request GET "http://localhost:3000/api/v1/payments/bills/<BILL_ID>" \
+  --header "Authorization: Bearer <TOKEN_STAFF>"
+```
+
+## QR create bill split (publico)
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/qr/tables/<QR_TOKEN>/bill/splits" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "participants": [
+      { "displayName": "Ana", "amount": "11800" },
+      { "displayName": "Luis", "amount": "11800" }
+    ]
+  }'
+```
+
+## QR pay split participant (publico)
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/qr/split-participants/<PARTICIPANT_TOKEN>/pay" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "tipAmount": "500"
+  }'
+```
+
+## Orders deliver
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/orders/<ORDER_ID>/deliver" \
+  --header "Authorization: Bearer <TOKEN_STAFF>"
+```
+
+## Orders cancel
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/orders/<ORDER_ID>/cancel" \
+  --header "Authorization: Bearer <TOKEN_STAFF>" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "reason": "Cliente cambio de opinion."
+  }'
+```
+
+## Floor abandon table session
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/<TABLE_SESSION_ID>/abandon" \
+  --header "Authorization: Bearer <TOKEN_STAFF_CASHIER>" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "closeReason": "Clientes se retiraron sin pagar."
+  }'
+```
+
 ## Kitchen list station tickets
 
 ```bash

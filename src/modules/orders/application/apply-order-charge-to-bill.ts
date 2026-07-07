@@ -1,9 +1,16 @@
-import { BillStatus, Prisma } from '@prisma/client';
+import { BillStatus, Prisma, TableSessionStatus } from '@prisma/client';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
-import type { OrderableMenuItem } from './orderable-menu-item-resolver.service';
+
+export type OrderChargeItem = {
+  orderItemId: string;
+  name: string;
+  price: Prisma.Decimal;
+  quantity: number;
+};
 
 type BillSnapshot = {
   id: string;
+  tableSessionId: string;
   subtotalAmount: Prisma.Decimal;
   tipAmount: Prisma.Decimal;
   totalAmount: Prisma.Decimal;
@@ -20,7 +27,7 @@ type BillSnapshot = {
 export async function applyOrderChargeToBill(
   tx: Prisma.TransactionClient,
   bill: BillSnapshot,
-  orderItems: Array<OrderableMenuItem & { orderItemId: string }>,
+  orderItems: OrderChargeItem[],
 ): Promise<void> {
   await tx.billItem.createMany({
     data: orderItems.map((item) => ({
@@ -64,4 +71,17 @@ export async function applyOrderChargeToBill(
       status,
     },
   });
+
+  if (remainingAmount.gt(0)) {
+    // Un cargo nuevo sobre una sesion ya pagada la devuelve a OPEN.
+    await tx.tableSession.updateMany({
+      where: {
+        id: bill.tableSessionId,
+        status: TableSessionStatus.PAYMENT_COMPLETED,
+      },
+      data: {
+        status: TableSessionStatus.OPEN,
+      },
+    });
+  }
 }

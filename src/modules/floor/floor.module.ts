@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AbandonTableSessionService } from './application/abandon-table-session.service';
 import { CreateTableService } from './application/create-table.service';
 import { CloseTableSessionService } from './application/close-table-session.service';
 import { FloorBranchAccessService } from './application/floor-branch-access.service';
@@ -20,6 +21,7 @@ import { FloorController } from './presentation/http/floor.controller';
     OpenTableSessionService,
     GetCurrentTableSessionService,
     CloseTableSessionService,
+    AbandonTableSessionService,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],

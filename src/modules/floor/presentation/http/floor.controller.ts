@@ -15,12 +15,14 @@ import { LoginProfileType } from '../../../auth/dto/login.dto';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
+import { AbandonTableSessionService } from '../../application/abandon-table-session.service';
 import { CreateTableService } from '../../application/create-table.service';
 import { CloseTableSessionService } from '../../application/close-table-session.service';
 import { GetCurrentTableSessionService } from '../../application/get-current-table-session.service';
 import { ListTablesService } from '../../application/list-tables.service';
 import { OpenTableSessionService } from '../../application/open-table-session.service';
 import {
+  AbandonTableSessionDto,
   CloseTableSessionDto,
   CreateTableDto,
   ListTablesQueryDto,
@@ -39,6 +41,7 @@ export class FloorController {
     private readonly openTableSessionService: OpenTableSessionService,
     private readonly getCurrentTableSessionService: GetCurrentTableSessionService,
     private readonly closeTableSessionService: CloseTableSessionService,
+    private readonly abandonTableSessionService: AbandonTableSessionService,
   ) {}
 
   @Post('tables')
@@ -108,5 +111,24 @@ export class FloorController {
     @Body() dto: CloseTableSessionDto,
   ): Promise<TableSessionResponseDto> {
     return this.closeTableSessionService.execute(authUser, tableSessionId, dto);
+  }
+
+  @Post('table-sessions/:tableSessionId/abandon')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Marca una sesion como abandonada por deuda o retiro sin pago. Solo caja, supervisor o admin.',
+  })
+  abandonTableSession(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('tableSessionId') tableSessionId: string,
+    @Body() dto: AbandonTableSessionDto,
+  ): Promise<TableSessionResponseDto> {
+    return this.abandonTableSessionService.execute(
+      authUser,
+      tableSessionId,
+      dto,
+    );
   }
 }

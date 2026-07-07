@@ -53,6 +53,9 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - `orders` ya crea ordenes pospago de mesero (cargo a la cuenta + tickets) y ordenes prepago QR en `AWAITING_PAYMENT`
 - `kitchen` ya opera tickets por estacion con transiciones validadas y recomputo del estado de la orden
 - la politica de impuestos esta aislada en `billing/domain/tax-policy.ts`: los precios ya incluyen IVA
+- `payments` ya cubre prepago QR con reintento, pago de cuenta abierta (QR y caja), propina y pagos parciales
+- el proveedor de pago vive tras el puerto `PAYMENT_PROVIDER`; el MVP usa un adapter manual que aprueba de inmediato
+- split bill, entrega, cancelacion de ordenes y abandono de mesa ya estan implementados
 
 ## Versionado HTTP actual
 
@@ -72,8 +75,8 @@ Eso implica un estado transitorio valido:
 
 ## Siguiente paso sugerido para este repo
 
-1. integrar `payments`: aprobar el pago de una orden QR debe ejecutar el cargo a la `Bill` y el ruteo a estaciones en la misma transaccion (reutilizar `applyOrderChargeToBill` y `routeOrderToStations` del modulo `orders`)
-2. pago de cuenta abierta desde QR y transiciones reales a `PAYMENT_COMPLETED`
-3. split bill simple sobre la misma `Bill`
-4. resolucion de abandono y deuda por supervisor o caja
-5. dejar entrega (`DELIVERED`), multimedia avanzada y multi idioma para la siguiente iteracion
+1. adapter de pasarela de pago real cuando se elija el proveedor (Webpay, MercadoPago, Stripe, etc.)
+2. multimedia e imagen principal por producto en la carta
+3. multi idioma basico de carta (tabla `translations` ya existe)
+4. ordenamiento fino de categorias e items
+5. reembolsos y anulaciones con impacto financiero en ordenes prepagadas

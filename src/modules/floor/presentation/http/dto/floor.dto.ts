@@ -87,6 +87,15 @@ export class CloseTableSessionDto {
   closeReason?: string;
 }
 
+export class AbandonTableSessionDto {
+  @ApiProperty({
+    example: 'Los clientes se retiraron sin pagar. Reportado por mesero.',
+  })
+  @IsString()
+  @MaxLength(250)
+  closeReason!: string;
+}
+
 export class TableSessionResponseDto {
   @ApiProperty({ format: 'uuid' })
   tableSessionId!: string;

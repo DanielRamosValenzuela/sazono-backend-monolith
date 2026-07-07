@@ -1,5 +1,10 @@
 import { Prisma } from '@prisma/client';
-import type { OrderableMenuItem } from './orderable-menu-item-resolver.service';
+
+export type RoutableOrderItem = {
+  orderItemId: string;
+  preparationStationId: string;
+  quantity: number;
+};
 
 /**
  * Divide una orden confirmada en tickets por estacion de preparacion.
@@ -9,12 +14,9 @@ import type { OrderableMenuItem } from './orderable-menu-item-resolver.service';
 export async function routeOrderToStations(
   tx: Prisma.TransactionClient,
   order: { id: string; branchId: string },
-  orderItems: Array<OrderableMenuItem & { orderItemId: string }>,
+  orderItems: RoutableOrderItem[],
 ): Promise<void> {
-  const itemsByStation = new Map<
-    string,
-    Array<OrderableMenuItem & { orderItemId: string }>
-  >();
+  const itemsByStation = new Map<string, RoutableOrderItem[]>();
 
   for (const item of orderItems) {
     const stationItems = itemsByStation.get(item.preparationStationId) ?? [];
