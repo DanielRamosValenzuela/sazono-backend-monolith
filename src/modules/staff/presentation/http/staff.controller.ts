@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { buildVersionedControllerPath } from '../../../../common/http/api-version';
 import { CurrentAuthUser } from '../../../auth/decorators/current-auth-user.decorator';
@@ -9,7 +17,12 @@ import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
 import { CreateStaffUserService } from '../../application/create-staff-user.service';
 import { ListStaffUsersService } from '../../application/list-staff-users.service';
-import { CreateStaffUserDto, StaffUserResponseDto } from './dto/staff.dto';
+import { UpdateStaffUserService } from '../../application/update-staff-user.service';
+import {
+  CreateStaffUserDto,
+  StaffUserResponseDto,
+  UpdateStaffUserDto,
+} from './dto/staff.dto';
 
 @ApiTags('staff')
 @ApiBearerAuth()
@@ -18,6 +31,7 @@ export class StaffController {
   constructor(
     private readonly createStaffUserService: CreateStaffUserService,
     private readonly listStaffUsersService: ListStaffUsersService,
+    private readonly updateStaffUserService: UpdateStaffUserService,
   ) {}
 
   @Get()
@@ -45,5 +59,20 @@ export class StaffController {
     @Body() dto: CreateStaffUserDto,
   ): Promise<StaffUserResponseDto> {
     return this.createStaffUserService.execute(authUser, dto);
+  }
+
+  @Patch(':staffUserId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Actualiza parcialmente un usuario interno y opcionalmente reemplaza sus roles por sucursal.',
+  })
+  update(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('staffUserId') staffUserId: string,
+    @Body() dto: UpdateStaffUserDto,
+  ): Promise<StaffUserResponseDto> {
+    return this.updateStaffUserService.execute(authUser, staffUserId, dto);
   }
 }

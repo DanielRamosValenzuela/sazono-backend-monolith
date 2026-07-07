@@ -1,0 +1,102 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BranchStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+
+class UpdateBranchSettingsDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  qrOrderingEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'prepaid_order',
+    description: 'Modo de pago QR de la sucursal.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  qrPaymentMode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  splitBillEnabled?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  partialDeliveryEnabled?: boolean;
+}
+
+export class UpdateBranchDto {
+  @ApiPropertyOptional({ example: 'Providencia' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
+
+  @ApiPropertyOptional({
+    example: 'Av. Providencia 1234, Santiago',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  address?: string | null;
+
+  @ApiPropertyOptional({ enum: BranchStatus, enumName: 'BranchStatus' })
+  @IsOptional()
+  @IsEnum(BranchStatus)
+  status?: BranchStatus;
+
+  @ApiPropertyOptional({
+    type: UpdateBranchSettingsDto,
+    description:
+      'Merge parcial: solo se actualizan los campos de settings enviados.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateBranchSettingsDto)
+  settings?: UpdateBranchSettingsDto;
+}
+
+class BranchSettingsResponseDto {
+  @ApiProperty()
+  qrOrderingEnabled!: boolean;
+
+  @ApiProperty()
+  qrPaymentMode!: string;
+
+  @ApiProperty()
+  splitBillEnabled!: boolean;
+
+  @ApiProperty()
+  partialDeliveryEnabled!: boolean;
+}
+
+export class BranchResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  branchId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  restaurantId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ nullable: true, required: false })
+  address: string | null = null;
+
+  @ApiProperty({ enum: BranchStatus, enumName: 'BranchStatus' })
+  status!: BranchStatus;
+
+  @ApiProperty({ type: BranchSettingsResponseDto })
+  settings!: BranchSettingsResponseDto;
+}

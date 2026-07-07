@@ -10,6 +10,7 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CloseTableSessionService } from './close-table-session.service';
 import { FloorBranchAccessService } from './floor-branch-access.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
   bill: {
@@ -153,7 +154,7 @@ describe('CloseTableSessionService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -259,7 +260,7 @@ describe('CloseTableSessionService', () => {
     await service.execute(
       {
         sub: 'auth-2',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-2',
         restaurantId: 'restaurant-1',
       },
@@ -327,7 +328,7 @@ describe('CloseTableSessionService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },

@@ -9,6 +9,7 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { OpenTableSessionService } from './open-table-session.service';
 import { FloorBranchAccessService } from './floor-branch-access.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
   bill: {
@@ -123,7 +124,7 @@ describe('OpenTableSessionService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -159,7 +160,7 @@ describe('OpenTableSessionService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },
@@ -225,7 +226,7 @@ describe('OpenTableSessionService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },

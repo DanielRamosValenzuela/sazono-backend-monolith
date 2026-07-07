@@ -6,6 +6,8 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsIn,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -52,6 +54,40 @@ export class CreateStaffUserDto {
   @ValidateNested({ each: true })
   @Type(() => StaffBranchRoleInputDto)
   branchRoles!: StaffBranchRoleInputDto[];
+}
+
+export class UpdateStaffUserDto {
+  @ApiPropertyOptional({ example: 'Ana' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Diaz' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  lastName?: string;
+
+  @ApiPropertyOptional({
+    enum: [StaffUserStatus.ACTIVE, StaffUserStatus.DISABLED],
+    description: 'Solo se permite ACTIVE o DISABLED.',
+  })
+  @IsOptional()
+  @IsIn([StaffUserStatus.ACTIVE, StaffUserStatus.DISABLED])
+  status?: StaffUserStatus;
+
+  @ApiPropertyOptional({
+    type: [StaffBranchRoleInputDto],
+    description:
+      'Si se envia, reemplaza el set completo de roles activos del usuario.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StaffBranchRoleInputDto)
+  branchRoles?: StaffBranchRoleInputDto[];
 }
 
 class StaffBranchRoleResponseDto {

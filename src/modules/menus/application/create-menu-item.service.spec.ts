@@ -7,6 +7,7 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateMenuItemService } from './create-menu-item.service';
 import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('CreateMenuItemService', () => {
   const categoryFindUniqueMock = jest.fn();
@@ -77,7 +78,7 @@ describe('CreateMenuItemService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -116,7 +117,7 @@ describe('CreateMenuItemService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },
@@ -155,7 +156,7 @@ describe('CreateMenuItemService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },

@@ -4,6 +4,7 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { CreateStaffUserService } from './create-staff-user.service';
 import { StaffAdminAccessService } from './staff-admin-access.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
   staffUser: {
@@ -167,7 +168,7 @@ describe('CreateStaffUserService', () => {
     const result = await service.execute(
       {
         sub: 'auth-admin',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-admin-1',
         restaurantId: 'restaurant-1',
       },
@@ -261,7 +262,7 @@ describe('CreateStaffUserService', () => {
     const result = await service.execute(
       {
         sub: 'auth-admin',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-admin-1',
         restaurantId: 'restaurant-1',
       },
@@ -288,7 +289,7 @@ describe('CreateStaffUserService', () => {
       service.execute(
         {
           sub: 'auth-admin',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-admin-1',
           restaurantId: 'restaurant-1',
         },

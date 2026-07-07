@@ -3,6 +3,7 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { ListStaffUsersService } from './list-staff-users.service';
 import { StaffAdminAccessService } from './staff-admin-access.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('ListStaffUsersService', () => {
   const findManyMock = jest.fn();
@@ -66,7 +67,7 @@ describe('ListStaffUsersService', () => {
 
     const result = await service.execute({
       sub: 'auth-admin',
-      profileType: 'staff',
+      profileType: LoginProfileType.STAFF,
       profileId: 'staff-admin-1',
       restaurantId: 'restaurant-1',
     });

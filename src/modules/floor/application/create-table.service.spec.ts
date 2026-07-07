@@ -3,6 +3,7 @@ import { Role, TableStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateTableService } from './create-table.service';
 import { FloorBranchAccessService } from './floor-branch-access.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('CreateTableService', () => {
   const findFirstMock = jest.fn();
@@ -47,7 +48,7 @@ describe('CreateTableService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -78,7 +79,7 @@ describe('CreateTableService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },

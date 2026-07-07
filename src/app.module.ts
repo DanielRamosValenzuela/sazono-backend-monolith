@@ -11,6 +11,7 @@ import { AppService } from './app.service';
 import { validateEnvironment } from './common/config/validate-environment';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { BranchesModule } from './modules/branches/branches.module';
@@ -74,6 +75,7 @@ import { StaffModule } from './modules/staff/staff.module';
     KitchenModule,
     BillingModule,
     PaymentsModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Role, StaffUserStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateBranchService } from './create-branch.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type StaffLookupResult = {
   id: string;
@@ -102,7 +103,7 @@ describe('CreateBranchService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -128,7 +129,7 @@ describe('CreateBranchService', () => {
       service.execute(
         {
           sub: 'auth-2',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-2',
           restaurantId: 'restaurant-1',
         },

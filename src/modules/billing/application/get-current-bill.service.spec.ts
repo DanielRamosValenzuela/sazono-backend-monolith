@@ -3,6 +3,7 @@ import { BillStatus, Prisma, Role, TableSessionStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { BillingBranchAccessService } from './billing-branch-access.service';
 import { GetCurrentBillService } from './get-current-bill.service';
+import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('GetCurrentBillService', () => {
   const findUniqueMock = jest.fn();
@@ -74,7 +75,7 @@ describe('GetCurrentBillService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -117,7 +118,7 @@ describe('GetCurrentBillService', () => {
     const result = await service.execute(
       {
         sub: 'auth-1',
-        profileType: 'staff',
+        profileType: LoginProfileType.STAFF,
         profileId: 'staff-1',
         restaurantId: 'restaurant-1',
       },
@@ -156,7 +157,7 @@ describe('GetCurrentBillService', () => {
       service.execute(
         {
           sub: 'auth-1',
-          profileType: 'staff',
+          profileType: LoginProfileType.STAFF,
           profileId: 'staff-1',
           restaurantId: 'restaurant-1',
         },

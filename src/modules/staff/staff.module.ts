@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateStaffUserService } from './application/create-staff-user.service';
 import { ListStaffUsersService } from './application/list-staff-users.service';
 import { StaffAdminAccessService } from './application/staff-admin-access.service';
+import { UpdateStaffUserService } from './application/update-staff-user.service';
 import { StaffController } from './presentation/http/staff.controller';
 
 @Module({
@@ -14,6 +15,7 @@ import { StaffController } from './presentation/http/staff.controller';
     StaffAdminAccessService,
     CreateStaffUserService,
     ListStaffUsersService,
+    UpdateStaffUserService,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],
