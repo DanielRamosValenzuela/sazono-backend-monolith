@@ -126,8 +126,6 @@ describe('CreateQrOrderService', () => {
     expect(sessionCreateArgs.data).toMatchObject({
       openedBySource: TableSessionOpenedBySource.QR,
     });
-
-    // QR prepago: sin cargos en la cuenta ni tickets antes del pago.
     expect(billItemCreateManyMock).not.toHaveBeenCalled();
     expect(stationTicketCreateMock).not.toHaveBeenCalled();
   });

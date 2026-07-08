@@ -6,7 +6,7 @@ import {
   PreparationStationType,
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
 import { PublishMenuService } from './publish-menu.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 

@@ -7,11 +7,6 @@ import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
 @Injectable()
 export class GetPublishedMenuByQrService {
   constructor(private readonly prisma: PrismaService) {}
-
-  /**
-   * Lectura publica de la carta activa de la sucursal a partir del QR de la
-   * mesa. Solo expone categorias activas e items disponibles.
-   */
   async execute(qrToken: string): Promise<MenuDetailResponseDto> {
     const table = await this.prisma.table.findUnique({
       where: {

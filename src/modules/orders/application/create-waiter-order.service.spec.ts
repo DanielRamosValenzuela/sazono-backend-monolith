@@ -162,8 +162,6 @@ describe('CreateWaiterOrderService', () => {
       paymentPolicy: PaymentPolicy.POSTPAID,
       createdByStaffUserId: 'staff-1',
     });
-
-    // Cargo a la cuenta: 2 x 5900 + 1 x 11900 = 23700
     const billUpdateArgs = billUpdateMock.mock.calls[0][0] as {
       where: Record<string, unknown>;
       data: Record<string, unknown>;
@@ -175,8 +173,6 @@ describe('CreateWaiterOrderService', () => {
       totalAmount: new Prisma.Decimal(23700),
       remainingAmount: new Prisma.Decimal(23700),
     });
-
-    // Un ticket por estacion involucrada.
     expect(stationTicketCreateMock).toHaveBeenCalledTimes(2);
   });
 

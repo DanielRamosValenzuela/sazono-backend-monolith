@@ -99,8 +99,6 @@ describe('PayQrOrderService', () => {
       status: PaymentStatus.PAID,
       paidAt: new Date('2026-07-07T12:00:00.000Z'),
     });
-    // Primera lectura: cuenta sin cargos. Segunda lectura (post cargo de la
-    // orden dentro de la misma transaccion): totales ya actualizados.
     const txBillFindUniqueOrThrowMock = jest
       .fn()
       .mockResolvedValueOnce({
@@ -157,16 +155,10 @@ describe('PayQrOrderService', () => {
 
     expect(result.status).toBe(PaymentStatus.PAID);
     expect(result.order?.status).toBe(OrderStatus.ROUTED);
-
-    // El pago cubre exactamente el cargo: la cuenta queda pagada.
     expect(result.bill.remainingAmount).toBe('0');
     expect(result.bill.status).toBe(BillStatus.PAID);
-
-    // Cargo + ruteo ocurren recien con el pago aprobado.
     expect(txBillItemCreateManyMock).toHaveBeenCalled();
     expect(txStationTicketCreateMock).toHaveBeenCalledTimes(1);
-
-    // La sesion queda PAYMENT_COMPLETED al saldar la cuenta.
     expect(txSessionUpdateManyMock).toHaveBeenCalled();
   });
 

@@ -37,12 +37,6 @@ export class PayBillSplitParticipantService {
     @Inject(PAYMENT_PROVIDER)
     private readonly paymentProvider: PaymentProviderPort,
   ) {}
-
-  /**
-   * Paga la parte pendiente de un participante del split usando su token QR.
-   * El monto aplicado a la cuenta es la parte asignada restante; la propina
-   * opcional se suma al total de la Bill como en el resto de pagos.
-   */
   async execute(
     participantToken: string,
     dto: PayBillSplitParticipantDto,

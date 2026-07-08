@@ -29,12 +29,6 @@ type PayableBill = {
   remainingAmount: Prisma.Decimal;
   currency: string;
 };
-
-/**
- * Nucleo compartido del pago de cuenta abierta: valida el monto, cobra al
- * proveedor y asienta el pago sobre la cuenta. Lo usan tanto el flujo
- * publico QR como el flujo staff de caja.
- */
 @Injectable()
 export class SettleBillPaymentService {
   constructor(

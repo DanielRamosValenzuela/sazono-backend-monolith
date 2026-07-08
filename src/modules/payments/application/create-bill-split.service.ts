@@ -33,12 +33,6 @@ export class CreateBillSplitService {
     private readonly prisma: PrismaService,
     private readonly paymentsBranchAccessService: PaymentsBranchAccessService,
   ) {}
-
-  /**
-   * Divide el saldo pendiente de una cuenta entre participantes. El split ocurre
-   * dentro de la misma Bill; cada participante recibe un token para pagar su
-   * parte desde QR.
-   */
   async executeForStaff(
     authUser: JwtPayload,
     billId: string,

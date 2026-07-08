@@ -8,7 +8,7 @@ import { BranchRoleStatus, Role, StaffUserStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { UpdateStaffUserService } from './update-staff-user.service';
-import { StaffAdminAccessService } from './staff-admin-access.service';
+import type { StaffAdminAccessService } from './staff-admin-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type StaffUserRecord = {

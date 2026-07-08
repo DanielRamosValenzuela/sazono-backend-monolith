@@ -1,12 +1,5 @@
-import {
-  BillSplitParticipantStatus,
-  BillSplitStatus,
-  Prisma,
-} from '@prisma/client';
-
-/**
- * Recalcula el estado del split a partir de sus participantes tras un pago.
- */
+import type { Prisma } from '@prisma/client';
+import { BillSplitParticipantStatus, BillSplitStatus } from '@prisma/client';
 export async function updateBillSplitStatus(
   tx: Prisma.TransactionClient,
   billSplitId: string,

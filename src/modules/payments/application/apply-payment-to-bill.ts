@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { BillStatus, Prisma, TableSessionStatus } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import { BillStatus, TableSessionStatus } from '@prisma/client';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
 
 export type BillAfterPayment = {
@@ -10,14 +11,6 @@ export type BillAfterPayment = {
   totalAmount: Prisma.Decimal;
   remainingAmount: Prisma.Decimal;
 };
-
-/**
- * Asienta un pago aprobado sobre la cuenta: suma la propina al total,
- * descuenta el monto pagado del saldo y actualiza el estado de la cuenta.
- *
- * Cuando el saldo llega a cero, la sesion pasa a PAYMENT_COMPLETED. La mesa
- * nunca se cierra automaticamente: el cierre sigue siendo manual.
- */
 export async function applyPaymentToBill(
   tx: Prisma.TransactionClient,
   billId: string,

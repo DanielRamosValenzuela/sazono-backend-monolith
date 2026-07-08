@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { BillStatus, Prisma, Role, TableSessionStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
-import { BillingBranchAccessService } from './billing-branch-access.service';
+import type { BillingBranchAccessService } from './billing-branch-access.service';
 import { GetCurrentBillService } from './get-current-bill.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 

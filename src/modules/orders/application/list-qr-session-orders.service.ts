@@ -8,11 +8,6 @@ import type { OrderResponseDto } from '../presentation/http/dto/orders.dto';
 @Injectable()
 export class ListQrSessionOrdersService {
   constructor(private readonly prisma: PrismaService) {}
-
-  /**
-   * Lista las ordenes de la sesion activa de la mesa asociada al QR.
-   * Permite al cliente final ver el estado general de sus pedidos.
-   */
   async execute(qrToken: string): Promise<OrderResponseDto[]> {
     const table = await this.prisma.table.findUnique({
       where: {

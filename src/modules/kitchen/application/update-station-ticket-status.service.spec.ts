@@ -134,8 +134,6 @@ describe('UpdateStationTicketStatusService', () => {
         data: { status: OrderItemStatus.READY },
       }),
     );
-
-    // Un ticket listo y otro en progreso: la orden queda PARTIALLY_READY.
     expect(orderUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { status: OrderStatus.PARTIALLY_READY },

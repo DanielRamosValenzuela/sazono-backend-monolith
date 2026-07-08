@@ -8,7 +8,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { OpenTableSessionService } from './open-table-session.service';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import type { FloorBranchAccessService } from './floor-branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {

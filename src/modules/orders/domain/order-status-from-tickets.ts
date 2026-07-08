@@ -1,9 +1,4 @@
 import { OrderStatus, StationTicketStatus } from '@prisma/client';
-
-/**
- * Deriva el estado comercial de la orden a partir del avance de sus tickets
- * de estacion. Los tickets cancelados no aportan al calculo.
- */
 export function computeOrderStatusFromTickets(
   ticketStatuses: StationTicketStatus[],
 ): OrderStatus | null {

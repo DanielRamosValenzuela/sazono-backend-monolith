@@ -14,10 +14,6 @@ export class PayQrBillService {
     private readonly prisma: PrismaService,
     private readonly settleBillPaymentService: SettleBillPaymentService,
   ) {}
-
-  /**
-   * Pago total o parcial de la cuenta abierta de la mesa desde el QR.
-   */
   async execute(
     qrToken: string,
     dto: PayBillDto,

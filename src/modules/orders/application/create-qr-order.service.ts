@@ -26,14 +26,6 @@ export class CreateQrOrderService {
     private readonly prisma: PrismaService,
     private readonly orderableMenuItemResolverService: OrderableMenuItemResolverService,
   ) {}
-
-  /**
-   * Crea una orden prepago iniciada por el cliente final via QR.
-   *
-   * La orden queda en AWAITING_PAYMENT: no genera cargos en la cuenta ni
-   * tickets de estacion hasta que el pago sea aprobado por el modulo de
-   * payments. Si la mesa no tiene sesion activa, este pedido la abre.
-   */
   async execute(
     qrToken: string,
     dto: CreateQrOrderDto,

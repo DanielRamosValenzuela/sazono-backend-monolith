@@ -16,11 +16,6 @@ export class PayBillService {
     private readonly paymentsBranchAccessService: PaymentsBranchAccessService,
     private readonly settleBillPaymentService: SettleBillPaymentService,
   ) {}
-
-  /**
-   * Pago total o parcial de una cuenta registrado por caja, supervisor o
-   * admin de la sucursal.
-   */
   async execute(
     authUser: JwtPayload,
     billId: string,

@@ -1,13 +1,13 @@
-import {
+import type {
   OrderItemStatus,
   OrderSource,
   OrderStatus,
   PaymentPolicy,
   PreparationStationStatus,
   PreparationStationType,
-  Prisma,
   StationTicketStatus,
 } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { OrderResponseDto } from '../presentation/http/dto/orders.dto';
 
 export type OrderWithRelations = {

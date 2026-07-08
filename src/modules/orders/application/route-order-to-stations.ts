@@ -1,16 +1,10 @@
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 export type RoutableOrderItem = {
   orderItemId: string;
   preparationStationId: string;
   quantity: number;
 };
-
-/**
- * Divide una orden confirmada en tickets por estacion de preparacion.
- * El cliente ve una sola orden comercial; cocina y barra reciben tickets
- * separados con sus propios items.
- */
 export async function routeOrderToStations(
   tx: Prisma.TransactionClient,
   order: { id: string; branchId: string },

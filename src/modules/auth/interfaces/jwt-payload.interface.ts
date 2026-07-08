@@ -1,4 +1,4 @@
-import { LoginProfileType } from '../dto/login.dto';
+import type { LoginProfileType } from '../dto/login.dto';
 
 export interface JwtPayload {
   sub: string;

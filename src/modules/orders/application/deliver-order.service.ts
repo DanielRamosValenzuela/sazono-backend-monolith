@@ -16,12 +16,6 @@ export class DeliverOrderService {
     private readonly prisma: PrismaService,
     private readonly ordersBranchAccessService: OrdersBranchAccessService,
   ) {}
-
-  /**
-   * Marca una orden lista como entregada en mesa. La entrega parcial ya se
-   * refleja a nivel de tickets e items; este cierre aplica cuando todas las
-   * estaciones terminaron.
-   */
   async execute(
     authUser: JwtPayload,
     orderId: string,

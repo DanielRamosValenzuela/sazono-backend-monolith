@@ -37,16 +37,6 @@ export class PayQrOrderService {
     @Inject(PAYMENT_PROVIDER)
     private readonly paymentProvider: PaymentProviderPort,
   ) {}
-
-  /**
-   * Aprueba el prepago de una orden QR.
-   *
-   * Solo con pago aprobado la orden entra a produccion: en la misma
-   * transaccion se cargan los items a la cuenta, se asienta el pago y se
-   * generan los tickets por estacion. Si el proveedor rechaza el cobro, la
-   * orden queda en PAYMENT_FAILED y el cliente puede reintentar con el
-   * mismo endpoint sin perder el pedido.
-   */
   async execute(
     qrToken: string,
     orderId: string,

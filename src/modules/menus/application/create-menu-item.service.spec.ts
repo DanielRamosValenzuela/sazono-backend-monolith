@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateMenuItemService } from './create-menu-item.service';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('CreateMenuItemService', () => {

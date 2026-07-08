@@ -20,11 +20,6 @@ export type OrderableMenuItem = {
 @Injectable()
 export class OrderableMenuItemResolverService {
   constructor(private readonly prisma: PrismaService) {}
-
-  /**
-   * Valida que los items pedidos pertenezcan a la carta publicada activa de
-   * la sucursal y retorna los datos necesarios para snapshotear la orden.
-   */
   async resolve(
     branchId: string,
     itemDtos: CreateOrderItemDto[],

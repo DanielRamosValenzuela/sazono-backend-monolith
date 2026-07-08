@@ -2,7 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Role, TableStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateTableService } from './create-table.service';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import type { FloorBranchAccessService } from './floor-branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('CreateTableService', () => {

@@ -84,8 +84,6 @@ describe('SettleBillPaymentService', () => {
           tableSession: { updateMany: txSessionUpdateManyMock },
         }),
     );
-
-    // Paga 10000 del saldo + 1000 de propina.
     const result = await service.execute(
       openBill,
       new Prisma.Decimal(10000),
@@ -94,11 +92,8 @@ describe('SettleBillPaymentService', () => {
 
     expect(result.status).toBe(PaymentStatus.PAID);
     expect(result.bill.status).toBe(BillStatus.PARTIALLY_PAID);
-    // Total sube a 24600 con propina; pagado 11000; quedan 13600.
     expect(result.bill.totalAmount).toBe('24600');
     expect(result.bill.remainingAmount).toBe('13600');
-
-    // La sesion no se marca PAYMENT_COMPLETED con saldo pendiente.
     expect(txSessionUpdateManyMock).not.toHaveBeenCalled();
   });
 

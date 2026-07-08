@@ -23,15 +23,11 @@ import type {
   CancelOrderDto,
   OrderResponseDto,
 } from '../presentation/http/dto/orders.dto';
-
-/** Estados previos a produccion: cancelables por el mesero sin impacto financiero. */
 const PRE_PRODUCTION_STATUSES: OrderStatus[] = [
   OrderStatus.DRAFT,
   OrderStatus.AWAITING_PAYMENT,
   OrderStatus.PAYMENT_FAILED,
 ];
-
-/** Estados en produccion: cancelables solo por supervisor o admin. */
 const IN_PRODUCTION_STATUSES: OrderStatus[] = [
   OrderStatus.CONFIRMED,
   OrderStatus.ROUTED,
@@ -108,11 +104,6 @@ export class CancelOrderService {
 
     return mapOrder(cancelledOrder);
   }
-
-  /**
-   * Antes de produccion no hay cargos ni tickets: basta cancelar orden e
-   * items.
-   */
   private async cancelPreProductionOrder(
     orderId: string,
     reason: string | null,
@@ -137,11 +128,6 @@ export class CancelOrderService {
       }),
     ]);
   }
-
-  /**
-   * En produccion la anulacion revierte el impacto financiero: anula los
-   * bill items de la orden, recalcula la cuenta y cancela los tickets.
-   */
   private async cancelInProductionOrder(
     order: {
       id: string;

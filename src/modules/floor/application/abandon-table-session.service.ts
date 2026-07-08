@@ -20,12 +20,6 @@ export class AbandonTableSessionService {
     private readonly prisma: PrismaService,
     private readonly floorBranchAccessService: FloorBranchAccessService,
   ) {}
-
-  /**
-   * Resolucion operativa de deuda o abandono: solo caja, supervisor o admin
-   * pueden cerrar el caso. La sesion y su cuenta quedan ABANDONED aunque
-   * exista saldo pendiente, y la mesa vuelve a estar disponible.
-   */
   async execute(
     authUser: JwtPayload,
     tableSessionId: string,

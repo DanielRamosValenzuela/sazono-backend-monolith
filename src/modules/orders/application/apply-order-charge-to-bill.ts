@@ -16,14 +16,6 @@ type BillSnapshot = {
   totalAmount: Prisma.Decimal;
   remainingAmount: Prisma.Decimal;
 };
-
-/**
- * Suma los items de una orden a la cuenta de la sesion: crea los bill items
- * y recalcula subtotal, total, saldo pendiente y estado de la cuenta.
- *
- * Debe ejecutarse dentro de la misma transaccion que crea la orden (flujo
- * pospago de mesero) o que aprueba el pago (flujo prepago QR).
- */
 export async function applyOrderChargeToBill(
   tx: Prisma.TransactionClient,
   bill: BillSnapshot,
@@ -73,7 +65,6 @@ export async function applyOrderChargeToBill(
   });
 
   if (remainingAmount.gt(0)) {
-    // Un cargo nuevo sobre una sesion ya pagada la devuelve a OPEN.
     await tx.tableSession.updateMany({
       where: {
         id: bill.tableSessionId,

@@ -2,7 +2,7 @@ import { Role, StaffUserStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { ListStaffUsersService } from './list-staff-users.service';
-import { StaffAdminAccessService } from './staff-admin-access.service';
+import type { StaffAdminAccessService } from './staff-admin-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('ListStaffUsersService', () => {
