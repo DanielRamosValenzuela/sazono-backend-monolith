@@ -1,5 +1,26 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
+import { IsDateString, IsOptional } from 'class-validator';
+
+export class GetBranchSummaryQueryDto {
+  @ApiPropertyOptional({
+    example: '2026-07-01',
+    description:
+      'Inicio del rango (inclusive, YYYY-MM-DD). Si se omite junto con "to", se usan los ultimos 7 dias.',
+  })
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-07-08',
+    description:
+      'Fin del rango (inclusive, YYYY-MM-DD). Si se omite junto con "from", se usan los ultimos 7 dias.',
+  })
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+}
 
 export class DailyPaymentsMetricDto {
   @ApiProperty({ example: '2026-07-01' })
@@ -53,8 +74,12 @@ export class BranchSummaryResponseDto {
   @ApiProperty({ example: '5000.00' })
   averageTicket!: string;
 
-  @ApiProperty({ type: [DailyPaymentsMetricDto] })
-  last7Days!: DailyPaymentsMetricDto[];
+  @ApiProperty({
+    type: [DailyPaymentsMetricDto],
+    description:
+      'Serie diaria de pagos. Cubre el rango pedido (from/to) o los ultimos 7 dias por defecto.',
+  })
+  dailySeries!: DailyPaymentsMetricDto[];
 
   @ApiProperty({ type: [OrdersByStatusMetricDto] })
   ordersByStatus!: OrdersByStatusMetricDto[];

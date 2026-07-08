@@ -2,12 +2,14 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { buildVersionedControllerPath } from '../../../../common/http/api-version';
 import { CreateBillSplitService } from '../../application/create-bill-split.service';
+import { GetBillSplitParticipantService } from '../../application/get-bill-split-participant.service';
 import { GetCurrentBillSplitService } from '../../application/get-current-bill-split.service';
 import { GetQrBillService } from '../../application/get-qr-bill.service';
 import { PayBillSplitParticipantService } from '../../application/pay-bill-split-participant.service';
 import { PayQrBillService } from '../../application/pay-qr-bill.service';
 import { PayQrOrderService } from '../../application/pay-qr-order.service';
 import {
+  BillSplitParticipantDetailResponseDto,
   BillSplitResponseDto,
   BillSummaryResponseDto,
   CreateBillSplitDto,
@@ -27,6 +29,7 @@ export class QrPaymentsController {
     private readonly createBillSplitService: CreateBillSplitService,
     private readonly getCurrentBillSplitService: GetCurrentBillSplitService,
     private readonly payBillSplitParticipantService: PayBillSplitParticipantService,
+    private readonly getBillSplitParticipantService: GetBillSplitParticipantService,
   ) {}
 
   @Get('tables/:qrToken/bill')
@@ -85,6 +88,17 @@ export class QrPaymentsController {
     @Param('qrToken') qrToken: string,
   ): Promise<BillSplitResponseDto | null> {
     return this.getCurrentBillSplitService.executeForQrToken(qrToken);
+  }
+
+  @Get('split-participants/:participantToken')
+  @ApiOperation({
+    summary:
+      'Retorna el detalle de un participante del split (cuanto debe, cuanto pago). Endpoint publico.',
+  })
+  getBillSplitParticipant(
+    @Param('participantToken') participantToken: string,
+  ): Promise<BillSplitParticipantDetailResponseDto> {
+    return this.getBillSplitParticipantService.execute(participantToken);
   }
 
   @Post('split-participants/:participantToken/pay')

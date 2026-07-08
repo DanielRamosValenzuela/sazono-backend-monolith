@@ -20,6 +20,7 @@ Este slice cierra los flujos operativos finales del MVP backend:
 
 - `POST /api/v1/qr/tables/:qrToken/bill/splits`
 - `GET /api/v1/qr/tables/:qrToken/bill/splits/current`
+- `GET /api/v1/qr/split-participants/:participantToken`
 - `POST /api/v1/qr/split-participants/:participantToken/pay`
 
 ## Endpoints orders (staff)
@@ -60,6 +61,17 @@ Este slice cierra los flujos operativos finales del MVP backend:
 - requiere motivo obligatorio
 - la sesion y la cuenta pasan a `ABANDONED` aunque quede saldo pendiente
 - la mesa vuelve a `AVAILABLE`
+
+## Consumo frontend
+
+`sazono-ui` ya tiene UI real para split bill y abandono: division desde
+Floor Console (`widgets/floor-console/ui/split-bill-dialog.tsx`, con
+verificacion de `splitBillEnabled` antes de mostrar el boton) y pago de cada
+participante en una pagina publica nueva (`widgets/split-payment`, ruta
+`/[locale]/split?token=`, consume el `GET /qr/split-participants/:token`
+agregado para esto). Abandono tiene su propio dialog con motivo obligatorio
+(`widgets/floor-console/ui/abandon-session-dialog.tsx`). Ver doc frontend 07
+para el detalle.
 
 ## Definition of Done alcanzada
 

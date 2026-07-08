@@ -313,3 +313,66 @@ export class CreateMenuItemDto {
   @IsBoolean()
   isAvailable?: boolean;
 }
+
+export class UpdateMenuCategoryDto {
+  @ApiPropertyOptional({ example: 'Fondos' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
+  @ApiPropertyOptional({
+    enum: MenuCategoryStatus,
+    enumName: 'MenuCategoryStatus',
+  })
+  @IsOptional()
+  @IsEnum(MenuCategoryStatus)
+  status?: MenuCategoryStatus;
+}
+
+export class UpdateMenuItemDto {
+  @ApiPropertyOptional({ example: 'Pisco Sour' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'Pisco, limon, goma y clara.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
+
+  @ApiPropertyOptional({ example: '5900' })
+  @IsOptional()
+  @IsNumberString()
+  price?: string;
+
+  @ApiPropertyOptional({ example: 'TRG-001' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  sku?: string;
+
+  @ApiPropertyOptional({ enum: MenuItemType, enumName: 'MenuItemType' })
+  @IsOptional()
+  @IsEnum(MenuItemType)
+  itemType?: MenuItemType;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  preparationStationId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isAvailable?: boolean;
+}

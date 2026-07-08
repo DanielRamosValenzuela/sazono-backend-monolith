@@ -26,7 +26,10 @@ Orden de rutas importante: `platform-metrics` esta declarada antes que `:restaur
 
 ### Analytics (`staff`, rol `ADMIN` o `SUPERVISOR` de la sucursal)
 
-- `GET /api/v1/analytics/branches/:branchId/summary` — mesas totales/ocupadas, sesiones abiertas, ventas de hoy (monto y cantidad de pagos `PAID`), ticket promedio, serie de los ultimos 7 dias, ordenes de hoy agrupadas por estado, y top 5 productos de los ultimos 30 dias
+- `GET /api/v1/analytics/branches/:branchId/summary` — mesas totales/ocupadas, sesiones abiertas, ventas de hoy (monto y cantidad de pagos `PAID`), ticket promedio, serie diaria (`dailySeries`), ordenes agrupadas por estado, y top 5 productos
+  - acepta `from`/`to` opcionales (`YYYY-MM-DD`, inclusive, deben venir juntos, maximo 92 dias entre ambos). Cuando se pasan, ese mismo rango se usa para `dailySeries`, `ordersByStatus` y `topItems`
+  - sin `from`/`to`, cada metrica usa su ventana historica por defecto: `dailySeries` los ultimos 7 dias, `ordersByStatus` el dia de hoy, `topItems` los ultimos 30 dias (comportamiento identico al de antes de aceptar rango)
+  - `todayRevenue`, `todayPaymentsCount` y `averageTicket` siempre reflejan el dia de hoy, sin importar el rango pedido
 
 ## Reglas activas
 
@@ -45,5 +48,8 @@ Orden de rutas importante: `platform-metrics` esta declarada antes que `:restaur
 
 - listado/gestion de sucursales inactivas o archivadas con filtros
 - borrado fisico o purga de restaurantes/sucursales
-- metricas de analytics con filtro de rango de fechas custom (hoy son ventanas fijas: hoy, 7 dias, 30 dias)
 - monetizacion real de la plataforma: hoy `platform-metrics` agrega pagos comensal→restaurante como proxy de actividad; no existe modelo de suscripcion/cobro de Sazono a los restaurantes
+
+Ya resuelto en el slice de huecos incrementales (ver doc frontend 09):
+
+- filtro de rango de fechas custom en `GET .../summary` (antes eran ventanas fijas: hoy, 7 dias, 30 dias)

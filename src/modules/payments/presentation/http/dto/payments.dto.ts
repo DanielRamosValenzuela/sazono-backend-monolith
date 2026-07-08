@@ -170,6 +170,32 @@ class BillSplitParticipantResponseDto {
   status!: BillSplitParticipantStatus;
 }
 
+export class BillSplitParticipantDetailResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  participantId!: string;
+
+  @ApiProperty({ nullable: true, required: false })
+  displayName!: string | null;
+
+  @ApiProperty({ example: '11800' })
+  allocatedAmount!: string;
+
+  @ApiProperty({ example: '0' })
+  paidAmount!: string;
+
+  @ApiProperty({
+    enum: BillSplitParticipantStatus,
+    enumName: 'BillSplitParticipantStatus',
+  })
+  status!: BillSplitParticipantStatus;
+
+  @ApiProperty({ example: 'CLP' })
+  currency!: string;
+
+  @ApiProperty({ enum: BillStatus, enumName: 'BillStatus' })
+  billStatus!: BillStatus;
+}
+
 export class BillSplitResponseDto {
   @ApiProperty({ format: 'uuid' })
   billSplitId!: string;

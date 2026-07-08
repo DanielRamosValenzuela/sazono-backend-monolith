@@ -57,9 +57,10 @@ export class BranchAnalyticsPrismaRepository {
     });
   }
 
-  findPaidPaymentsSince(
+  findPaidPaymentsInRange(
     branchId: string,
     since: Date,
+    until: Date,
   ): Promise<PaidPaymentRecord[]> {
     return this.prisma.payment.findMany({
       where: {
@@ -71,12 +72,14 @@ export class BranchAnalyticsPrismaRepository {
           {
             paidAt: {
               gte: since,
+              lte: until,
             },
           },
           {
             paidAt: null,
             createdAt: {
               gte: since,
+              lte: until,
             },
           },
         ],
@@ -89,9 +92,10 @@ export class BranchAnalyticsPrismaRepository {
     });
   }
 
-  async groupOrdersByStatusSince(
+  async groupOrdersByStatusInRange(
     branchId: string,
     since: Date,
+    until: Date,
   ): Promise<OrdersByStatusRecord[]> {
     const groups = await this.prisma.order.groupBy({
       by: ['status'],
@@ -99,6 +103,7 @@ export class BranchAnalyticsPrismaRepository {
         branchId,
         createdAt: {
           gte: since,
+          lte: until,
         },
       },
       _count: {
@@ -112,7 +117,11 @@ export class BranchAnalyticsPrismaRepository {
     }));
   }
 
-  findTopItemsSince(branchId: string, since: Date): Promise<TopItemRecord[]> {
+  findTopItemsInRange(
+    branchId: string,
+    since: Date,
+    until: Date,
+  ): Promise<TopItemRecord[]> {
     return this.prisma.$queryRaw<TopItemRecord[]>`
       SELECT
         oi.name_snapshot AS name,
@@ -123,6 +132,7 @@ export class BranchAnalyticsPrismaRepository {
       WHERE o.branch_id = ${branchId}::uuid
         AND oi.status <> 'CANCELLED'
         AND oi.created_at >= ${since}
+        AND oi.created_at <= ${until}
       GROUP BY oi.name_snapshot
       ORDER BY SUM(oi.price_snapshot * oi.quantity) DESC
       LIMIT ${TOP_ITEMS_LIMIT}

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -23,6 +24,8 @@ import { GetMenuDetailService } from '../../application/get-menu-detail.service'
 import { ListMenusService } from '../../application/list-menus.service';
 import { ListPreparationStationsService } from '../../application/list-preparation-stations.service';
 import { PublishMenuService } from '../../application/publish-menu.service';
+import { UpdateMenuCategoryService } from '../../application/update-menu-category.service';
+import { UpdateMenuItemService } from '../../application/update-menu-item.service';
 import {
   CreateMenuCategoryDto,
   CreateMenuDto,
@@ -35,6 +38,8 @@ import {
   MenuItemResponseDto,
   MenuListItemResponseDto,
   PreparationStationResponseDto,
+  UpdateMenuCategoryDto,
+  UpdateMenuItemDto,
 } from './dto/menus.dto';
 
 @ApiTags('menus')
@@ -49,6 +54,8 @@ export class MenusController {
     private readonly getMenuDetailService: GetMenuDetailService,
     private readonly createMenuCategoryService: CreateMenuCategoryService,
     private readonly createMenuItemService: CreateMenuItemService,
+    private readonly updateMenuCategoryService: UpdateMenuCategoryService,
+    private readonly updateMenuItemService: UpdateMenuItemService,
     private readonly publishMenuService: PublishMenuService,
   ) {}
 
@@ -132,6 +139,25 @@ export class MenusController {
     return this.createMenuCategoryService.execute(authUser, menuId, dto);
   }
 
+  @Patch('categories/:menuCategoryId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Edita nombre, orden o estado (activa/oculta/archivada) de una categoria en una carta draft.',
+  })
+  updateMenuCategory(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('menuCategoryId') menuCategoryId: string,
+    @Body() dto: UpdateMenuCategoryDto,
+  ): Promise<MenuCategoryResponseDto> {
+    return this.updateMenuCategoryService.execute(
+      authUser,
+      menuCategoryId,
+      dto,
+    );
+  }
+
   @Post('categories/:menuCategoryId/items')
   @UseGuards(JwtAuthGuard, ProfileTypeGuard)
   @RequireProfileType(LoginProfileType.STAFF)
@@ -144,6 +170,21 @@ export class MenusController {
     @Body() dto: CreateMenuItemDto,
   ): Promise<MenuItemResponseDto> {
     return this.createMenuItemService.execute(authUser, menuCategoryId, dto);
+  }
+
+  @Patch('items/:menuItemId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Edita nombre, precio, descripcion, estacion o disponibilidad de un item en una carta draft.',
+  })
+  updateMenuItem(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('menuItemId') menuItemId: string,
+    @Body() dto: UpdateMenuItemDto,
+  ): Promise<MenuItemResponseDto> {
+    return this.updateMenuItemService.execute(authUser, menuItemId, dto);
   }
 
   @Post(':menuId/publish')

@@ -12,6 +12,8 @@ import { ListMenusService } from './application/list-menus.service';
 import { ListPreparationStationsService } from './application/list-preparation-stations.service';
 import { MenusBranchAdminAccessService } from './application/menus-branch-admin-access.service';
 import { PublishMenuService } from './application/publish-menu.service';
+import { UpdateMenuCategoryService } from './application/update-menu-category.service';
+import { UpdateMenuItemService } from './application/update-menu-item.service';
 import { MenusController } from './presentation/http/menus.controller';
 import { QrMenuController } from './presentation/http/qr-menu.controller';
 
@@ -28,6 +30,8 @@ import { QrMenuController } from './presentation/http/qr-menu.controller';
     GetPublishedMenuByQrService,
     CreateMenuCategoryService,
     CreateMenuItemService,
+    UpdateMenuCategoryService,
+    UpdateMenuItemService,
     PublishMenuService,
     JwtAuthGuard,
     ProfileTypeGuard,

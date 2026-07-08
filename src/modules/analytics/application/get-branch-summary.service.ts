@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAnalyticsPrismaRepository } from '../infrastructure/prisma/branch-analytics.prisma.repository';
@@ -6,11 +6,15 @@ import type { PaidPaymentRecord } from '../infrastructure/prisma/branch-analytic
 import type {
   BranchSummaryResponseDto,
   DailyPaymentsMetricDto,
+  GetBranchSummaryQueryDto,
 } from '../presentation/http/dto/analytics.dto';
 import { AnalyticsBranchAccessService } from './analytics-branch-access.service';
 
-const LAST_DAYS_WINDOW = 7;
-const TOP_ITEMS_WINDOW_DAYS = 30;
+const DEFAULT_SERIES_DAYS = 7;
+const DEFAULT_TOP_ITEMS_WINDOW_DAYS = 30;
+const MAX_RANGE_DAYS = 92;
+
+type ResolvedRange = { start: Date; end: Date };
 
 @Injectable()
 export class GetBranchSummaryService {
@@ -22,6 +26,7 @@ export class GetBranchSummaryService {
   async execute(
     authUser: JwtPayload,
     branchId: string,
+    query: GetBranchSummaryQueryDto,
   ): Promise<BranchSummaryResponseDto> {
     await this.analyticsBranchAccessService.ensureAccess(authUser, branchId, [
       Role.ADMIN,
@@ -30,47 +35,64 @@ export class GetBranchSummaryService {
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = this.endOfDay(startOfToday);
 
-    const paymentsRangeStart = new Date(startOfToday);
-    paymentsRangeStart.setDate(
-      paymentsRangeStart.getDate() - (LAST_DAYS_WINDOW - 1),
-    );
+    const customRange = this.resolveCustomRange(query);
 
-    const topItemsRangeStart = new Date(
-      Date.now() - TOP_ITEMS_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-    );
+    const seriesRange: ResolvedRange = customRange ?? {
+      start: this.daysBefore(startOfToday, DEFAULT_SERIES_DAYS - 1),
+      end: endOfToday,
+    };
+    const ordersByStatusRange: ResolvedRange = customRange ?? {
+      start: startOfToday,
+      end: endOfToday,
+    };
+    const topItemsRange: ResolvedRange = customRange ?? {
+      start: this.daysBefore(startOfToday, DEFAULT_TOP_ITEMS_WINDOW_DAYS - 1),
+      end: endOfToday,
+    };
 
     const [
       totalTables,
       occupiedTables,
       openSessions,
-      payments,
+      todayPayments,
+      seriesPayments,
       orderGroups,
       topItems,
     ] = await Promise.all([
       this.branchAnalyticsRepository.countTables(branchId),
       this.branchAnalyticsRepository.countOccupiedTables(branchId),
       this.branchAnalyticsRepository.countOpenSessions(branchId),
-      this.branchAnalyticsRepository.findPaidPaymentsSince(
-        branchId,
-        paymentsRangeStart,
-      ),
-      this.branchAnalyticsRepository.groupOrdersByStatusSince(
+      this.branchAnalyticsRepository.findPaidPaymentsInRange(
         branchId,
         startOfToday,
+        endOfToday,
       ),
-      this.branchAnalyticsRepository.findTopItemsSince(
+      this.branchAnalyticsRepository.findPaidPaymentsInRange(
         branchId,
-        topItemsRangeStart,
+        seriesRange.start,
+        seriesRange.end,
+      ),
+      this.branchAnalyticsRepository.groupOrdersByStatusInRange(
+        branchId,
+        ordersByStatusRange.start,
+        ordersByStatusRange.end,
+      ),
+      this.branchAnalyticsRepository.findTopItemsInRange(
+        branchId,
+        topItemsRange.start,
+        topItemsRange.end,
       ),
     ]);
 
-    const last7Days = this.buildLast7Days(startOfToday, payments);
-    const today = last7Days[last7Days.length - 1];
-    const todayAmount = new Prisma.Decimal(today.amount);
+    const todayAmount = todayPayments.reduce(
+      (total, payment) => total.add(payment.amount),
+      new Prisma.Decimal(0),
+    );
     const averageTicket =
-      today.count > 0
-        ? todayAmount.dividedBy(today.count).toFixed(2)
+      todayPayments.length > 0
+        ? todayAmount.dividedBy(todayPayments.length).toFixed(2)
         : new Prisma.Decimal(0).toFixed(2);
 
     return {
@@ -78,10 +100,14 @@ export class GetBranchSummaryService {
       totalTables,
       occupiedTables,
       openSessions,
-      todayRevenue: today.amount,
-      todayPaymentsCount: today.count,
+      todayRevenue: todayAmount.toFixed(2),
+      todayPaymentsCount: todayPayments.length,
       averageTicket,
-      last7Days,
+      dailySeries: this.buildDailySeries(
+        seriesRange.start,
+        seriesRange.end,
+        seriesPayments,
+      ),
       ordersByStatus: orderGroups.sort((a, b) => b.count - a.count),
       topItems: topItems.map((item) => ({
         name: item.name,
@@ -91,8 +117,60 @@ export class GetBranchSummaryService {
     };
   }
 
-  private buildLast7Days(
-    startOfToday: Date,
+  private resolveCustomRange(
+    query: GetBranchSummaryQueryDto,
+  ): ResolvedRange | null {
+    if (!query.from && !query.to) {
+      return null;
+    }
+
+    if (!query.from || !query.to) {
+      throw new BadRequestException(
+        'Debes indicar "from" y "to" juntos, o ninguno de los dos.',
+      );
+    }
+
+    const start = new Date(`${query.from}T00:00:00.000`);
+    const end = new Date(`${query.to}T23:59:59.999`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new BadRequestException(
+        'El rango de fechas indicado no es valido.',
+      );
+    }
+
+    if (start > end) {
+      throw new BadRequestException('"from" debe ser anterior o igual a "to".');
+    }
+
+    const spanDays =
+      Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
+    if (spanDays > MAX_RANGE_DAYS) {
+      throw new BadRequestException(
+        `El rango no puede superar ${MAX_RANGE_DAYS} dias.`,
+      );
+    }
+
+    return { start, end };
+  }
+
+  private daysBefore(date: Date, days: number): Date {
+    const result = new Date(date);
+    result.setDate(result.getDate() - days);
+    return result;
+  }
+
+  private endOfDay(date: Date): Date {
+    const result = new Date(date);
+    result.setDate(result.getDate() + 1);
+    result.setMilliseconds(-1);
+    return result;
+  }
+
+  private buildDailySeries(
+    rangeStart: Date,
+    rangeEnd: Date,
     payments: PaidPaymentRecord[],
   ): DailyPaymentsMetricDto[] {
     const totalsByDate = new Map<
@@ -113,22 +191,26 @@ export class GetBranchSummaryService {
       });
     }
 
-    const last7Days: DailyPaymentsMetricDto[] = [];
+    const series: DailyPaymentsMetricDto[] = [];
+    const cursor = new Date(rangeStart);
+    cursor.setHours(0, 0, 0, 0);
+    const lastDay = new Date(rangeEnd);
+    lastDay.setHours(0, 0, 0, 0);
 
-    for (let daysAgo = LAST_DAYS_WINDOW - 1; daysAgo >= 0; daysAgo -= 1) {
-      const day = new Date(startOfToday);
-      day.setDate(day.getDate() - daysAgo);
-      const dateKey = this.toDateKey(day);
+    while (cursor <= lastDay) {
+      const dateKey = this.toDateKey(cursor);
       const totals = totalsByDate.get(dateKey);
 
-      last7Days.push({
+      series.push({
         date: dateKey,
         amount: (totals?.amount ?? new Prisma.Decimal(0)).toFixed(2),
         count: totals?.count ?? 0,
       });
+
+      cursor.setDate(cursor.getDate() + 1);
     }
 
-    return last7Days;
+    return series;
   }
 
   private toDateKey(date: Date): string {

@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { CreateBillSplitService } from './application/create-bill-split.service';
+import { GetBillSplitParticipantService } from './application/get-bill-split-participant.service';
 import { GetCurrentBillSplitService } from './application/get-current-bill-split.service';
 import { GetQrBillService } from './application/get-qr-bill.service';
 import { ListBillPaymentsService } from './application/list-bill-payments.service';
@@ -35,6 +36,7 @@ import { QrPaymentsController } from './presentation/http/qr-payments.controller
     CreateBillSplitService,
     GetCurrentBillSplitService,
     PayBillSplitParticipantService,
+    GetBillSplitParticipantService,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],

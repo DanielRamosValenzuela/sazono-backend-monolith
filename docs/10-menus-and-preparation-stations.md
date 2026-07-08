@@ -18,7 +18,9 @@ Este slice deja la primera base real de carta digital para el MVP:
 - `GET /api/v1/menus`
 - `GET /api/v1/menus/:menuId`
 - `POST /api/v1/menus/:menuId/categories`
+- `PATCH /api/v1/menus/categories/:menuCategoryId` — edita `name`, `sortOrder` o `status` (`ACTIVE`/`HIDDEN`/`ARCHIVED`)
 - `POST /api/v1/menus/categories/:menuCategoryId/items`
+- `PATCH /api/v1/menus/items/:menuItemId` — edita cualquier campo editable de `CreateMenuItemDto` (nombre, descripcion, precio, sku, tipo, estacion, disponibilidad)
 - `POST /api/v1/menus/:menuId/publish`
 
 ## Reglas activas
@@ -44,9 +46,13 @@ Este slice ya permite:
 
 - multimedia en productos
 - traducciones y fallback por idioma
-- actualizacion y archivado fino de categorias o items
 
 Ya resuelto en el slice de orders y kitchen (ver doc 11):
 
 - lectura publica de carta por QR (`GET /api/v1/qr/tables/:qrToken/menu`)
 - integracion con `orders` para snapshot de nombre y precio
+
+Ya resuelto en el slice de huecos incrementales (ver doc frontend 09):
+
+- edicion y archivado de categorias e items existentes, con el mismo guard
+  "solo `DRAFT`" que ya aplicaba a create

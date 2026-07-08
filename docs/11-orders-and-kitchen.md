@@ -57,6 +57,15 @@ La politica tributaria del MVP vive aislada en `src/modules/billing/domain/tax-p
 - `taxAmount` queda en 0 como campo informativo
 - una futura expansion a paises con otra regla se resuelve en ese archivo, sin tocar los casos de uso
 
+## Consumo frontend
+
+`sazono-ui` ya tiene UI real para ambos endpoints staff: pedido de mesero
+(`widgets/floor-console/ui/add-order-sheet.tsx`, `POST /orders`) y tablero de
+cocina/barra (`widgets/kitchen-board`, ruta `/staff/kitchen`, consume listado
+y avance de tickets). Ver doc frontend 06 para el detalle. Cambios de forma
+en `OrderResponseDto`/`StationTicketResponseDto` ahora rompen una pantalla
+real, no solo contratos documentados.
+
 ## Lo que falta despues
 
 - edicion de ordenes antes de produccion (solo cancelacion implementada por ahora)

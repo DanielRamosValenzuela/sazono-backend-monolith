@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { BillStatus } from '@prisma/client';
+import { BillStatus, TableSessionStatus } from '@prisma/client';
 
 export class BillResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -37,4 +37,33 @@ export class BillResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   closeReason!: string | null;
+}
+
+export class BranchOpenBillResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  tableId!: string;
+
+  @ApiProperty({ example: 'M01' })
+  tableCode!: string;
+
+  @ApiProperty()
+  tableName!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  tableSessionId!: string;
+
+  @ApiProperty({ enum: TableSessionStatus, enumName: 'TableSessionStatus' })
+  sessionStatus!: TableSessionStatus;
+
+  @ApiProperty()
+  sessionOpenedAt!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  billId!: string;
+
+  @ApiProperty({ example: '0' })
+  totalAmount!: string;
+
+  @ApiProperty({ example: '0' })
+  remainingAmount!: string;
 }

@@ -7,6 +7,7 @@ Este slice conecta por primera vez `TableSession` con `Bill` y completa el flujo
 ## Endpoints actuales
 
 - `GET /api/v1/billing/table-sessions/:tableSessionId/current-bill`
+- `GET /api/v1/billing/branches/:branchId/open-bills`: todas las cuentas de sesiones activas de la sucursal en una sola consulta (evita N+1 al pedir el saldo mesa por mesa)
 - `POST /api/v1/floor/table-sessions/:tableSessionId/close`
 
 ## Reglas activas
@@ -21,6 +22,13 @@ Este slice conecta por primera vez `TableSession` con `Bill` y completa el flujo
 
 - consultar `Bill` actual: `ADMIN`, `SUPERVISOR`, `WAITER` o `CASHIER`
 - cerrar mesa: `ADMIN`, `SUPERVISOR`, `WAITER` o `CASHIER`
+
+## Consumo frontend
+
+`sazono-ui` usa `open-bills` para mostrar el saldo pendiente de cada mesa
+directo en la grilla de Floor Console (badge "Debe $X" por tarjeta, mas un
+filtro "Solo con saldo pendiente"), sin pantalla de caja/supervisor
+separada. Ver doc frontend 08.
 
 ## Lo que todavia no resuelve
 

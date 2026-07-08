@@ -4,6 +4,7 @@ import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingBranchAccessService } from './application/billing-branch-access.service';
 import { GetCurrentBillService } from './application/get-current-bill.service';
+import { ListBranchOpenBillsService } from './application/list-branch-open-bills.service';
 import { BillingController } from './presentation/http/billing.controller';
 
 @Module({
@@ -12,6 +13,7 @@ import { BillingController } from './presentation/http/billing.controller';
   providers: [
     BillingBranchAccessService,
     GetCurrentBillService,
+    ListBranchOpenBillsService,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],
