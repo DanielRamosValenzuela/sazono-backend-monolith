@@ -3,11 +3,13 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { buildVersionedControllerPath } from '../../../../common/http/api-version';
 import { CreateBillSplitService } from '../../application/create-bill-split.service';
 import { GetCurrentBillSplitService } from '../../application/get-current-bill-split.service';
+import { GetQrBillService } from '../../application/get-qr-bill.service';
 import { PayBillSplitParticipantService } from '../../application/pay-bill-split-participant.service';
 import { PayQrBillService } from '../../application/pay-qr-bill.service';
 import { PayQrOrderService } from '../../application/pay-qr-order.service';
 import {
   BillSplitResponseDto,
+  BillSummaryResponseDto,
   CreateBillSplitDto,
   PayBillDto,
   PayBillSplitParticipantDto,
@@ -21,10 +23,22 @@ export class QrPaymentsController {
   constructor(
     private readonly payQrOrderService: PayQrOrderService,
     private readonly payQrBillService: PayQrBillService,
+    private readonly getQrBillService: GetQrBillService,
     private readonly createBillSplitService: CreateBillSplitService,
     private readonly getCurrentBillSplitService: GetCurrentBillSplitService,
     private readonly payBillSplitParticipantService: PayBillSplitParticipantService,
   ) {}
+
+  @Get('tables/:qrToken/bill')
+  @ApiOperation({
+    summary:
+      'Retorna el saldo de la cuenta abierta de la mesa (o null si no hay cuenta). Endpoint publico.',
+  })
+  getQrBill(
+    @Param('qrToken') qrToken: string,
+  ): Promise<BillSummaryResponseDto | null> {
+    return this.getQrBillService.execute(qrToken);
+  }
 
   @Post('tables/:qrToken/orders/:orderId/pay')
   @ApiOperation({

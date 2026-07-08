@@ -28,9 +28,13 @@ const PRE_PRODUCTION_STATUSES: OrderStatus[] = [
   OrderStatus.AWAITING_PAYMENT,
   OrderStatus.PAYMENT_FAILED,
 ];
-const IN_PRODUCTION_STATUSES: OrderStatus[] = [
+
+const QUEUED_NOT_STARTED_STATUSES: OrderStatus[] = [
   OrderStatus.CONFIRMED,
   OrderStatus.ROUTED,
+];
+
+const IN_PRODUCTION_STATUSES: OrderStatus[] = [
   OrderStatus.IN_PREPARATION,
   OrderStatus.PARTIALLY_READY,
   OrderStatus.READY,
@@ -69,17 +73,24 @@ export class CancelOrderService {
 
     const reason = dto.reason?.trim() || null;
 
+    const isQueuedNotStarted = QUEUED_NOT_STARTED_STATUSES.includes(
+      order.status,
+    );
+    const isInProduction = IN_PRODUCTION_STATUSES.includes(order.status);
+
     if (PRE_PRODUCTION_STATUSES.includes(order.status)) {
       await this.cancelPreProductionOrder(order.id, reason);
-    } else if (IN_PRODUCTION_STATUSES.includes(order.status)) {
-      const isSupervisor =
-        context.roles.includes(Role.ADMIN) ||
-        context.roles.includes(Role.SUPERVISOR);
+    } else if (isQueuedNotStarted || isInProduction) {
+      if (isInProduction) {
+        const isSupervisor =
+          context.roles.includes(Role.ADMIN) ||
+          context.roles.includes(Role.SUPERVISOR);
 
-      if (!isSupervisor) {
-        throw new ForbiddenException(
-          'Una orden en produccion solo puede anularla un supervisor o admin.',
-        );
+        if (!isSupervisor) {
+          throw new ForbiddenException(
+            'Una orden en produccion solo puede anularla un supervisor o admin.',
+          );
+        }
       }
 
       if (order.paymentPolicy === PaymentPolicy.PREPAID) {

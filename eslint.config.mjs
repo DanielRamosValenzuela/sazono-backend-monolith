@@ -3,6 +3,34 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+const noProjectCommentsPlugin = {
+  rules: {
+    'no-project-comments': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description: 'Disallow comments in project source files',
+        },
+        schema: [],
+      },
+      create(context) {
+        const sourceCode = context.sourceCode;
+
+        return {
+          Program() {
+            for (const comment of sourceCode.getAllComments()) {
+              context.report({
+                loc: comment.loc,
+                message: 'Comments are not allowed in project source files.',
+              });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 export default tseslint.config(
   {
     ignores: ['eslint.config.mjs'],
@@ -21,6 +49,18 @@ export default tseslint.config(
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+  {
+    files: ['src/**/*.ts', 'apps/**/*.ts', 'libs/**/*.ts', 'test/**/*.ts'],
+    plugins: {
+      project: noProjectCommentsPlugin,
+    },
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+    },
+    rules: {
+      'project/no-project-comments': 'error',
     },
   },
   {

@@ -23,6 +23,10 @@ export class PrismaService
     super({
       ...(adapter ? { adapter } : {}),
       log,
+      transactionOptions: {
+        maxWait: 5000,
+        timeout: 15000,
+      },
     });
   }
 

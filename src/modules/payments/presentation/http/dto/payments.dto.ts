@@ -46,7 +46,7 @@ export class PayBillDto {
   tipAmount?: string;
 }
 
-class BillSummaryResponseDto {
+export class BillSummaryResponseDto {
   @ApiProperty({ format: 'uuid' })
   billId!: string;
 

@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { CreateBillSplitService } from './application/create-bill-split.service';
 import { GetCurrentBillSplitService } from './application/get-current-bill-split.service';
+import { GetQrBillService } from './application/get-qr-bill.service';
 import { ListBillPaymentsService } from './application/list-bill-payments.service';
 import { PayBillService } from './application/pay-bill.service';
 import { PayBillSplitParticipantService } from './application/pay-bill-split-participant.service';
@@ -28,6 +29,7 @@ import { QrPaymentsController } from './presentation/http/qr-payments.controller
     SettleBillPaymentService,
     PayQrOrderService,
     PayQrBillService,
+    GetQrBillService,
     PayBillService,
     ListBillPaymentsService,
     CreateBillSplitService,
