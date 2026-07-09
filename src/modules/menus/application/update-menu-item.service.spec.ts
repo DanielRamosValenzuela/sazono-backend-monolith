@@ -64,6 +64,8 @@ describe('UpdateMenuItemService', () => {
       sku: null,
       itemType: 'DRINK',
       isAvailable: false,
+      sortOrder: 0,
+      media: [],
       preparationStation: {
         id: 'station-1',
         name: 'Barra',

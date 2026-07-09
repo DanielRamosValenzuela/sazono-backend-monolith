@@ -11,6 +11,56 @@ import type {
   PreparationStationResponseDto,
 } from '../presentation/http/dto/menus.dto';
 
+export type TranslationEntry = {
+  locale: string;
+  name: string;
+  description: string | null;
+};
+
+export type TranslationRecord = {
+  entityId: string;
+  locale: string;
+  fieldName: string;
+  translatedValue: string;
+};
+
+export const groupTranslationsByEntity = (
+  rows: TranslationRecord[],
+): Map<string, TranslationEntry[]> => {
+  const byEntityAndLocale = new Map<string, Map<string, TranslationEntry>>();
+
+  for (const row of rows) {
+    const byLocale =
+      byEntityAndLocale.get(row.entityId) ??
+      new Map<string, TranslationEntry>();
+    const entry = byLocale.get(row.locale) ?? {
+      locale: row.locale,
+      name: '',
+      description: null,
+    };
+
+    if (row.fieldName === 'name') {
+      entry.name = row.translatedValue;
+    } else if (row.fieldName === 'description') {
+      entry.description = row.translatedValue;
+    }
+
+    byLocale.set(row.locale, entry);
+    byEntityAndLocale.set(row.entityId, byLocale);
+  }
+
+  const result = new Map<string, TranslationEntry[]>();
+
+  for (const [entityId, byLocale] of byEntityAndLocale) {
+    result.set(
+      entityId,
+      [...byLocale.values()].filter((entry) => entry.name.length > 0),
+    );
+  }
+
+  return result;
+};
+
 type MenuSummaryWithRelations = {
   id: string;
   branchId: string;
@@ -32,6 +82,7 @@ type MenuSummaryWithRelations = {
       sku: string | null;
       itemType: MenuItemType;
       isAvailable: boolean;
+      sortOrder: number;
     }>;
   }>;
 };
@@ -57,6 +108,8 @@ type MenuDetailWithRelations = {
       sku: string | null;
       itemType: MenuItemType;
       isAvailable: boolean;
+      sortOrder: number;
+      media: Array<{ url: string }>;
       preparationStation: {
         id: string;
         name: string;
@@ -107,6 +160,7 @@ export const mapMenuListItem = (
 export const mapMenuDetail = (
   menu: MenuDetailWithRelations,
   isDefaultMenu: boolean,
+  translationsByEntity: Map<string, TranslationEntry[]> = new Map(),
 ): MenuDetailResponseDto => ({
   menuId: menu.id,
   branchId: menu.branchId,
@@ -121,6 +175,7 @@ export const mapMenuDetail = (
     name: category.name,
     sortOrder: category.sortOrder,
     status: category.status,
+    translations: translationsByEntity.get(category.id) ?? [],
     items: category.items.map((item) => ({
       menuItemId: item.id,
       name: item.name,
@@ -129,6 +184,9 @@ export const mapMenuDetail = (
       sku: item.sku,
       itemType: item.itemType,
       isAvailable: item.isAvailable,
+      sortOrder: item.sortOrder,
+      imageUrl: item.media[0]?.url ?? null,
+      translations: translationsByEntity.get(item.id) ?? [],
       preparationStation: {
         preparationStationId: item.preparationStation.id,
         name: item.preparationStation.name,

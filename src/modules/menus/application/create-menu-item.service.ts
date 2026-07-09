@@ -66,6 +66,19 @@ export class CreateMenuItemService {
       );
     }
 
+    const nextSortOrder =
+      dto.sortOrder ??
+      ((
+        await this.prisma.menuItem.aggregate({
+          where: {
+            menuCategoryId,
+          },
+          _max: {
+            sortOrder: true,
+          },
+        })
+      )._max.sortOrder ?? -1) + 1;
+
     const item = await this.prisma.menuItem.create({
       data: {
         menuCategoryId,
@@ -76,6 +89,7 @@ export class CreateMenuItemService {
         itemType: dto.itemType,
         preparationStationId: dto.preparationStationId,
         isAvailable: dto.isAvailable ?? true,
+        sortOrder: nextSortOrder,
       },
       include: {
         preparationStation: true,
@@ -91,6 +105,8 @@ export class CreateMenuItemService {
       sku: item.sku,
       itemType: item.itemType,
       isAvailable: item.isAvailable,
+      sortOrder: item.sortOrder,
+      imageUrl: null,
       preparationStation: {
         preparationStationId: item.preparationStation.id,
         name: item.preparationStation.name,

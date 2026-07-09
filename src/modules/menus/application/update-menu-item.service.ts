@@ -92,9 +92,15 @@ export class UpdateMenuItemService {
         ...(dto.isAvailable !== undefined
           ? { isAvailable: dto.isAvailable }
           : {}),
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       },
       include: {
         preparationStation: true,
+        media: {
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
       },
     });
 
@@ -107,6 +113,8 @@ export class UpdateMenuItemService {
       sku: updated.sku,
       itemType: updated.itemType,
       isAvailable: updated.isAvailable,
+      sortOrder: updated.sortOrder,
+      imageUrl: updated.media[0]?.url ?? null,
       preparationStation: {
         preparationStationId: updated.preparationStation.id,
         name: updated.preparationStation.name,

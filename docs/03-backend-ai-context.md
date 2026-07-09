@@ -79,13 +79,16 @@ Eso implica un estado transitorio valido:
 ## Siguiente paso sugerido para este repo
 
 1. adapter de pasarela de pago real cuando se elija el proveedor (Webpay, MercadoPago, Stripe, etc.)
-2. multimedia e imagen principal por producto en la carta
-3. multi idioma basico de carta (tabla `translations` ya existe)
-4. ordenamiento fino de categorias e items: el `PATCH` ya acepta `sortOrder`, pero ninguna UI lo expone todavia (sin drag-and-drop ni input numerico)
-5. reembolsos y anulaciones con impacto financiero en ordenes prepagadas
-6. modelo de monetizacion de la plataforma (suscripcion o cobro de Sazono a los restaurantes); hoy no existe
+2. reembolsos y anulaciones con impacto financiero en ordenes prepagadas
+3. modelo de monetizacion de la plataforma (suscripcion o cobro de Sazono a los restaurantes); hoy no existe
 
 Ya resuelto (ver doc frontend 09):
 
 - actualizar (y archivar) categorias/items existentes de la carta (`PATCH /menus/categories/:id`, `PATCH /menus/items/:id`, ver doc 10)
 - filtro de rango de fechas custom en analytics (ver doc 14)
+
+Ya resuelto (ver doc frontend 10):
+
+- multimedia e imagen principal por producto en la carta
+- multi idioma basico de carta
+- ordenamiento fino de categorias e items con drag-and-drop

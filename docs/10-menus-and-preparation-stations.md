@@ -19,8 +19,14 @@ Este slice deja la primera base real de carta digital para el MVP:
 - `GET /api/v1/menus/:menuId`
 - `POST /api/v1/menus/:menuId/categories`
 - `PATCH /api/v1/menus/categories/:menuCategoryId` — edita `name`, `sortOrder` o `status` (`ACTIVE`/`HIDDEN`/`ARCHIVED`)
+- `PATCH /api/v1/menus/:menuId/categories/reorder` — reordena todas las categorias de la carta en una transaccion (body `{ orderedCategoryIds: [] }`, arreglo completo)
 - `POST /api/v1/menus/categories/:menuCategoryId/items`
-- `PATCH /api/v1/menus/items/:menuItemId` — edita cualquier campo editable de `CreateMenuItemDto` (nombre, descripcion, precio, sku, tipo, estacion, disponibilidad)
+- `PATCH /api/v1/menus/items/:menuItemId` — edita cualquier campo editable de `CreateMenuItemDto` (nombre, descripcion, precio, sku, tipo, estacion, disponibilidad, `sortOrder`)
+- `PATCH /api/v1/menus/categories/:menuCategoryId/items/reorder` — reordena todos los items de la categoria en una transaccion (body `{ orderedItemIds: [] }`, arreglo completo)
+- `POST /api/v1/menus/items/:menuItemId/media` — multipart (`file`), sube/reemplaza la imagen principal del item en el bucket publico `menu-media` de Supabase Storage
+- `DELETE /api/v1/menus/items/:menuItemId/media` — quita la imagen principal
+- `PUT /api/v1/menus/categories/:menuCategoryId/translations/:locale` — crea o reemplaza la traduccion de `name` de la categoria para ese locale
+- `PUT /api/v1/menus/items/:menuItemId/translations/:locale` — crea o reemplaza la traduccion de `name`/`description` del item para ese locale
 - `POST /api/v1/menus/:menuId/publish`
 
 ## Reglas activas
@@ -44,8 +50,8 @@ Este slice ya permite:
 
 ## Lo que falta despues
 
-- multimedia en productos
-- traducciones y fallback por idioma
+- fallback de idioma mas alla de es/en si se agregan mas locales
+- galeria de multiples imagenes por item (hoy es una sola, "imagen principal")
 
 Ya resuelto en el slice de orders y kitchen (ver doc 11):
 
@@ -56,3 +62,11 @@ Ya resuelto en el slice de huecos incrementales (ver doc frontend 09):
 
 - edicion y archivado de categorias e items existentes, con el mismo guard
   "solo `DRAFT`" que ya aplicaba a create
+
+Ya resuelto en el slice de fase 5 / paquete de carta (ver doc frontend 10):
+
+- `sortOrder` en items (antes solo las categorias lo tenian) y
+  reordenamiento en lote para categorias e items
+- imagen principal por producto (`MenuItemMedia`, bucket `menu-media`)
+- traducciones de nombre/descripcion por locale (`Translation`), con
+  sustitucion automatica en la lectura publica via `?locale=`

@@ -69,6 +69,8 @@ describe('PublishMenuService', () => {
               sku: null,
               itemType: 'FOOD',
               isAvailable: true,
+              sortOrder: 0,
+              media: [],
               preparationStation: {
                 id: 'station-1',
                 name: 'Cocina',
@@ -122,6 +124,8 @@ describe('PublishMenuService', () => {
                 sku: null,
                 itemType: 'FOOD',
                 isAvailable: true,
+                sortOrder: 0,
+                media: [],
                 preparationStation: {
                   id: 'station-1',
                   name: 'Cocina',

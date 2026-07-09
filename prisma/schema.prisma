@@ -402,6 +402,7 @@ model MenuItem {
   itemType             MenuItemType       @map("item_type")
   preparationStationId String             @map("preparation_station_id") @db.Uuid
   isAvailable          Boolean            @default(true) @map("is_available")
+  sortOrder            Int                @default(0) @map("sort_order")
   menuCategory         MenuCategory       @relation(fields: [menuCategoryId], references: [id], onDelete: Cascade)
   preparationStation   PreparationStation @relation(fields: [preparationStationId], references: [id], onDelete: Restrict)
   media                MenuItemMedia[]
@@ -410,6 +411,7 @@ model MenuItem {
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([menuCategoryId, isAvailable])
+  @@index([menuCategoryId, sortOrder])
   @@index([preparationStationId])
   @@map("menu_items")
 }

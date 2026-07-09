@@ -114,6 +114,11 @@ export class PublishMenuService {
                 orderBy: [{ name: 'asc' }],
                 include: {
                   preparationStation: true,
+                  media: {
+                    orderBy: {
+                      sortOrder: 'asc',
+                    },
+                  },
                 },
               },
             },

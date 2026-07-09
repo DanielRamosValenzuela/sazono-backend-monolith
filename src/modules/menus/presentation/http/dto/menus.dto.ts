@@ -8,6 +8,9 @@ import {
 } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -39,6 +42,17 @@ class PreparationStationSummaryResponseDto {
   status!: PreparationStationStatus;
 }
 
+class TranslationResponseDto {
+  @ApiProperty({ example: 'en' })
+  locale!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ nullable: true, required: false })
+  description!: string | null;
+}
+
 class MenuItemSummaryResponseDto {
   @ApiProperty({ format: 'uuid' })
   menuItemId!: string;
@@ -60,6 +74,15 @@ class MenuItemSummaryResponseDto {
 
   @ApiProperty()
   isAvailable!: boolean;
+
+  @ApiProperty()
+  sortOrder!: number;
+
+  @ApiProperty({ nullable: true, required: false })
+  imageUrl!: string | null;
+
+  @ApiProperty({ type: [TranslationResponseDto] })
+  translations!: TranslationResponseDto[];
 
   @ApiProperty({ type: PreparationStationSummaryResponseDto })
   preparationStation!: PreparationStationSummaryResponseDto;
@@ -100,6 +123,9 @@ class MenuCategoryDetailResponseDto {
     enumName: 'MenuCategoryStatus',
   })
   status!: MenuCategoryStatus;
+
+  @ApiProperty({ type: [TranslationResponseDto] })
+  translations!: TranslationResponseDto[];
 
   @ApiProperty({ type: [MenuItemSummaryResponseDto] })
   items!: MenuItemSummaryResponseDto[];
@@ -152,6 +178,12 @@ export class MenuItemResponseDto {
 
   @ApiProperty()
   isAvailable!: boolean;
+
+  @ApiProperty()
+  sortOrder!: number;
+
+  @ApiProperty({ nullable: true, required: false })
+  imageUrl!: string | null;
 
   @ApiProperty({ type: PreparationStationSummaryResponseDto })
   preparationStation!: PreparationStationSummaryResponseDto;
@@ -312,6 +344,13 @@ export class CreateMenuItemDto {
   @IsOptional()
   @IsBoolean()
   isAvailable?: boolean;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
 }
 
 export class UpdateMenuCategoryDto {
@@ -375,4 +414,49 @@ export class UpdateMenuItemDto {
   @IsOptional()
   @IsBoolean()
   isAvailable?: boolean;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class ReorderMenuCategoriesDto {
+  @ApiProperty({ type: [String], format: 'uuid' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  orderedCategoryIds!: string[];
+}
+
+export class ReorderMenuItemsDto {
+  @ApiProperty({ type: [String], format: 'uuid' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  orderedItemIds!: string[];
+}
+
+export class UpsertCategoryTranslationDto {
+  @ApiProperty({ example: 'Mains' })
+  @IsString()
+  @MaxLength(100)
+  name!: string;
+}
+
+export class UpsertItemTranslationDto {
+  @ApiProperty({ example: 'Pisco Sour' })
+  @IsString()
+  @MaxLength(120)
+  name!: string;
+
+  @ApiPropertyOptional({ example: 'Pisco, lime and simple syrup.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
 }

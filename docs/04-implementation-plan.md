@@ -116,9 +116,9 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Crear modulo `staff` con roles por sucursal
 - [x] Crear modulo `floor` con apertura y cierre de mesa
 - [x] Crear modulo `menus` con constructor de carta y publicacion
-- [ ] Implementar ordenamiento de categorias y productos
-- [ ] Implementar descripcion e imagen principal por producto
-- [ ] Implementar multi idioma basico de carta
+- [x] Implementar ordenamiento de categorias y productos (`sortOrder` + `PATCH .../reorder` en lote; ver doc 10)
+- [x] Implementar descripcion e imagen principal por producto (descripcion ya existia; imagen via `MenuItemMedia`/Supabase Storage; ver doc 10)
+- [x] Implementar multi idioma basico de carta (tabla `translations`, sustitucion por `?locale=` en la lectura publica; ver doc 10)
 - [x] Crear modulo `orders` con origen QR y mesero
 - [x] Crear modulo `kitchen` con tickets por estacion
 - [x] Crear modulo `billing` con cuenta unica por mesa
@@ -155,7 +155,7 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - al saldar la cuenta la sesion pasa a `PAYMENT_COMPLETED`; el cierre de mesa sigue siendo manual
 - split bill simple (`BY_AMOUNT`) dentro de la misma cuenta, con pago por participante via token QR
 - entrega de ordenes (`DELIVERED`), cancelacion antes/durante produccion y abandono de mesa por caja/supervisor
-- el backend MVP operacional esta completo; pendientes menores: multimedia de carta, multi idioma, pasarela de pago real
+- el backend MVP operacional esta completo; pendiente menor: pasarela de pago real (multimedia de carta y multi idioma ya se resolvieron, ver doc 10)
 - `restaurants` ahora expone CRUD de lectura/edicion para `platform_admin` (listar, detalle con equipo, editar, activar/desactivar) y metricas agregadas de plataforma
 - `branches` ahora expone listado y edicion (`PATCH`) para `staff`, incluyendo merge parcial de `branch_settings`
 - `staff` ahora expone edicion (`PATCH /staff/:id`) con reglas de proteccion: no auto-desactivarse, no dejar el restaurante sin `ADMIN`
