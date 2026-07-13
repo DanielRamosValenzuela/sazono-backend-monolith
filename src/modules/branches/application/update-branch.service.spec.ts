@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
@@ -8,7 +8,7 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import type {
-  BranchesStaffAccessService,
+  BranchAccessService,
   BranchesStaffContext,
 } from './branches-staff-access.service';
 import { UpdateBranchService } from './update-branch.service';
@@ -61,9 +61,9 @@ describe('UpdateBranchService', () => {
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
-  const branchesStaffAccessService = {
+  const BranchAccessService = {
     getStaffContext: getStaffContextMock,
-  } as unknown as BranchesStaffAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser: JwtPayload = {
     sub: 'auth-1',
@@ -83,7 +83,7 @@ describe('UpdateBranchService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpdateBranchService(prisma, branchesStaffAccessService);
+    service = new UpdateBranchService(prisma, BranchAccessService);
   });
 
   it('rejects an update without any field to change', async () => {

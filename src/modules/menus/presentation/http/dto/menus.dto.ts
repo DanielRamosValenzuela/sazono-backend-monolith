@@ -274,6 +274,30 @@ export class ListPreparationStationsQueryDto {
   branchId!: string;
 }
 
+export class UpdatePreparationStationDto {
+  @ApiPropertyOptional({ example: 'Cocina caliente' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name?: string;
+
+  @ApiPropertyOptional({
+    enum: PreparationStationType,
+    enumName: 'PreparationStationType',
+  })
+  @IsOptional()
+  @IsEnum(PreparationStationType)
+  stationType?: PreparationStationType;
+
+  @ApiPropertyOptional({
+    enum: PreparationStationStatus,
+    enumName: 'PreparationStationStatus',
+  })
+  @IsOptional()
+  @IsEnum(PreparationStationStatus)
+  status?: PreparationStationStatus;
+}
+
 export class CreateMenuDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()

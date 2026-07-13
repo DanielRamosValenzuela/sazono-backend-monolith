@@ -1,12 +1,12 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { MenuStatus, PreparationStationStatus } from '@prisma/client';
+import { Role, MenuStatus, PreparationStationStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   MenuItemResponseDto,
   UpdateMenuItemDto,
@@ -16,7 +16,7 @@ import type {
 export class UpdateMenuItemService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -43,9 +43,10 @@ export class UpdateMenuItemService {
 
     const branchId = item.menuCategory.menu.branchId;
 
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       branchId,
+      [Role.ADMIN],
     );
 
     if (item.menuCategory.menu.status !== MenuStatus.DRAFT) {

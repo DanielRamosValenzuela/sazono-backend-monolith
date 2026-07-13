@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -12,7 +12,7 @@ import {
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../domain/active-table-session-statuses';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   OpenTableSessionDto,
   TableSessionResponseDto,
@@ -22,7 +22,7 @@ import type {
 export class OpenTableSessionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly floorBranchAccessService: FloorBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -45,7 +45,7 @@ export class OpenTableSessionService {
       );
     }
 
-    const context = await this.floorBranchAccessService.ensureAccess(
+    const context = await this.branchAccessService.ensureAccess(
       authUser,
       table.branchId,
       [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],

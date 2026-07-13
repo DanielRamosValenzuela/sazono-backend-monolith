@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { mapPreparationStation } from './menu-mapper';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   ListPreparationStationsQueryDto,
   PreparationStationResponseDto,
@@ -12,16 +13,17 @@ import type {
 export class ListPreparationStationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
     authUser: JwtPayload,
     query: ListPreparationStationsQueryDto,
   ): Promise<PreparationStationResponseDto[]> {
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       query.branchId,
+      [Role.ADMIN],
     );
 
     const stations = await this.prisma.preparationStation.findMany({

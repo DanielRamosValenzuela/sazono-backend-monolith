@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -18,7 +18,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
-import { OrdersBranchAccessService } from './orders-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   CancelOrderDto,
   OrderResponseDto,
@@ -44,7 +44,7 @@ const IN_PRODUCTION_STATUSES: OrderStatus[] = [
 export class CancelOrderService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ordersBranchAccessService: OrdersBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -65,10 +65,10 @@ export class CancelOrderService {
       throw new BadRequestException('La orden indicada no existe.');
     }
 
-    const context = await this.ordersBranchAccessService.ensureAccess(
+    const context = await this.branchAccessService.ensureAccess(
       authUser,
       order.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],
+      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
     );
 
     const reason = dto.reason?.trim() || null;

@@ -1,7 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+﻿import { BadRequestException } from '@nestjs/common';
 import { BillStatus, Prisma, Role, TableSessionStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
-import type { BillingBranchAccessService } from './billing-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { GetCurrentBillService } from './get-current-bill.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
@@ -34,15 +34,15 @@ describe('GetCurrentBillService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const billingBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as BillingBranchAccessService;
+  } as unknown as BranchAccessService;
 
   let service: GetCurrentBillService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new GetCurrentBillService(prisma, billingBranchAccessService);
+    service = new GetCurrentBillService(prisma, BranchAccessService);
   });
 
   it('returns the current bill for an active session', async () => {

@@ -13,10 +13,10 @@ import {
   StaffUserStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { AUTH_PROVIDER } from '../../auth/application/ports/auth-provider.port';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { StaffAdminAccessService } from './staff-admin-access.service';
 import type {
   StaffUserResponseDto,
   UpdateStaffUserDto,
@@ -31,7 +31,7 @@ type BranchRoleAssignment = {
 export class UpdateStaffUserService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly staffAdminAccessService: StaffAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
     @Inject(AUTH_PROVIDER)
     private readonly authProvider: AuthProvider,
   ) {}
@@ -41,8 +41,13 @@ export class UpdateStaffUserService {
     staffUserId: string,
     dto: UpdateStaffUserDto,
   ): Promise<StaffUserResponseDto> {
-    const context =
-      await this.staffAdminAccessService.getAdminContext(authUser);
+    const context = await this.branchAccessService.getStaffContext(authUser);
+
+    if (context.adminBranchIds.size === 0) {
+      throw new ForbiddenException(
+        'Debes tener al menos un rol ADMIN para administrar usuarios internos.',
+      );
+    }
 
     const hasChanges =
       dto.firstName !== undefined ||

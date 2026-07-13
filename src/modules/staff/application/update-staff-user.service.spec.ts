@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -8,7 +8,7 @@ import { BranchRoleStatus, Role, StaffUserStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { UpdateStaffUserService } from './update-staff-user.service';
-import type { StaffAdminAccessService } from './staff-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type StaffUserRecord = {
@@ -60,10 +60,10 @@ describe('UpdateStaffUserService', () => {
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const getAdminContextMock = jest.fn();
-  const staffAdminAccessService = {
-    getAdminContext: getAdminContextMock,
-  } as unknown as StaffAdminAccessService;
+  const getStaffContextMock = jest.fn();
+  const branchAccessService = {
+    getStaffContext: getStaffContextMock,
+  } as unknown as BranchAccessService;
 
   const getUserByIdMock = jest.fn();
   const authProvider = {
@@ -115,10 +115,10 @@ describe('UpdateStaffUserService', () => {
     jest.clearAllMocks();
     service = new UpdateStaffUserService(
       prisma,
-      staffAdminAccessService,
+      branchAccessService,
       authProvider,
     );
-    getAdminContextMock.mockResolvedValue(adminContext);
+    getStaffContextMock.mockResolvedValue(adminContext);
   });
 
   it('updates names and replaces branch roles as the full set', async () => {

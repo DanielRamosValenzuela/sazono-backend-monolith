@@ -1,6 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { RestaurantStatus } from '@prisma/client';
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  Min,
+} from 'class-validator';
 
 export class UpdateRestaurantDto {
   @ApiPropertyOptional({ example: 'Sazono Bistro' })
@@ -8,6 +16,28 @@ export class UpdateRestaurantDto {
   @IsString()
   @IsNotEmpty()
   name?: string;
+
+  @ApiPropertyOptional({
+    example: 'sazono-bistro',
+    description:
+      'Identificador de la pantalla de login exclusiva de este restaurante (/r/:slug/login). Solo minusculas, numeros y guiones.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
+    message: 'slug solo puede contener minusculas, numeros y guiones.',
+  })
+  slug?: string;
+
+  @ApiPropertyOptional({
+    example: 2,
+    description: 'Cantidad de sucursales que este restaurante puede crear.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  branchQuota?: number;
 
   @ApiPropertyOptional({
     nullable: true,

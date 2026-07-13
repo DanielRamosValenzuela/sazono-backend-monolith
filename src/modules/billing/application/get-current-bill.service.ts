@@ -1,15 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import { BillStatus, Role, TableSessionStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import type { BillResponseDto } from '../presentation/http/dto/billing.dto';
-import { BillingBranchAccessService } from './billing-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 @Injectable()
 export class GetCurrentBillService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly billingBranchAccessService: BillingBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -29,7 +29,7 @@ export class GetCurrentBillService {
       throw new BadRequestException('La sesion indicada no existe.');
     }
 
-    await this.billingBranchAccessService.ensureAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       tableSession.branchId,
       [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],

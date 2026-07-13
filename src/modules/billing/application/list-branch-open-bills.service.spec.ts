@@ -1,7 +1,7 @@
-import { Prisma, Role, TableSessionStatus } from '@prisma/client';
+﻿import { Prisma, Role, TableSessionStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
-import type { BillingBranchAccessService } from './billing-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { ListBranchOpenBillsService } from './list-branch-open-bills.service';
 
 describe('ListBranchOpenBillsService', () => {
@@ -13,9 +13,9 @@ describe('ListBranchOpenBillsService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const billingBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as BillingBranchAccessService;
+  } as unknown as BranchAccessService;
 
   let service: ListBranchOpenBillsService;
 
@@ -30,7 +30,7 @@ describe('ListBranchOpenBillsService', () => {
     jest.clearAllMocks();
     service = new ListBranchOpenBillsService(
       prisma,
-      billingBranchAccessService,
+      BranchAccessService,
     );
   });
 
@@ -75,12 +75,7 @@ describe('ListBranchOpenBillsService', () => {
     expect(ensureAccessMock).toHaveBeenCalledWith(
       authUser,
       'branch-1',
-      expect.arrayContaining([
-        Role.ADMIN,
-        Role.SUPERVISOR,
-        Role.WAITER,
-        Role.CASHIER,
-      ]),
+      expect.arrayContaining([Role.ADMIN, Role.SUPERVISOR, Role.CASHIER]),
     );
   });
 

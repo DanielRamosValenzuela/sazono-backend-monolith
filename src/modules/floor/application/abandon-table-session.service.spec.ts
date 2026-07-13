@@ -1,8 +1,8 @@
-import { TableSessionStatus } from '@prisma/client';
+﻿import { TableSessionStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import { AbandonTableSessionService } from './abandon-table-session.service';
-import type { FloorBranchAccessService } from './floor-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 describe('AbandonTableSessionService', () => {
   const tableSessionFindUniqueMock = jest.fn();
@@ -15,9 +15,9 @@ describe('AbandonTableSessionService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const floorBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as FloorBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -30,7 +30,7 @@ describe('AbandonTableSessionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AbandonTableSessionService(prisma, floorBranchAccessService);
+    service = new AbandonTableSessionService(prisma, BranchAccessService);
   });
 
   it('marks the session and bill as abandoned and frees the table', async () => {

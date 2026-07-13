@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { slugify } from '../../../common/slug/slugify';
 import { AUTH_PROVIDER } from '../../auth/application/ports/auth-provider.port';
 import type {
   AuthenticatedIdentity,
@@ -68,11 +69,15 @@ export class BootstrapRestaurantService {
     }
 
     try {
+      const slug = await this.generateUniqueSlug(dto.restaurant.name);
+
       const result = await this.prisma.$transaction(async (tx) => {
         const restaurant = await tx.restaurant.create({
           data: {
             name: dto.restaurant.name,
             legalName: dto.restaurant.legalName,
+            slug,
+            branchQuota: dto.restaurant.branchQuota ?? 1,
             defaultLanguage: dto.restaurant.defaultLanguage,
             timezone: dto.restaurant.timezone,
             currency: dto.restaurant.currency,
@@ -95,6 +100,8 @@ export class BootstrapRestaurantService {
       return {
         restaurantId: result.restaurant.id,
         restaurantName: result.restaurant.name,
+        restaurantSlug: result.restaurant.slug,
+        branchQuota: result.restaurant.branchQuota,
         firstAdmin: {
           authUserId: authIdentity.authUserId,
           staffUserId: result.staffUser.id,
@@ -107,5 +114,23 @@ export class BootstrapRestaurantService {
       await this.authProvider.deleteUser(authIdentity.authUserId);
       throw error;
     }
+  }
+
+  private async generateUniqueSlug(name: string): Promise<string> {
+    const base = slugify(name) || 'restaurante';
+    let candidate = base;
+    let suffix = 2;
+
+    while (
+      await this.prisma.restaurant.findUnique({
+        where: { slug: candidate },
+        select: { id: true },
+      })
+    ) {
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+
+    return candidate;
   }
 }

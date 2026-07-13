@@ -1,8 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+﻿import { BadRequestException, ConflictException } from '@nestjs/common';
 import { MenuStatus } from '@prisma/client';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
-import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { UpsertMenuItemTranslationService } from './upsert-menu-item-translation.service';
 
 describe('UpsertMenuItemTranslationService', () => {
@@ -22,10 +22,10 @@ describe('UpsertMenuItemTranslationService', () => {
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const ensureAdminAccessMock = jest.fn();
-  const menusBranchAdminAccessService = {
-    ensureAdminAccess: ensureAdminAccessMock,
-  } as unknown as MenusBranchAdminAccessService;
+  const ensureAccessMock = jest.fn();
+  const branchAccessService = {
+    ensureAccess: ensureAccessMock,
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -40,9 +40,9 @@ describe('UpsertMenuItemTranslationService', () => {
     jest.clearAllMocks();
     service = new UpsertMenuItemTranslationService(
       prisma,
-      menusBranchAdminAccessService,
+      branchAccessService,
     );
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',

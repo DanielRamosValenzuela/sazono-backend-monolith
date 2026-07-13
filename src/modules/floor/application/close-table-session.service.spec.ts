@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+﻿import { BadRequestException } from '@nestjs/common';
 import {
   BillStatus,
   Prisma,
@@ -9,7 +9,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CloseTableSessionService } from './close-table-session.service';
-import type { FloorBranchAccessService } from './floor-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
@@ -70,15 +70,15 @@ describe('CloseTableSessionService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const floorBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as FloorBranchAccessService;
+  } as unknown as BranchAccessService;
 
   let service: CloseTableSessionService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CloseTableSessionService(prisma, floorBranchAccessService);
+    service = new CloseTableSessionService(prisma, BranchAccessService);
   });
 
   it('closes an active table session and frees the table', async () => {

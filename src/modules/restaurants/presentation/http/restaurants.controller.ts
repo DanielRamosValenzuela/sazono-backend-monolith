@@ -5,9 +5,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { buildVersionedControllerPath } from '../../../../common/http/api-version';
 import { LoginProfileType } from '../../../auth/dto/login.dto';
 import { RequireProfileType } from '../../../auth/decorators/require-profile-type.decorator';
@@ -15,8 +17,10 @@ import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import { BootstrapRestaurantService } from '../../application/bootstrap-restaurant.service';
 import { GetPlatformMetricsService } from '../../application/get-platform-metrics.service';
+import { GetRestaurantBySlugService } from '../../application/get-restaurant-by-slug.service';
 import { GetRestaurantDetailService } from '../../application/get-restaurant-detail.service';
 import { ListRestaurantsService } from '../../application/list-restaurants.service';
+import { SearchRestaurantsService } from '../../application/search-restaurants.service';
 import { UpdateRestaurantService } from '../../application/update-restaurant.service';
 import {
   BootstrapRestaurantDto,
@@ -24,7 +28,12 @@ import {
 } from './dto/bootstrap-restaurant.dto';
 import { RestaurantSummaryResponseDto } from './dto/list-restaurants.dto';
 import { PlatformMetricsResponseDto } from './dto/platform-metrics.dto';
+import { RestaurantBySlugResponseDto } from './dto/restaurant-by-slug.dto';
 import { RestaurantDetailResponseDto } from './dto/restaurant-detail.dto';
+import {
+  RestaurantSearchResultDto,
+  SearchRestaurantsQueryDto,
+} from './dto/search-restaurants.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 
 @ApiTags('restaurants')
@@ -37,7 +46,32 @@ export class RestaurantsController {
     private readonly getPlatformMetricsService: GetPlatformMetricsService,
     private readonly getRestaurantDetailService: GetRestaurantDetailService,
     private readonly updateRestaurantService: UpdateRestaurantService,
+    private readonly getRestaurantBySlugService: GetRestaurantBySlugService,
+    private readonly searchRestaurantsService: SearchRestaurantsService,
   ) {}
+
+  @Get('search')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Busca restaurantes activos por prefijo de nombre (para encontrar tu URL de login). Sin autenticacion.',
+  })
+  search(
+    @Query() query: SearchRestaurantsQueryDto,
+  ): Promise<RestaurantSearchResultDto[]> {
+    return this.searchRestaurantsService.execute(query.q);
+  }
+
+  @Get('by-slug/:slug')
+  @ApiOperation({
+    summary:
+      'Resuelve el nombre publico de un restaurante por su slug de login. Sin autenticacion.',
+  })
+  getBySlug(
+    @Param('slug') slug: string,
+  ): Promise<RestaurantBySlugResponseDto> {
+    return this.getRestaurantBySlugService.execute(slug);
+  }
 
   @Get('platform-metrics')
   @UseGuards(JwtAuthGuard, ProfileTypeGuard)

@@ -16,6 +16,8 @@
 12. [12 Payments](D:\Programacion\Sazono\sazono-backend-monolith\docs\12-payments.md)
 13. [13 Payments Split and Resolution](D:\Programacion\Sazono\sazono-backend-monolith\docs\13-payments-split-and-resolution.md)
 14. [14 Platform Admin and Analytics](D:\Programacion\Sazono\sazono-backend-monolith\docs\14-platform-admin-and-analytics.md)
+15. [15 Branch Access, Waiter Permissions and Stations](D:\Programacion\Sazono\sazono-backend-monolith\docs\15-branch-access-and-waiter-permissions.md)
+16. [16 Leads and Restaurant Search](D:\Programacion\Sazono\sazono-backend-monolith\docs\16-leads-and-restaurant-search.md)
 
 ## Objetivo
 

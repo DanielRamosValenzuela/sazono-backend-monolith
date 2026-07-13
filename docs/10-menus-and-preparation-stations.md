@@ -14,6 +14,7 @@ Este slice deja la primera base real de carta digital para el MVP:
 
 - `POST /api/v1/menus/preparation-stations`
 - `GET /api/v1/menus/preparation-stations`
+- `PATCH /api/v1/menus/preparation-stations/:preparationStationId` — edita `name`, `stationType` o `status` (`ACTIVE`/`INACTIVE`)
 - `POST /api/v1/menus`
 - `GET /api/v1/menus`
 - `GET /api/v1/menus/:menuId`
@@ -31,7 +32,8 @@ Este slice deja la primera base real de carta digital para el MVP:
 
 ## Reglas activas
 
-- solo un `ADMIN` de sucursal puede administrar la carta
+- solo un `ADMIN` de sucursal puede administrar (crear/editar/publicar) la carta
+- `GET /menus` y `GET /menus/:id` tambien aceptan rol `WAITER` (solo lectura, sin esto el mesero no puede cargar el menu para armar una comanda; ver doc 15)
 - cada `menu_item` debe apuntar a una `PreparationStation` activa de la misma sucursal
 - una carta `PUBLISHED` no se edita; los cambios deben ocurrir sobre una nueva version `DRAFT`
 - publicar una carta la deja como `defaultMenuId` de la sucursal

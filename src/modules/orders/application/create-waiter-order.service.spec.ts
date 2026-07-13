@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+﻿import { BadRequestException } from '@nestjs/common';
 import {
   BillStatus,
   OrderStatus,
@@ -10,7 +10,7 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import { CreateWaiterOrderService } from './create-waiter-order.service';
 import type { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
-import type { OrdersBranchAccessService } from './orders-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 describe('CreateWaiterOrderService', () => {
   const tableSessionFindUniqueMock = jest.fn();
@@ -27,9 +27,9 @@ describe('CreateWaiterOrderService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const ordersBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as OrdersBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const resolveMock = jest.fn();
   const orderableMenuItemResolverService = {
@@ -49,7 +49,7 @@ describe('CreateWaiterOrderService', () => {
     jest.clearAllMocks();
     service = new CreateWaiterOrderService(
       prisma,
-      ordersBranchAccessService,
+      BranchAccessService,
       orderableMenuItemResolverService,
     );
   });

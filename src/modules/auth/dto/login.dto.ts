@@ -5,7 +5,6 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUUID,
   MinLength,
 } from 'class-validator';
 
@@ -41,11 +40,11 @@ export class LoginDto {
   profileType?: LoginProfileType;
 
   @ApiPropertyOptional({
-    format: 'uuid',
+    example: 'sazono-bistro',
     description:
-      'Selecciona el restaurante cuando la misma identidad tenga mas de un perfil staff.',
+      'Slug del restaurante (identifica la pantalla de login exclusiva de esa empresa). Requerido para profileType=staff.',
   })
   @IsOptional()
-  @IsUUID()
-  restaurantId?: string;
+  @IsString()
+  restaurantSlug?: string;
 }

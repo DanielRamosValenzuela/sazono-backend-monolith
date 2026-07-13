@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+﻿import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   BillStatus,
   Role,
@@ -8,7 +8,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { OpenTableSessionService } from './open-table-session.service';
-import type { FloorBranchAccessService } from './floor-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
@@ -47,15 +47,15 @@ describe('OpenTableSessionService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const floorBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as FloorBranchAccessService;
+  } as unknown as BranchAccessService;
 
   let service: OpenTableSessionService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new OpenTableSessionService(prisma, floorBranchAccessService);
+    service = new OpenTableSessionService(prisma, BranchAccessService);
   });
 
   it('opens a new active session and marks the table occupied', async () => {

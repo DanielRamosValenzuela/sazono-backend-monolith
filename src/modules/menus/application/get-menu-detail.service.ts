@@ -1,16 +1,16 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { TranslationEntityType } from '@prisma/client';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
+import { Role, TranslationEntityType } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { groupTranslationsByEntity, mapMenuDetail } from './menu-mapper';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
 
 @Injectable()
 export class GetMenuDetailService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -49,9 +49,10 @@ export class GetMenuDetailService {
       },
     });
 
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       menu.branchId,
+      [Role.ADMIN, Role.WAITER],
     );
 
     const categoryIds = menu.categories.map((category) => category.id);

@@ -54,10 +54,15 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales invalidas.');
     }
 
+    const resolvedRestaurantId = await this.resolveRestaurantIdFromSlug(
+      loginDto.restaurantSlug,
+    );
+
     const profile = await this.resolveProfileFromAuthUserId(
       authenticatedIdentity.authUserId,
       authenticatedIdentity.email ?? loginDto.email,
       loginDto,
+      resolvedRestaurantId,
     );
 
     const payload: JwtPayload = {
@@ -94,15 +99,39 @@ export class AuthService {
         email: authenticatedIdentity.email ?? '',
         password: '',
         profileType: payload.profileType,
-        restaurantId: payload.restaurantId,
       },
+      payload.restaurantId,
     );
+  }
+
+  private async resolveRestaurantIdFromSlug(
+    restaurantSlug?: string,
+  ): Promise<string | undefined> {
+    if (!restaurantSlug) {
+      return undefined;
+    }
+
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: {
+        slug: restaurantSlug,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!restaurant) {
+      throw new UnauthorizedException('Credenciales invalidas.');
+    }
+
+    return restaurant.id;
   }
 
   private async resolveProfileFromAuthUserId(
     authUserId: string,
     email: string,
     loginDto: LoginDto,
+    restaurantId?: string,
   ): Promise<AuthenticatedProfileDto> {
     const [platformAdmins, staffUsers] = await Promise.all([
       this.prisma.platformAdmin.findMany({
@@ -138,6 +167,7 @@ export class AuthService {
       activePlatformAdmins,
       activeStaffUsers,
       loginDto,
+      restaurantId,
     );
   }
 
@@ -147,6 +177,7 @@ export class AuthService {
     activePlatformAdmins: PlatformAdminRecord[],
     activeStaffUsers: StaffUserRecord[],
     loginDto: LoginDto,
+    restaurantId?: string,
   ): AuthenticatedProfileDto {
     if (!loginDto.profileType && activePlatformAdmins.length > 0) {
       if (activeStaffUsers.length === 0) {
@@ -176,7 +207,7 @@ export class AuthService {
 
     const selectedStaffUser = this.resolveStaffProfile(
       activeStaffUsers,
-      loginDto.restaurantId,
+      restaurantId,
     );
 
     if (!selectedStaffUser) {

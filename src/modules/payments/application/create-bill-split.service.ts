@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -16,7 +16,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
 import { BILL_SPLIT_INCLUDE, mapBillSplit } from './bill-split-mapper';
-import { PaymentsBranchAccessService } from './payments-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   BillSplitResponseDto,
   CreateBillSplitDto,
@@ -31,7 +31,7 @@ const SPLITTABLE_BILL_STATUSES: BillStatus[] = [
 export class CreateBillSplitService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paymentsBranchAccessService: PaymentsBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
   async executeForStaff(
     authUser: JwtPayload,
@@ -40,10 +40,10 @@ export class CreateBillSplitService {
   ): Promise<BillSplitResponseDto> {
     const bill = await this.loadSplittableBill(billId);
 
-    await this.paymentsBranchAccessService.ensureAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       bill.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER, Role.WAITER],
+      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
     );
 
     return this.createSplit(bill, dto);

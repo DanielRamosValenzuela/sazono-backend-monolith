@@ -1,8 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+﻿import { BadRequestException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { BranchAnalyticsPrismaRepository } from '../infrastructure/prisma/branch-analytics.prisma.repository';
-import type { AnalyticsBranchAccessService } from './analytics-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { GetBranchSummaryService } from './get-branch-summary.service';
 
 describe('GetBranchSummaryService', () => {
@@ -23,9 +23,9 @@ describe('GetBranchSummaryService', () => {
   } as unknown as BranchAnalyticsPrismaRepository;
 
   const ensureAccessMock = jest.fn();
-  const analyticsBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as AnalyticsBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -39,7 +39,7 @@ describe('GetBranchSummaryService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     service = new GetBranchSummaryService(
-      analyticsBranchAccessService,
+      BranchAccessService,
       repository,
     );
 

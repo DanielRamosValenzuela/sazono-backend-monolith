@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   BillStatus,
   Role,
@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../domain/active-table-session-statuses';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   AbandonTableSessionDto,
   TableSessionResponseDto,
@@ -18,7 +18,7 @@ import type {
 export class AbandonTableSessionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly floorBranchAccessService: FloorBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
   async execute(
     authUser: JwtPayload,
@@ -44,7 +44,7 @@ export class AbandonTableSessionService {
       );
     }
 
-    const context = await this.floorBranchAccessService.ensureAccess(
+    const context = await this.branchAccessService.ensureAccess(
       authUser,
       existingSession.branchId,
       [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],

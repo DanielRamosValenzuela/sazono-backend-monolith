@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+﻿import { ForbiddenException } from '@nestjs/common';
 import {
   BillItemStatus,
   BillStatus,
@@ -9,7 +9,7 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import { CancelOrderService } from './cancel-order.service';
-import type { OrdersBranchAccessService } from './orders-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 describe('CancelOrderService', () => {
   const orderFindUniqueMock = jest.fn();
@@ -29,9 +29,9 @@ describe('CancelOrderService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const ordersBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as OrdersBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -44,7 +44,7 @@ describe('CancelOrderService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CancelOrderService(prisma, ordersBranchAccessService);
+    service = new CancelOrderService(prisma, BranchAccessService);
   });
 
   it('cancels an awaiting payment QR order without touching the bill', async () => {

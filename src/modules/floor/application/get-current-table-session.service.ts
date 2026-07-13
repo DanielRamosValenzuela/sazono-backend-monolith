@@ -1,16 +1,16 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../domain/active-table-session-statuses';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { TableSessionResponseDto } from '../presentation/http/dto/floor.dto';
 
 @Injectable()
 export class GetCurrentTableSessionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly floorBranchAccessService: FloorBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -27,7 +27,7 @@ export class GetCurrentTableSessionService {
       throw new BadRequestException('La mesa indicada no existe.');
     }
 
-    await this.floorBranchAccessService.ensureAccess(authUser, table.branchId, [
+    await this.branchAccessService.ensureAccess(authUser, table.branchId, [
       Role.ADMIN,
       Role.SUPERVISOR,
       Role.WAITER,

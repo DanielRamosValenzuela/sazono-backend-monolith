@@ -1,9 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
-import { OrdersBranchAccessService } from './orders-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   ListOrdersQueryDto,
   OrderResponseDto,
@@ -13,7 +13,7 @@ import type {
 export class ListSessionOrdersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ordersBranchAccessService: OrdersBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -30,7 +30,7 @@ export class ListSessionOrdersService {
       throw new BadRequestException('La sesion indicada no existe.');
     }
 
-    await this.ordersBranchAccessService.ensureAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       tableSession.branchId,
       [

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -24,6 +25,14 @@ export class UpdateRestaurantService {
 
     if (dto.legalName !== undefined) {
       data.legalName = dto.legalName;
+    }
+
+    if (dto.slug !== undefined) {
+      data.slug = dto.slug;
+    }
+
+    if (dto.branchQuota !== undefined) {
+      data.branchQuota = dto.branchQuota;
     }
 
     if (dto.defaultLanguage !== undefined) {
@@ -61,25 +70,41 @@ export class UpdateRestaurantService {
       throw new NotFoundException('El restaurante no existe.');
     }
 
-    const updatedRestaurant = await this.prisma.restaurant.update({
-      where: {
-        id: restaurantId,
-      },
-      data,
-      include: {
-        _count: {
-          select: {
-            branches: true,
-            staffUsers: true,
+    let updatedRestaurant;
+
+    try {
+      updatedRestaurant = await this.prisma.restaurant.update({
+        where: {
+          id: restaurantId,
+        },
+        data,
+        include: {
+          _count: {
+            select: {
+              branches: true,
+              staffUsers: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Ese slug ya esta en uso por otro restaurante.',
+        );
+      }
+      throw error;
+    }
 
     return {
       restaurantId: updatedRestaurant.id,
       name: updatedRestaurant.name,
       legalName: updatedRestaurant.legalName,
+      slug: updatedRestaurant.slug,
+      branchQuota: updatedRestaurant.branchQuota,
       status: updatedRestaurant.status,
       currency: updatedRestaurant.currency,
       timezone: updatedRestaurant.timezone,

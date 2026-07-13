@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+﻿import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   BillSplitMode,
   BillSplitStatus,
@@ -8,7 +8,7 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import { CreateBillSplitService } from './create-bill-split.service';
-import type { PaymentsBranchAccessService } from './payments-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 describe('CreateBillSplitService', () => {
   const billFindUniqueMock = jest.fn();
@@ -25,9 +25,9 @@ describe('CreateBillSplitService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const paymentsBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as PaymentsBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -40,7 +40,7 @@ describe('CreateBillSplitService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CreateBillSplitService(prisma, paymentsBranchAccessService);
+    service = new CreateBillSplitService(prisma, BranchAccessService);
   });
 
   it('creates a BY_AMOUNT split when allocations match the remaining balance', async () => {

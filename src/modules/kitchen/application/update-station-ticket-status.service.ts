@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -14,7 +14,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { computeOrderStatusFromTickets } from '../../orders/domain/order-status-from-tickets';
 import { canTransitionStationTicket } from '../domain/station-ticket-transitions';
-import { KitchenBranchAccessService } from './kitchen-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import {
   STATION_TICKET_INCLUDE,
   mapStationTicket,
@@ -43,7 +43,7 @@ const ORDER_ITEM_STATUS_BY_TICKET_STATUS: Partial<
 export class UpdateStationTicketStatusService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kitchenBranchAccessService: KitchenBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -64,7 +64,7 @@ export class UpdateStationTicketStatusService {
       throw new BadRequestException('El ticket indicado no existe.');
     }
 
-    const context = await this.kitchenBranchAccessService.ensureAccess(
+    const context = await this.branchAccessService.ensureAccess(
       authUser,
       ticket.branchId,
       [Role.ADMIN, Role.SUPERVISOR, Role.KITCHEN, Role.BAR],

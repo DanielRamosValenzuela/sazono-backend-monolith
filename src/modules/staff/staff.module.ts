@@ -4,7 +4,6 @@ import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateStaffUserService } from './application/create-staff-user.service';
 import { ListStaffUsersService } from './application/list-staff-users.service';
-import { StaffAdminAccessService } from './application/staff-admin-access.service';
 import { UpdateStaffUserService } from './application/update-staff-user.service';
 import { StaffController } from './presentation/http/staff.controller';
 
@@ -12,7 +11,6 @@ import { StaffController } from './presentation/http/staff.controller';
   imports: [AuthModule],
   controllers: [StaffController],
   providers: [
-    StaffAdminAccessService,
     CreateStaffUserService,
     ListStaffUsersService,
     UpdateStaffUserService,

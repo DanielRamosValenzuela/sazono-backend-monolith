@@ -1,9 +1,9 @@
-import { ForbiddenException } from '@nestjs/common';
+﻿import { ForbiddenException } from '@nestjs/common';
 import { Role, StaffUserStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { CreateStaffUserService } from './create-staff-user.service';
-import type { StaffAdminAccessService } from './staff-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
@@ -66,10 +66,10 @@ describe('CreateStaffUserService', () => {
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const getAdminContextMock = jest.fn();
-  const staffAdminAccessService = {
-    getAdminContext: getAdminContextMock,
-  } as unknown as StaffAdminAccessService;
+  const getStaffContextMock = jest.fn();
+  const branchAccessService = {
+    getStaffContext: getStaffContextMock,
+  } as unknown as BranchAccessService;
 
   const findUserByEmailMock = jest.fn();
   const createUserMock = jest.fn();
@@ -86,13 +86,13 @@ describe('CreateStaffUserService', () => {
     jest.clearAllMocks();
     service = new CreateStaffUserService(
       prisma,
-      staffAdminAccessService,
+      branchAccessService,
       authProvider,
     );
   });
 
   it('creates a new auth identity and staff profile', async () => {
-    getAdminContextMock.mockResolvedValue({
+    getStaffContextMock.mockResolvedValue({
       staffUserId: 'staff-admin-1',
       restaurantId: 'restaurant-1',
       adminBranchIds: new Set(['branch-1']),
@@ -187,7 +187,7 @@ describe('CreateStaffUserService', () => {
   });
 
   it('reuses an existing auth identity when the email already exists', async () => {
-    getAdminContextMock.mockResolvedValue({
+    getStaffContextMock.mockResolvedValue({
       staffUserId: 'staff-admin-1',
       restaurantId: 'restaurant-1',
       adminBranchIds: new Set(['branch-1']),
@@ -279,7 +279,7 @@ describe('CreateStaffUserService', () => {
   });
 
   it('rejects branch assignments outside admin scope', async () => {
-    getAdminContextMock.mockResolvedValue({
+    getStaffContextMock.mockResolvedValue({
       staffUserId: 'staff-admin-1',
       restaurantId: 'restaurant-1',
       adminBranchIds: new Set(['branch-1']),

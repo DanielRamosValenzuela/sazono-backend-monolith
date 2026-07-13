@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../domain/active-table-session-statuses';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   ListTablesQueryDto,
   TableResponseDto,
@@ -13,14 +13,14 @@ import type {
 export class ListTablesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly floorBranchAccessService: FloorBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
     authUser: JwtPayload,
     query: ListTablesQueryDto,
   ): Promise<TableResponseDto[]> {
-    await this.floorBranchAccessService.ensureAccess(authUser, query.branchId, [
+    await this.branchAccessService.ensureAccess(authUser, query.branchId, [
       Role.ADMIN,
       Role.SUPERVISOR,
       Role.WAITER,

@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { mapMenuListItem } from './menu-mapper';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   ListMenusQueryDto,
   MenuListItemResponseDto,
@@ -12,16 +13,17 @@ import type {
 export class ListMenusService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
     authUser: JwtPayload,
     query: ListMenusQueryDto,
   ): Promise<MenuListItemResponseDto[]> {
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       query.branchId,
+      [Role.ADMIN, Role.WAITER],
     );
 
     const [branchSettings, menus] = await Promise.all([

@@ -61,6 +61,26 @@ export class CreateBranchService {
       );
     }
 
+    const restaurant = await this.prisma.restaurant.findUniqueOrThrow({
+      where: {
+        id: staffUser.restaurantId,
+      },
+      select: {
+        branchQuota: true,
+        _count: {
+          select: {
+            branches: true,
+          },
+        },
+      },
+    });
+
+    if (restaurant._count.branches >= restaurant.branchQuota) {
+      throw new ForbiddenException(
+        'Alcanzaste el limite de sucursales de tu plan. Contacta a Sazono para aumentarlo.',
+      );
+    }
+
     const branch = await this.prisma.$transaction(async (tx) => {
       const createdBranch = await tx.branch.create({
         data: {

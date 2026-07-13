@@ -10,7 +10,6 @@ import { GetOrderDetailService } from './application/get-order-detail.service';
 import { ListQrSessionOrdersService } from './application/list-qr-session-orders.service';
 import { ListSessionOrdersService } from './application/list-session-orders.service';
 import { OrderableMenuItemResolverService } from './application/orderable-menu-item-resolver.service';
-import { OrdersBranchAccessService } from './application/orders-branch-access.service';
 import { OrdersController } from './presentation/http/orders.controller';
 import { QrOrdersController } from './presentation/http/qr-orders.controller';
 
@@ -18,7 +17,6 @@ import { QrOrdersController } from './presentation/http/qr-orders.controller';
   imports: [AuthModule],
   controllers: [OrdersController, QrOrdersController],
   providers: [
-    OrdersBranchAccessService,
     OrderableMenuItemResolverService,
     CreateWaiterOrderService,
     CreateQrOrderService,

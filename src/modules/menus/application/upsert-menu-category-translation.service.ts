@@ -1,19 +1,19 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { MenuStatus, TranslationEntityType } from '@prisma/client';
+import { Role, MenuStatus, TranslationEntityType } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { UpsertCategoryTranslationDto } from '../presentation/http/dto/menus.dto';
 
 @Injectable()
 export class UpsertMenuCategoryTranslationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -35,9 +35,10 @@ export class UpsertMenuCategoryTranslationService {
       throw new BadRequestException('La categoria indicada no existe.');
     }
 
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       category.menu.branchId,
+      [Role.ADMIN],
     );
 
     if (category.menu.status !== MenuStatus.DRAFT) {

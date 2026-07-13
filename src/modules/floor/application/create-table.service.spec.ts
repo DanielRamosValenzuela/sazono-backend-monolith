@@ -1,8 +1,8 @@
-import { ConflictException } from '@nestjs/common';
+﻿import { ConflictException } from '@nestjs/common';
 import { Role, TableStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateTableService } from './create-table.service';
-import type { FloorBranchAccessService } from './floor-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('CreateTableService', () => {
@@ -16,15 +16,15 @@ describe('CreateTableService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const floorBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as FloorBranchAccessService;
+  } as unknown as BranchAccessService;
 
   let service: CreateTableService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CreateTableService(prisma, floorBranchAccessService);
+    service = new CreateTableService(prisma, BranchAccessService);
   });
 
   it('creates a table for the branch', async () => {

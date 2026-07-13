@@ -1,9 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { PreparationStationStatus } from '@prisma/client';
+﻿import { ConflictException, Injectable } from '@nestjs/common';
+import { Role, PreparationStationStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { mapPreparationStation } from './menu-mapper';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   CreatePreparationStationDto,
   PreparationStationResponseDto,
@@ -13,16 +13,17 @@ import type {
 export class CreatePreparationStationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
     authUser: JwtPayload,
     dto: CreatePreparationStationDto,
   ): Promise<PreparationStationResponseDto> {
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       dto.branchId,
+      [Role.ADMIN],
     );
 
     const normalizedName = dto.name.trim();

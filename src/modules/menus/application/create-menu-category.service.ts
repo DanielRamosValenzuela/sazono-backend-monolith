@@ -1,12 +1,12 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { MenuStatus } from '@prisma/client';
+import { Role, MenuStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   CreateMenuCategoryDto,
   MenuCategoryResponseDto,
@@ -16,7 +16,7 @@ import type {
 export class CreateMenuCategoryService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -34,9 +34,10 @@ export class CreateMenuCategoryService {
       throw new BadRequestException('La carta indicada no existe.');
     }
 
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       menu.branchId,
+      [Role.ADMIN],
     );
 
     if (menu.status !== MenuStatus.DRAFT) {

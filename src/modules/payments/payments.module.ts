@@ -11,7 +11,6 @@ import { PayBillService } from './application/pay-bill.service';
 import { PayBillSplitParticipantService } from './application/pay-bill-split-participant.service';
 import { PayQrBillService } from './application/pay-qr-bill.service';
 import { PayQrOrderService } from './application/pay-qr-order.service';
-import { PaymentsBranchAccessService } from './application/payments-branch-access.service';
 import { PAYMENT_PROVIDER } from './application/ports/payment-provider.port';
 import { SettleBillPaymentService } from './application/settle-bill-payment.service';
 import { ManualPaymentProviderAdapter } from './infrastructure/manual-payment-provider.adapter';
@@ -26,7 +25,6 @@ import { QrPaymentsController } from './presentation/http/qr-payments.controller
       provide: PAYMENT_PROVIDER,
       useClass: ManualPaymentProviderAdapter,
     },
-    PaymentsBranchAccessService,
     SettleBillPaymentService,
     PayQrOrderService,
     PayQrBillService,

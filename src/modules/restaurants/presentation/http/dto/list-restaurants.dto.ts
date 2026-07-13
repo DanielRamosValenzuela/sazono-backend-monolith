@@ -11,6 +11,12 @@ export class RestaurantSummaryResponseDto {
   @ApiProperty({ nullable: true, required: false })
   legalName!: string | null;
 
+  @ApiProperty({ example: 'sazono-bistro' })
+  slug!: string;
+
+  @ApiProperty({ example: 1 })
+  branchQuota!: number;
+
   @ApiProperty({ enum: RestaurantStatus, enumName: 'RestaurantStatus' })
   status!: RestaurantStatus;
 

@@ -59,6 +59,9 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - `platform_admin` ya puede listar, ver el detalle (con `branches` y `staff` con email resuelto) y editar cualquier restaurante, ademas de ver metricas agregadas de plataforma (ver doc 14)
 - `staff` ya puede listar y editar sucursales (`GET`/`PATCH /branches`), y editar staff existente (`PATCH /staff/:id`) con reglas de proteccion contra auto-desactivarse o dejar el restaurante sin `ADMIN`
 - existe un modulo `analytics` con `GET /analytics/branches/:id/summary` para el dashboard del restaurante (ver doc 14)
+- la autorizacion por sucursal vive en un `BranchAccessService` unico y global (`src/common/branch-access`), no en copias por modulo (ver doc 15)
+- `restaurants` tiene `slug` (login exclusivo por restaurante, ver doc 05) y `branchQuota` (limite de sucursales autoservicio, ver doc 15)
+- existe un modulo `leads` (`POST /leads` publico con throttle estricto, `GET /leads` platform_admin) para el formulario de contacto/demo de la landing; `restaurants` expone ademas `GET /restaurants/search?q=` publico para que un cliente encuentre su URL de login (ver doc 16)
 
 ## Versionado HTTP actual
 
@@ -82,6 +85,10 @@ Eso implica un estado transitorio valido:
 2. reembolsos y anulaciones con impacto financiero en ordenes prepagadas
 3. modelo de monetizacion de la plataforma (suscripcion o cobro de Sazono a los restaurantes); hoy no existe
 
+Evaluado y diferido a proposito (ver doc 15):
+
+- aislamiento granular por estacion de cocina (hoy cualquier staff `KITCHEN`/`BAR` de la sucursal ve todas las estaciones, no solo la suya) — no es fuga entre tenants, se resuelve primero a nivel de UI si hace falta antes de invertir en una migracion de schema nueva
+
 Ya resuelto (ver doc frontend 09):
 
 - actualizar (y archivar) categorias/items existentes de la carta (`PATCH /menus/categories/:id`, `PATCH /menus/items/:id`, ver doc 10)
@@ -92,3 +99,14 @@ Ya resuelto (ver doc frontend 10):
 - multimedia e imagen principal por producto en la carta
 - multi idioma basico de carta
 - ordenamiento fino de categorias e items con drag-and-drop
+
+Ya resuelto (ver doc frontend 11 y doc backend 15):
+
+- control de acceso por sucursal consolidado (`BranchAccessService`), cupo de sucursales y login exclusivo por restaurante
+- permisos de `WAITER` corregidos (lectura de menu habilitada, exceso de permisos removido)
+- CRUD completo de estaciones de preparacion
+
+Ya resuelto (ver doc frontend 12 y doc backend 16):
+
+- landing marketera con formulario real de contacto/demo (modulo `leads`)
+- busqueda publica de restaurantes para la pantalla "ya soy cliente"

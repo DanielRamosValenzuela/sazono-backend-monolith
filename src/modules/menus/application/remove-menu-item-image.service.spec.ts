@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+﻿import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   MenuStatus,
   PreparationStationStatus,
@@ -7,7 +7,7 @@ import {
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { SupabaseService } from '../../../common/supabase/supabase.service';
-import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { RemoveMenuItemImageService } from './remove-menu-item-image.service';
 
 describe('RemoveMenuItemImageService', () => {
@@ -35,10 +35,10 @@ describe('RemoveMenuItemImageService', () => {
     },
   } as unknown as SupabaseService;
 
-  const ensureAdminAccessMock = jest.fn();
-  const menusBranchAdminAccessService = {
-    ensureAdminAccess: ensureAdminAccessMock,
-  } as unknown as MenusBranchAdminAccessService;
+  const ensureAccessMock = jest.fn();
+  const branchAccessService = {
+    ensureAccess: ensureAccessMock,
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -54,9 +54,9 @@ describe('RemoveMenuItemImageService', () => {
     service = new RemoveMenuItemImageService(
       prisma,
       supabaseService,
-      menusBranchAdminAccessService,
+      branchAccessService,
     );
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',

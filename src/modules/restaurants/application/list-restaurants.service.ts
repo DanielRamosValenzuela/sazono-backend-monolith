@@ -25,6 +25,8 @@ export class ListRestaurantsService {
       restaurantId: restaurant.id,
       name: restaurant.name,
       legalName: restaurant.legalName,
+      slug: restaurant.slug,
+      branchQuota: restaurant.branchQuota,
       status: restaurant.status,
       currency: restaurant.currency,
       timezone: restaurant.timezone,

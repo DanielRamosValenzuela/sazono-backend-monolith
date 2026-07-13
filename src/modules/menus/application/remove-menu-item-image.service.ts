@@ -1,13 +1,13 @@
-import {
+﻿import {
   BadRequestException,
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { MenuStatus } from '@prisma/client';
+import { Role, MenuStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { SupabaseService } from '../../../common/supabase/supabase.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { MenuItemResponseDto } from '../presentation/http/dto/menus.dto';
 
 const BUCKET_NAME = 'menu-media';
@@ -17,7 +17,7 @@ export class RemoveMenuItemImageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly supabaseService: SupabaseService,
-    private readonly menusBranchAdminAccessService: MenusBranchAdminAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -41,9 +41,10 @@ export class RemoveMenuItemImageService {
       throw new BadRequestException('El item indicado no existe.');
     }
 
-    await this.menusBranchAdminAccessService.ensureAdminAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       item.menuCategory.menu.branchId,
+      [Role.ADMIN],
     );
 
     if (item.menuCategory.menu.status !== MenuStatus.DRAFT) {

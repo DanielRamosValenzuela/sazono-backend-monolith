@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+﻿import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   MenuStatus,
   PreparationStationStatus,
@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateMenuItemService } from './create-menu-item.service';
-import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('CreateMenuItemService', () => {
@@ -27,16 +27,16 @@ describe('CreateMenuItemService', () => {
     },
   } as unknown as PrismaService;
 
-  const ensureAdminAccessMock = jest.fn();
-  const menusBranchAdminAccessService = {
-    ensureAdminAccess: ensureAdminAccessMock,
-  } as unknown as MenusBranchAdminAccessService;
+  const ensureAccessMock = jest.fn();
+  const branchAccessService = {
+    ensureAccess: ensureAccessMock,
+  } as unknown as BranchAccessService;
 
   let service: CreateMenuItemService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CreateMenuItemService(prisma, menusBranchAdminAccessService);
+    service = new CreateMenuItemService(prisma, branchAccessService);
   });
 
   it('creates an item when category and station belong to the same branch', async () => {
@@ -48,7 +48,7 @@ describe('CreateMenuItemService', () => {
         status: MenuStatus.DRAFT,
       },
     });
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',
@@ -115,7 +115,7 @@ describe('CreateMenuItemService', () => {
         status: MenuStatus.DRAFT,
       },
     });
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',
@@ -175,7 +175,7 @@ describe('CreateMenuItemService', () => {
         status: MenuStatus.PUBLISHED,
       },
     });
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',
@@ -209,7 +209,7 @@ describe('CreateMenuItemService', () => {
         status: MenuStatus.DRAFT,
       },
     });
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',

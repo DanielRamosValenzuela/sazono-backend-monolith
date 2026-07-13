@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAnalyticsPrismaRepository } from '../infrastructure/prisma/branch-analytics.prisma.repository';
@@ -8,7 +8,7 @@ import type {
   DailyPaymentsMetricDto,
   GetBranchSummaryQueryDto,
 } from '../presentation/http/dto/analytics.dto';
-import { AnalyticsBranchAccessService } from './analytics-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 const DEFAULT_SERIES_DAYS = 7;
 const DEFAULT_TOP_ITEMS_WINDOW_DAYS = 30;
@@ -19,7 +19,7 @@ type ResolvedRange = { start: Date; end: Date };
 @Injectable()
 export class GetBranchSummaryService {
   constructor(
-    private readonly analyticsBranchAccessService: AnalyticsBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
     private readonly branchAnalyticsRepository: BranchAnalyticsPrismaRepository,
   ) {}
 
@@ -28,7 +28,7 @@ export class GetBranchSummaryService {
     branchId: string,
     query: GetBranchSummaryQueryDto,
   ): Promise<BranchSummaryResponseDto> {
-    await this.analyticsBranchAccessService.ensureAccess(authUser, branchId, [
+    await this.branchAccessService.ensureAccess(authUser, branchId, [
       Role.ADMIN,
       Role.SUPERVISOR,
     ]);

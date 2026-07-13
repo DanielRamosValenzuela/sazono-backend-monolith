@@ -134,6 +134,12 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Implementar listado y edicion de sucursales para `staff` (`GET`/`PATCH /branches`)
 - [x] Implementar edicion de staff existente (`PATCH /staff/:id`) con reglas de proteccion de ultimo `ADMIN`
 - [x] Implementar modulo `analytics` con resumen por sucursal para el dashboard del restaurante
+- [x] Consolidar autorizacion por sucursal en `BranchAccessService` compartido (ver doc 15)
+- [x] Implementar cupo de sucursales (`branchQuota`) y login exclusivo por restaurante via slug (ver doc 05 y 15)
+- [x] Corregir permisos de `WAITER` (lectura de menu habilitada, exceso de permisos removido; ver doc 15)
+- [x] Completar CRUD de estaciones de preparacion (`PATCH` para editar/desactivar; ver doc 15)
+- [x] Implementar modulo `leads` (formulario de contacto/demo de la landing; ver doc 16)
+- [x] Implementar busqueda publica de restaurantes por nombre (para la pantalla "ya soy cliente"; ver doc 16)
 
 ## 7. Estado actual
 
@@ -161,6 +167,14 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - `staff` ahora expone edicion (`PATCH /staff/:id`) con reglas de proteccion: no auto-desactivarse, no dejar el restaurante sin `ADMIN`
 - nuevo modulo `analytics` con `GET /analytics/branches/:id/summary` (mesas, ventas de hoy, serie 7 dias, ordenes por estado, top productos) para el dashboard del restaurante
 - ver doc 14 para el detalle de este slice
+- autorizacion por sucursal consolidada en un `BranchAccessService` unico y global (antes 8 copias duplicadas por modulo)
+- `restaurants` ahora tiene `slug` (login exclusivo por restaurante) y `branchQuota` (limite de sucursales autoservicio); `POST /branches` valida el cupo
+- `WAITER` ya puede leer el menu (bug que bloqueaba enviar comanda), y perdio permisos que no le correspondian (entregar/cancelar ordenes, cuentas abiertas de la sucursal, historial de pagos, split de cuenta)
+- `menus/preparation-stations` ahora tiene `PATCH` para editar nombre/tipo/estado
+- ver doc 15 para el detalle de este slice
+- nuevo modulo `leads` (`POST /leads` publico, `GET /leads` platform_admin) para el formulario de contacto/demo de la landing
+- `restaurants` expone `GET /restaurants/search?q=` publico (prefijo de nombre, solo activos) para la pantalla "ya soy cliente"
+- ver doc 16 para el detalle de este slice
 
 ## 8. Definition of Done backend MVP
 

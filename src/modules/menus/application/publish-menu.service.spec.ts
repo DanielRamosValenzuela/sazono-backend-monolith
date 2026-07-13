@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+﻿import { BadRequestException } from '@nestjs/common';
 import {
   MenuCategoryStatus,
   MenuStatus,
@@ -6,7 +6,7 @@ import {
   PreparationStationType,
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
-import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { PublishMenuService } from './publish-menu.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
@@ -31,16 +31,16 @@ describe('PublishMenuService', () => {
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const ensureAdminAccessMock = jest.fn();
-  const menusBranchAdminAccessService = {
-    ensureAdminAccess: ensureAdminAccessMock,
-  } as unknown as MenusBranchAdminAccessService;
+  const ensureAccessMock = jest.fn();
+  const branchAccessService = {
+    ensureAccess: ensureAccessMock,
+  } as unknown as BranchAccessService;
 
   let service: PublishMenuService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new PublishMenuService(prisma, menusBranchAdminAccessService);
+    service = new PublishMenuService(prisma, branchAccessService);
   });
 
   it('publishes a draft menu and marks it as default for the branch', async () => {
@@ -82,7 +82,7 @@ describe('PublishMenuService', () => {
         },
       ],
     });
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',
@@ -180,7 +180,7 @@ describe('PublishMenuService', () => {
         },
       ],
     });
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',

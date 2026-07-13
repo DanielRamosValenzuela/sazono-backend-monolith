@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { PaymentsBranchAccessService } from './payments-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { SettleBillPaymentService } from './settle-bill-payment.service';
 import type {
   PayBillDto,
@@ -13,7 +13,7 @@ import type {
 export class PayBillService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paymentsBranchAccessService: PaymentsBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
     private readonly settleBillPaymentService: SettleBillPaymentService,
   ) {}
   async execute(
@@ -38,7 +38,7 @@ export class PayBillService {
       throw new BadRequestException('La cuenta indicada no existe.');
     }
 
-    await this.paymentsBranchAccessService.ensureAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       bill.branchId,
       [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],

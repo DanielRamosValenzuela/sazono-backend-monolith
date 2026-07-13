@@ -34,6 +34,7 @@ import { GetMenuDetailService } from '../../application/get-menu-detail.service'
 import { ListMenusService } from '../../application/list-menus.service';
 import { ListPreparationStationsService } from '../../application/list-preparation-stations.service';
 import { PublishMenuService } from '../../application/publish-menu.service';
+import { UpdatePreparationStationService } from '../../application/update-preparation-station.service';
 import { RemoveMenuItemImageService } from '../../application/remove-menu-item-image.service';
 import { ReorderMenuCategoriesService } from '../../application/reorder-menu-categories.service';
 import { ReorderMenuItemsService } from '../../application/reorder-menu-items.service';
@@ -58,6 +59,7 @@ import {
   ReorderMenuItemsDto,
   UpdateMenuCategoryDto,
   UpdateMenuItemDto,
+  UpdatePreparationStationDto,
   UpsertCategoryTranslationDto,
   UpsertItemTranslationDto,
 } from './dto/menus.dto';
@@ -69,6 +71,7 @@ export class MenusController {
   constructor(
     private readonly createPreparationStationService: CreatePreparationStationService,
     private readonly listPreparationStationsService: ListPreparationStationsService,
+    private readonly updatePreparationStationService: UpdatePreparationStationService,
     private readonly createMenuService: CreateMenuService,
     private readonly listMenusService: ListMenusService,
     private readonly getMenuDetailService: GetMenuDetailService,
@@ -110,6 +113,25 @@ export class MenusController {
     @Query() query: ListPreparationStationsQueryDto,
   ): Promise<PreparationStationResponseDto[]> {
     return this.listPreparationStationsService.execute(authUser, query);
+  }
+
+  @Patch('preparation-stations/:preparationStationId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Edita nombre, tipo o estado (activar/desactivar) de una estacion de preparacion.',
+  })
+  updatePreparationStation(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('preparationStationId') preparationStationId: string,
+    @Body() dto: UpdatePreparationStationDto,
+  ): Promise<PreparationStationResponseDto> {
+    return this.updatePreparationStationService.execute(
+      authUser,
+      preparationStationId,
+      dto,
+    );
   }
 
   @Post()

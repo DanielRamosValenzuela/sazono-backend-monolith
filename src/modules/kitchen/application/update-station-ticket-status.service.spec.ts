@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+﻿import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
   OrderItemStatus,
   OrderStatus,
@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
-import type { KitchenBranchAccessService } from './kitchen-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { UpdateStationTicketStatusService } from './update-station-ticket-status.service';
 
 describe('UpdateStationTicketStatusService', () => {
@@ -22,9 +22,9 @@ describe('UpdateStationTicketStatusService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const kitchenBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as KitchenBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -39,7 +39,7 @@ describe('UpdateStationTicketStatusService', () => {
     jest.clearAllMocks();
     service = new UpdateStationTicketStatusService(
       prisma,
-      kitchenBranchAccessService,
+      BranchAccessService,
     );
   });
 

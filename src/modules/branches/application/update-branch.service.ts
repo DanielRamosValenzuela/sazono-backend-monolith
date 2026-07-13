@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -7,7 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { BranchesStaffAccessService } from './branches-staff-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { mapBranchToResponse } from './branch-mapper';
 import type {
   BranchResponseDto,
@@ -18,7 +18,7 @@ import type {
 export class UpdateBranchService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly branchesStaffAccessService: BranchesStaffAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
@@ -27,7 +27,7 @@ export class UpdateBranchService {
     dto: UpdateBranchDto,
   ): Promise<BranchResponseDto> {
     const context =
-      await this.branchesStaffAccessService.getStaffContext(authUser);
+      await this.branchAccessService.getStaffContext(authUser);
 
     const hasChanges =
       dto.name !== undefined ||

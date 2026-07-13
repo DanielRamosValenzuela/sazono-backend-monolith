@@ -1,7 +1,7 @@
-import { MenuStatus } from '@prisma/client';
+﻿import { MenuStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateMenuService } from './create-menu.service';
-import type { MenusBranchAdminAccessService } from './menus-branch-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 type TransactionClient = {
@@ -29,20 +29,20 @@ describe('CreateMenuService', () => {
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const ensureAdminAccessMock = jest.fn();
-  const menusBranchAdminAccessService = {
-    ensureAdminAccess: ensureAdminAccessMock,
-  } as unknown as MenusBranchAdminAccessService;
+  const ensureAccessMock = jest.fn();
+  const branchAccessService = {
+    ensureAccess: ensureAccessMock,
+  } as unknown as BranchAccessService;
 
   let service: CreateMenuService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CreateMenuService(prisma, menusBranchAdminAccessService);
+    service = new CreateMenuService(prisma, branchAccessService);
   });
 
   it('creates a new draft menu with the next version number', async () => {
-    ensureAdminAccessMock.mockResolvedValue({
+    ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',
       restaurantId: 'restaurant-1',

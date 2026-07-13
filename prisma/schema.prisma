@@ -193,10 +193,23 @@ enum TranslationEntityType {
   MENU_ITEM
 }
 
+enum LeadIntent {
+  DEMO_REQUEST
+  GENERAL_INQUIRY
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
 model Restaurant {
   id              String           @id @default(uuid()) @db.Uuid
   name            String
   legalName       String?          @map("legal_name")
+  slug            String           @unique
+  branchQuota     Int              @default(1) @map("branch_quota")
   defaultLanguage String           @default("es") @map("default_language")
   timezone        String           @default("America/Santiago")
   currency        String           @default("CLP")
@@ -646,4 +659,20 @@ model PaymentAttempt {
   @@index([orderId, status])
   @@index([billId, status])
   @@map("payment_attempts")
+}
+
+model Lead {
+  id           String     @id @default(uuid()) @db.Uuid
+  name         String
+  email        String
+  phone        String?
+  businessName String?    @map("business_name")
+  intent       LeadIntent @default(GENERAL_INQUIRY)
+  message      String?
+  status       LeadStatus @default(NEW)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@map("leads")
 }

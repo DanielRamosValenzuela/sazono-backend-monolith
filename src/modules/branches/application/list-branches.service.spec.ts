@@ -1,9 +1,9 @@
-import { BranchStatus } from '@prisma/client';
+﻿import { BranchStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import type {
-  BranchesStaffAccessService,
+  BranchAccessService,
   BranchesStaffContext,
 } from './branches-staff-access.service';
 import { ListBranchesService } from './list-branches.service';
@@ -43,9 +43,9 @@ describe('ListBranchesService', () => {
       findMany: branchFindManyMock,
     },
   } as unknown as PrismaService;
-  const branchesStaffAccessService = {
+  const BranchAccessService = {
     getStaffContext: getStaffContextMock,
-  } as unknown as BranchesStaffAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser: JwtPayload = {
     sub: 'auth-1',
@@ -81,7 +81,7 @@ describe('ListBranchesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ListBranchesService(prisma, branchesStaffAccessService);
+    service = new ListBranchesService(prisma, BranchAccessService);
   });
 
   it('returns every restaurant branch when the caller is admin of at least one branch', async () => {

@@ -1,9 +1,9 @@
-import { ConflictException } from '@nestjs/common';
+﻿import { ConflictException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import { DeliverOrderService } from './deliver-order.service';
-import type { OrdersBranchAccessService } from './orders-branch-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
 describe('DeliverOrderService', () => {
   const orderFindUniqueMock = jest.fn();
@@ -22,9 +22,9 @@ describe('DeliverOrderService', () => {
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
-  const ordersBranchAccessService = {
+  const BranchAccessService = {
     ensureAccess: ensureAccessMock,
-  } as unknown as OrdersBranchAccessService;
+  } as unknown as BranchAccessService;
 
   const authUser = {
     sub: 'auth-1',
@@ -37,7 +37,7 @@ describe('DeliverOrderService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new DeliverOrderService(prisma, ordersBranchAccessService);
+    service = new DeliverOrderService(prisma, BranchAccessService);
   });
 
   it('marks a ready order as delivered', async () => {

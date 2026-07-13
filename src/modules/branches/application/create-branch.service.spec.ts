@@ -47,9 +47,14 @@ describe('CreateBranchService', () => {
     [TransactionCallback]
   >();
 
+  const restaurantFindUniqueOrThrowMock = jest.fn();
+
   const prisma = {
     staffUser: {
       findFirst: staffUserFindFirstMock,
+    },
+    restaurant: {
+      findUniqueOrThrow: restaurantFindUniqueOrThrowMock,
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
@@ -67,6 +72,10 @@ describe('CreateBranchService', () => {
       restaurantId: 'restaurant-1',
       status: StaffUserStatus.ACTIVE,
       branchRoles: [],
+    });
+    restaurantFindUniqueOrThrowMock.mockResolvedValue({
+      branchQuota: 5,
+      _count: { branches: 0 },
     });
 
     const createBranchMock = jest
@@ -138,5 +147,33 @@ describe('CreateBranchService', () => {
         },
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects when the restaurant already reached its branch quota', async () => {
+    staffUserFindFirstMock.mockResolvedValue({
+      id: 'staff-3',
+      restaurantId: 'restaurant-1',
+      status: StaffUserStatus.ACTIVE,
+      branchRoles: [{ role: Role.ADMIN }],
+    });
+    restaurantFindUniqueOrThrowMock.mockResolvedValue({
+      branchQuota: 1,
+      _count: { branches: 1 },
+    });
+
+    await expect(
+      service.execute(
+        {
+          sub: 'auth-3',
+          profileType: LoginProfileType.STAFF,
+          profileId: 'staff-3',
+          restaurantId: 'restaurant-1',
+        },
+        {
+          name: 'Vitacura',
+        },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 });

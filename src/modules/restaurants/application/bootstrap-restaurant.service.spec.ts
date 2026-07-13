@@ -12,8 +12,12 @@ describe('BootstrapRestaurantService', () => {
   } as unknown as AuthProvider;
 
   const transactionMock = jest.fn();
+  const restaurantFindUniqueMock = jest.fn().mockResolvedValue(null);
   const prisma = {
     $transaction: transactionMock,
+    restaurant: {
+      findUnique: restaurantFindUniqueMock,
+    },
   } as unknown as PrismaService;
 
   const dto = {

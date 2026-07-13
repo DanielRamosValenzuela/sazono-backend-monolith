@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   BillStatus,
   OrderSource,
@@ -12,7 +12,7 @@ import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-s
 import { applyOrderChargeToBill } from './apply-order-charge-to-bill';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
 import { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
-import { OrdersBranchAccessService } from './orders-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { routeOrderToStations } from './route-order-to-stations';
 import type {
   CreateWaiterOrderDto,
@@ -23,7 +23,7 @@ import type {
 export class CreateWaiterOrderService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ordersBranchAccessService: OrdersBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
     private readonly orderableMenuItemResolverService: OrderableMenuItemResolverService,
   ) {}
 
@@ -50,7 +50,7 @@ export class CreateWaiterOrderService {
       );
     }
 
-    const context = await this.ordersBranchAccessService.ensureAccess(
+    const context = await this.branchAccessService.ensureAccess(
       authUser,
       tableSession.branchId,
       [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],

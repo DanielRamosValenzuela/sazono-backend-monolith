@@ -1,9 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+﻿import { ConflictException, Injectable } from '@nestjs/common';
 import { Role, TableStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { FloorBranchAccessService } from './floor-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   CreateTableDto,
   TableResponseDto,
@@ -13,14 +13,14 @@ import type {
 export class CreateTableService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly floorBranchAccessService: FloorBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async execute(
     authUser: JwtPayload,
     dto: CreateTableDto,
   ): Promise<TableResponseDto> {
-    await this.floorBranchAccessService.ensureAccess(authUser, dto.branchId, [
+    await this.branchAccessService.ensureAccess(authUser, dto.branchId, [
       Role.ADMIN,
       Role.SUPERVISOR,
     ]);

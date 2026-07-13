@@ -1,8 +1,8 @@
-import { Role, StaffUserStatus } from '@prisma/client';
+﻿import { Role, StaffUserStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthProvider } from '../../auth/application/ports/auth-provider.port';
 import { ListStaffUsersService } from './list-staff-users.service';
-import type { StaffAdminAccessService } from './staff-admin-access.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 
 describe('ListStaffUsersService', () => {
@@ -13,10 +13,10 @@ describe('ListStaffUsersService', () => {
     },
   } as unknown as PrismaService;
 
-  const getAdminContextMock = jest.fn();
-  const staffAdminAccessService = {
-    getAdminContext: getAdminContextMock,
-  } as unknown as StaffAdminAccessService;
+  const getStaffContextMock = jest.fn();
+  const branchAccessService = {
+    getStaffContext: getStaffContextMock,
+  } as unknown as BranchAccessService;
 
   const getUserByIdMock = jest.fn();
   const authProvider = {
@@ -29,13 +29,13 @@ describe('ListStaffUsersService', () => {
     jest.clearAllMocks();
     service = new ListStaffUsersService(
       prisma,
-      staffAdminAccessService,
+      branchAccessService,
       authProvider,
     );
   });
 
   it('returns restaurant staff with active branch roles', async () => {
-    getAdminContextMock.mockResolvedValue({
+    getStaffContextMock.mockResolvedValue({
       staffUserId: 'staff-admin-1',
       restaurantId: 'restaurant-1',
       adminBranchIds: new Set(['branch-1']),

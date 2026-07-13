@@ -9,6 +9,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validateEnvironment } from './common/config/validate-environment';
+import { BranchAccessModule } from './common/branch-access/branch-access.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
@@ -17,6 +18,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { FloorModule } from './modules/floor/floor.module';
 import { KitchenModule } from './modules/kitchen/kitchen.module';
+import { LeadsModule } from './modules/leads/leads.module';
 import { MenusModule } from './modules/menus/menus.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -64,6 +66,7 @@ import { StaffModule } from './modules/staff/staff.module';
       ],
     }),
     PrismaModule,
+    BranchAccessModule,
     SupabaseModule,
     AuthModule,
     RestaurantsModule,
@@ -76,6 +79,7 @@ import { StaffModule } from './modules/staff/staff.module';
     BillingModule,
     PaymentsModule,
     AnalyticsModule,
+    LeadsModule,
   ],
   controllers: [AppController],
   providers: [

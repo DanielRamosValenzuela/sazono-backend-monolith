@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -8,7 +8,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
 import { BILL_SPLIT_INCLUDE, mapBillSplit } from './bill-split-mapper';
-import { PaymentsBranchAccessService } from './payments-branch-access.service';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { BillSplitResponseDto } from '../presentation/http/dto/payments.dto';
 
 const ACTIVE_SPLIT_STATUSES: BillSplitStatus[] = [
@@ -20,7 +20,7 @@ const ACTIVE_SPLIT_STATUSES: BillSplitStatus[] = [
 export class GetCurrentBillSplitService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paymentsBranchAccessService: PaymentsBranchAccessService,
+    private readonly branchAccessService: BranchAccessService,
   ) {}
 
   async executeForStaff(
@@ -37,10 +37,10 @@ export class GetCurrentBillSplitService {
       throw new BadRequestException('La cuenta indicada no existe.');
     }
 
-    await this.paymentsBranchAccessService.ensureAccess(
+    await this.branchAccessService.ensureAccess(
       authUser,
       bill.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER, Role.WAITER],
+      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
     );
 
     return this.findActiveSplit(bill.id);
