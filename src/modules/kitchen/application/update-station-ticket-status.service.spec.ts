@@ -37,10 +37,7 @@ describe('UpdateStationTicketStatusService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpdateStationTicketStatusService(
-      prisma,
-      BranchAccessService,
-    );
+    service = new UpdateStationTicketStatusService(prisma, BranchAccessService);
   });
 
   const mappedTicket = {

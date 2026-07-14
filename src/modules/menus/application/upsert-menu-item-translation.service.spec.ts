@@ -38,10 +38,7 @@ describe('UpsertMenuItemTranslationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpsertMenuItemTranslationService(
-      prisma,
-      branchAccessService,
-    );
+    service = new UpsertMenuItemTranslationService(prisma, branchAccessService);
     ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',

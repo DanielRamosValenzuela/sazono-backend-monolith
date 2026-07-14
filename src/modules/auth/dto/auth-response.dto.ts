@@ -42,11 +42,17 @@ export class AuthResponseDto {
   @ApiProperty()
   accessToken!: string;
 
+  @ApiProperty()
+  refreshToken!: string;
+
   @ApiProperty({ example: 'Bearer' })
   tokenType!: 'Bearer';
 
-  @ApiProperty({ example: '15m' })
+  @ApiProperty({ example: '8h' })
   expiresIn!: string;
+
+  @ApiProperty({ example: '2026-07-14T18:00:00.000Z' })
+  expiresAt!: string;
 
   @ApiProperty({ type: AuthenticatedProfileDto })
   user!: AuthenticatedProfileDto;

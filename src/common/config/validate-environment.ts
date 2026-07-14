@@ -92,6 +92,12 @@ class EnvironmentVariables {
   JWT_ACCESS_TOKEN_EXPIRES_IN = '15m';
 
   @IsString()
+  JWT_REFRESH_TOKEN_SECRET = 'change-me-refresh';
+
+  @IsString()
+  JWT_REFRESH_TOKEN_EXPIRES_IN = '30d';
+
+  @IsString()
   SUPABASE_URL = '';
 
   @IsString()

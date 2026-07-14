@@ -31,10 +31,7 @@ describe('UpdateMenuCategoryService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpdateMenuCategoryService(
-      prisma,
-      branchAccessService,
-    );
+    service = new UpdateMenuCategoryService(prisma, branchAccessService);
   });
 
   it('archives a category on a draft menu', async () => {

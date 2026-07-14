@@ -30,9 +30,13 @@ describe('AuthService.login', () => {
   } as unknown as PrismaService;
 
   const signAsyncMock = jest.fn().mockResolvedValue('signed-jwt');
-  const jwtService = { signAsync: signAsyncMock } as unknown as JwtService;
+  const decodeMock = jest.fn().mockReturnValue({ exp: 1_784_019_600 });
+  const jwtService = {
+    signAsync: signAsyncMock,
+    decode: decodeMock,
+  } as unknown as JwtService;
   const configService = {
-    get: jest.fn().mockReturnValue('15m'),
+    get: jest.fn().mockReturnValue('8h'),
   } as unknown as ConfigService;
 
   let service: AuthService;
@@ -42,6 +46,7 @@ describe('AuthService.login', () => {
     platformAdminFindManyMock.mockResolvedValue([]);
     staffUserFindManyMock.mockResolvedValue([]);
     signAsyncMock.mockResolvedValue('signed-jwt');
+    decodeMock.mockReturnValue({ exp: 1_784_019_600 });
     service = new AuthService(prisma, authProvider, jwtService, configService);
   });
 
@@ -117,6 +122,8 @@ describe('AuthService.login', () => {
     });
 
     expect(result.accessToken).toBe('signed-jwt');
+    expect(result.expiresIn).toBe('8h');
+    expect(result.expiresAt).toBe('2026-07-15T06:20:00.000Z');
     expect(result.user.restaurantId).toBe('restaurant-target');
   });
 
@@ -143,5 +150,6 @@ describe('AuthService.login', () => {
 
     expect(restaurantFindUniqueMock).not.toHaveBeenCalled();
     expect(result.user.profileType).toBe(LoginProfileType.PLATFORM_ADMIN);
+    expect(result.expiresAt).toBe('2026-07-15T06:20:00.000Z');
   });
 });

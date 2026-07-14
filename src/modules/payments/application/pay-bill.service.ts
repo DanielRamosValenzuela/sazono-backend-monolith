@@ -38,11 +38,11 @@ export class PayBillService {
       throw new BadRequestException('La cuenta indicada no existe.');
     }
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      bill.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
-    );
+    await this.branchAccessService.ensureAccess(authUser, bill.branchId, [
+      Role.ADMIN,
+      Role.SUPERVISOR,
+      Role.CASHIER,
+    ]);
 
     return this.settleBillPaymentService.execute(
       {

@@ -67,9 +67,7 @@ export class RestaurantsController {
     summary:
       'Resuelve el nombre publico de un restaurante por su slug de login. Sin autenticacion.',
   })
-  getBySlug(
-    @Param('slug') slug: string,
-  ): Promise<RestaurantBySlugResponseDto> {
+  getBySlug(@Param('slug') slug: string): Promise<RestaurantBySlugResponseDto> {
     return this.getRestaurantBySlugService.execute(slug);
   }
 

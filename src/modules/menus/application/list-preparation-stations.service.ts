@@ -20,11 +20,9 @@ export class ListPreparationStationsService {
     authUser: JwtPayload,
     query: ListPreparationStationsQueryDto,
   ): Promise<PreparationStationResponseDto[]> {
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      query.branchId,
-      [Role.ADMIN],
-    );
+    await this.branchAccessService.ensureAccess(authUser, query.branchId, [
+      Role.ADMIN,
+    ]);
 
     const stations = await this.prisma.preparationStation.findMany({
       where: {

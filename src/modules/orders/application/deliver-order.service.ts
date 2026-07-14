@@ -30,11 +30,11 @@ export class DeliverOrderService {
       throw new BadRequestException('La orden indicada no existe.');
     }
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      order.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
-    );
+    await this.branchAccessService.ensureAccess(authUser, order.branchId, [
+      Role.ADMIN,
+      Role.SUPERVISOR,
+      Role.CASHIER,
+    ]);
 
     if (order.status !== OrderStatus.READY) {
       throw new ConflictException(

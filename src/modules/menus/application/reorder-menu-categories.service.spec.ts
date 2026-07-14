@@ -35,10 +35,7 @@ describe('ReorderMenuCategoriesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ReorderMenuCategoriesService(
-      prisma,
-      branchAccessService,
-    );
+    service = new ReorderMenuCategoriesService(prisma, branchAccessService);
     ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
       branchId: 'branch-1',

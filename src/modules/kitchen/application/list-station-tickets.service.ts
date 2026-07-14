@@ -23,11 +23,12 @@ export class ListStationTicketsService {
     authUser: JwtPayload,
     query: ListStationTicketsQueryDto,
   ): Promise<StationTicketResponseDto[]> {
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      query.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.KITCHEN, Role.BAR],
-    );
+    await this.branchAccessService.ensureAccess(authUser, query.branchId, [
+      Role.ADMIN,
+      Role.SUPERVISOR,
+      Role.KITCHEN,
+      Role.BAR,
+    ]);
 
     const tickets = await this.prisma.stationTicket.findMany({
       where: {

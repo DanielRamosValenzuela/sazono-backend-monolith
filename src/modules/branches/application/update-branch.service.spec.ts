@@ -1,16 +1,16 @@
-﻿import {
+import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { BranchStatus } from '@prisma/client';
+import {
+  BranchAccessService,
+  type StaffContext,
+} from '../../../common/branch-access/branch-access.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import type {
-  BranchAccessService,
-  BranchesStaffContext,
-} from './branches-staff-access.service';
 import { UpdateBranchService } from './update-branch.service';
 
 type BranchWithSettingsResult = {
@@ -50,10 +50,7 @@ describe('UpdateBranchService', () => {
     Promise<BranchWithSettingsResult>,
     [TransactionCallback]
   >();
-  const getStaffContextMock = jest.fn<
-    Promise<BranchesStaffContext>,
-    [JwtPayload]
-  >();
+  const getStaffContextMock = jest.fn<Promise<StaffContext>, [JwtPayload]>();
 
   const prisma = {
     branch: {
@@ -61,9 +58,12 @@ describe('UpdateBranchService', () => {
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
-  const BranchAccessService = {
-    getStaffContext: getStaffContextMock,
-  } as unknown as BranchAccessService;
+  const branchAccessService = Object.assign(
+    Object.create(BranchAccessService.prototype) as BranchAccessService,
+    {
+      getStaffContext: getStaffContextMock,
+    },
+  );
 
   const authUser: JwtPayload = {
     sub: 'auth-1',
@@ -72,7 +72,7 @@ describe('UpdateBranchService', () => {
     restaurantId: 'restaurant-1',
   };
 
-  const adminContext: BranchesStaffContext = {
+  const adminContext: StaffContext = {
     staffUserId: 'staff-1',
     restaurantId: 'restaurant-1',
     memberBranchIds: new Set(['branch-1']),
@@ -83,7 +83,7 @@ describe('UpdateBranchService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpdateBranchService(prisma, BranchAccessService);
+    service = new UpdateBranchService(prisma, branchAccessService);
   });
 
   it('rejects an update without any field to change', async () => {

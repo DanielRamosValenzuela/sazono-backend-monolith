@@ -36,7 +36,9 @@ export class CreateLeadDto {
   @IsEnum(LeadIntent)
   intent!: LeadIntent;
 
-  @ApiPropertyOptional({ example: 'Nos interesa probar Sazono en 2 sucursales.' })
+  @ApiPropertyOptional({
+    example: 'Nos interesa probar Sazono en 2 sucursales.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(2000)

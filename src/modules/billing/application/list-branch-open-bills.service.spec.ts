@@ -28,10 +28,7 @@ describe('ListBranchOpenBillsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ListBranchOpenBillsService(
-      prisma,
-      BranchAccessService,
-    );
+    service = new ListBranchOpenBillsService(prisma, BranchAccessService);
   });
 
   it('returns one row per active session that already has a bill', async () => {

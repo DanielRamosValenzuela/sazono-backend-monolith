@@ -20,11 +20,9 @@ export class CreateMenuService {
     authUser: JwtPayload,
     dto: CreateMenuDto,
   ): Promise<MenuListItemResponseDto> {
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      dto.branchId,
-      [Role.ADMIN],
-    );
+    await this.branchAccessService.ensureAccess(authUser, dto.branchId, [
+      Role.ADMIN,
+    ]);
 
     const createdMenu = await this.prisma.$transaction(async (tx) => {
       const latestMenu = await tx.menu.findFirst({

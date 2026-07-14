@@ -19,7 +19,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       useFactory: (configService: ConfigService) => {
         const expiresIn = (configService.get<string>(
           'JWT_ACCESS_TOKEN_EXPIRES_IN',
-        ) ?? '15m') as StringValue;
+        ) ?? '8h') as StringValue;
 
         return {
           secret:

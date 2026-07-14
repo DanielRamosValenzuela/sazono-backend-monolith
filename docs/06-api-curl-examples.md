@@ -19,12 +19,52 @@ curl --request POST "http://localhost:3000/api/v1/auth/login" \
   }'
 ```
 
+## Respuesta esperada de auth login
+
+```json
+{
+  "accessToken": "jwt-token",
+  "refreshToken": "jwt-refresh-token",
+  "tokenType": "Bearer",
+  "expiresIn": "8h",
+  "expiresAt": "2026-07-14T18:00:00.000Z",
+  "user": {
+    "authIdentityId": "uuid",
+    "profileType": "platform_admin",
+    "profileId": "uuid",
+    "email": "platform-admin@sazono.cl",
+    "firstName": "Daniel",
+    "lastName": "Ramos",
+    "restaurantId": null,
+    "branchRoles": []
+  }
+}
+```
+
+## Auth refresh
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/auth/refresh" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "refreshToken": "jwt-refresh-token"
+  }'
+```
+
+Sin `Authorization` header: el propio `refreshToken` es la credencial. La respuesta tiene el mismo shape que `POST /auth/login` (ver arriba), con `accessToken` y `refreshToken` nuevos — cada refresh rota ambos tokens.
+
 ## Auth me
 
 ```bash
 curl --request GET "http://localhost:3000/api/v1/auth/me" \
   --header "Authorization: Bearer <TOKEN>"
 ```
+
+## Nota de sesion
+
+- el frontend no deberia consultar `auth/me` cada minuto
+- la expiracion real ya viene en `expiresAt`, por lo que basta con revalidar al enfocar la app, al refrescar manualmente o al reconstruir la sesion tras recargar la pagina
+- cuando el access token esta por expirar (o ya expiro), el frontend usa `POST /auth/refresh` con el `refreshToken` guardado en vez de forzar un login completo
 
 ## Restaurants bootstrap
 

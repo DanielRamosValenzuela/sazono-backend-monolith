@@ -49,11 +49,10 @@ export class GetMenuDetailService {
       },
     });
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      menu.branchId,
-      [Role.ADMIN, Role.WAITER],
-    );
+    await this.branchAccessService.ensureAccess(authUser, menu.branchId, [
+      Role.ADMIN,
+      Role.WAITER,
+    ]);
 
     const categoryIds = menu.categories.map((category) => category.id);
     const itemIds = menu.categories.flatMap((category) =>

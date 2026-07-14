@@ -13,6 +13,7 @@ import {
   StaffUserStatus,
   type PlatformAdmin,
 } from '@prisma/client';
+import type { StringValue } from 'ms';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AUTH_PROVIDER } from './application/ports/auth-provider.port';
 import type { AuthProvider } from './application/ports/auth-provider.port';
@@ -21,7 +22,10 @@ import {
   AuthenticatedProfileDto,
 } from './dto/auth-response.dto';
 import { LoginDto, LoginProfileType } from './dto/login.dto';
-import { JwtPayload } from './interfaces/jwt-payload.interface';
+import {
+  JwtPayload,
+  RefreshTokenPayload,
+} from './interfaces/jwt-payload.interface';
 
 type PlatformAdminRecord = PlatformAdmin;
 type StaffUserRecord = Prisma.StaffUserGetPayload<{
@@ -33,6 +37,16 @@ type StaffUserRecord = Prisma.StaffUserGetPayload<{
     };
   };
 }>;
+
+interface SignedTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: string;
+  expiresAt: string;
+}
+
+const DEFAULT_REFRESH_TOKEN_SECRET = 'change-me-refresh';
+const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = '30d' as StringValue;
 
 @Injectable()
 export class AuthService {
@@ -72,13 +86,46 @@ export class AuthService {
       ...(profile.restaurantId ? { restaurantId: profile.restaurantId } : {}),
     };
 
-    const accessToken = await this.jwtService.signAsync(payload);
+    const { accessToken, refreshToken, expiresIn, expiresAt } =
+      await this.signTokens(payload);
 
     return {
       accessToken,
+      refreshToken,
       tokenType: 'Bearer',
-      expiresIn:
-        this.configService.get<string>('JWT_ACCESS_TOKEN_EXPIRES_IN') ?? '15m',
+      expiresIn,
+      expiresAt,
+      user: profile,
+    };
+  }
+
+  async refresh(refreshToken: string): Promise<AuthResponseDto> {
+    const decodedPayload = await this.verifyRefreshToken(refreshToken);
+
+    const profile = await this.getCurrentUser(decodedPayload);
+
+    const payload: JwtPayload = {
+      sub: decodedPayload.sub,
+      profileType: decodedPayload.profileType,
+      profileId: decodedPayload.profileId,
+      ...(decodedPayload.restaurantId
+        ? { restaurantId: decodedPayload.restaurantId }
+        : {}),
+    };
+
+    const {
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresIn,
+      expiresAt,
+    } = await this.signTokens(payload);
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+      tokenType: 'Bearer',
+      expiresIn,
+      expiresAt,
       user: profile,
     };
   }
@@ -104,6 +151,62 @@ export class AuthService {
     );
   }
 
+  private async signTokens(payload: JwtPayload): Promise<SignedTokens> {
+    const expiresIn =
+      this.configService.get<string>('JWT_ACCESS_TOKEN_EXPIRES_IN') ?? '8h';
+    const refreshTokenSecret =
+      this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET') ??
+      DEFAULT_REFRESH_TOKEN_SECRET;
+    const refreshTokenExpiresIn = (this.configService.get<string>(
+      'JWT_REFRESH_TOKEN_EXPIRES_IN',
+    ) ?? DEFAULT_REFRESH_TOKEN_EXPIRES_IN) as StringValue;
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(
+        { ...payload, type: 'refresh' },
+        {
+          secret: refreshTokenSecret,
+          expiresIn: refreshTokenExpiresIn,
+        },
+      ),
+    ]);
+
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn,
+      expiresAt: this.resolveAccessTokenExpiresAt(accessToken),
+    };
+  }
+
+  private async verifyRefreshToken(
+    refreshToken: string,
+  ): Promise<RefreshTokenPayload> {
+    const refreshTokenSecret =
+      this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET') ??
+      DEFAULT_REFRESH_TOKEN_SECRET;
+
+    let payload: RefreshTokenPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(
+        refreshToken,
+        {
+          secret: refreshTokenSecret,
+        },
+      );
+    } catch {
+      throw new UnauthorizedException('Refresh token invalido o expirado.');
+    }
+
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Refresh token invalido o expirado.');
+    }
+
+    return payload;
+  }
+
   private async resolveRestaurantIdFromSlug(
     restaurantSlug?: string,
   ): Promise<string | undefined> {
@@ -125,6 +228,22 @@ export class AuthService {
     }
 
     return restaurant.id;
+  }
+
+  private resolveAccessTokenExpiresAt(accessToken: string): string {
+    const decodedToken = this.jwtService.decode(accessToken);
+
+    if (
+      !decodedToken ||
+      typeof decodedToken === 'string' ||
+      typeof decodedToken.exp !== 'number'
+    ) {
+      throw new UnauthorizedException(
+        'No se pudo calcular la expiracion del token.',
+      );
+    }
+
+    return new Date(decodedToken.exp * 1000).toISOString();
   }
 
   private async resolveProfileFromAuthUserId(

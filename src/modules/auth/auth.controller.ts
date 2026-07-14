@@ -7,6 +7,7 @@ import {
   AuthenticatedProfileDto,
 } from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthService } from './auth.service';
@@ -22,6 +23,14 @@ export class AuthController {
   })
   login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(loginDto);
+  }
+
+  @Post('refresh')
+  @ApiOperation({
+    summary: 'Renueva el access token a partir de un refresh token valido.',
+  })
+  refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<AuthResponseDto> {
+    return this.authService.refresh(refreshTokenDto.refreshToken);
   }
 
   @Get('me')

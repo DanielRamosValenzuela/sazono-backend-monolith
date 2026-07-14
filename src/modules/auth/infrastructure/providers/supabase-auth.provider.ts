@@ -6,6 +6,8 @@ import {
   CreateAuthUserInput,
 } from '../../application/ports/auth-provider.port';
 
+const GET_USER_BY_ID_RETRY_DELAY_MS = 300;
+
 @Injectable()
 export class SupabaseAuthProvider implements AuthProvider {
   constructor(private readonly supabaseService: SupabaseService) {}
@@ -31,17 +33,38 @@ export class SupabaseAuthProvider implements AuthProvider {
   }
 
   async getUserById(authUserId: string): Promise<AuthenticatedIdentity | null> {
+    return this.getUserByIdWithRetry(authUserId, true);
+  }
+
+  private async getUserByIdWithRetry(
+    authUserId: string,
+    allowRetry: boolean,
+  ): Promise<AuthenticatedIdentity | null> {
     const { data, error } =
       await this.supabaseService.adminClient.auth.admin.getUserById(authUserId);
 
-    if (error || !data.user) {
+    if (!error) {
+      return data.user
+        ? { authUserId: data.user.id, email: data.user.email ?? null }
+        : null;
+    }
+
+    const isUserNotFoundError =
+      error.status === 404 || error.code === 'user_not_found';
+
+    if (isUserNotFoundError) {
       return null;
     }
 
-    return {
-      authUserId: data.user.id,
-      email: data.user.email ?? null,
-    };
+    if (allowRetry) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, GET_USER_BY_ID_RETRY_DELAY_MS),
+      );
+
+      return this.getUserByIdWithRetry(authUserId, false);
+    }
+
+    throw error;
   }
 
   async findUserByEmail(email: string): Promise<AuthenticatedIdentity | null> {

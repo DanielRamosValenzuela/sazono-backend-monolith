@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { PreparationStationStatus, PreparationStationType } from '@prisma/client';
+import {
+  PreparationStationStatus,
+  PreparationStationType,
+} from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { UpdatePreparationStationService } from './update-preparation-station.service';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';

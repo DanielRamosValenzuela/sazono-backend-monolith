@@ -28,18 +28,14 @@ export class GetOrderDetailService {
       throw new BadRequestException('La orden indicada no existe.');
     }
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      order.branchId,
-      [
-        Role.ADMIN,
-        Role.SUPERVISOR,
-        Role.WAITER,
-        Role.CASHIER,
-        Role.KITCHEN,
-        Role.BAR,
-      ],
-    );
+    await this.branchAccessService.ensureAccess(authUser, order.branchId, [
+      Role.ADMIN,
+      Role.SUPERVISOR,
+      Role.WAITER,
+      Role.CASHIER,
+      Role.KITCHEN,
+      Role.BAR,
+    ]);
 
     return mapOrder(order);
   }

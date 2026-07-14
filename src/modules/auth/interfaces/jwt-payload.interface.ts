@@ -6,3 +6,7 @@ export interface JwtPayload {
   profileId: string;
   restaurantId?: string;
 }
+
+export interface RefreshTokenPayload extends JwtPayload {
+  type: 'refresh';
+}

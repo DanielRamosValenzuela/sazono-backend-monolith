@@ -43,11 +43,9 @@ export class UpdateMenuItemService {
 
     const branchId = item.menuCategory.menu.branchId;
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      branchId,
-      [Role.ADMIN],
-    );
+    await this.branchAccessService.ensureAccess(authUser, branchId, [
+      Role.ADMIN,
+    ]);
 
     if (item.menuCategory.menu.status !== MenuStatus.DRAFT) {
       throw new ConflictException(

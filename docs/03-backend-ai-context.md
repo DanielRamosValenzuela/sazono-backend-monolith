@@ -62,6 +62,7 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - la autorizacion por sucursal vive en un `BranchAccessService` unico y global (`src/common/branch-access`), no en copias por modulo (ver doc 15)
 - `restaurants` tiene `slug` (login exclusivo por restaurante, ver doc 05) y `branchQuota` (limite de sucursales autoservicio, ver doc 15)
 - existe un modulo `leads` (`POST /leads` publico con throttle estricto, `GET /leads` platform_admin) para el formulario de contacto/demo de la landing; `restaurants` expone ademas `GET /restaurants/search?q=` publico para que un cliente encuentre su URL de login (ver doc 16)
+- `auth` ya soporta renovacion de sesion via `POST /auth/refresh` (refresh token JWT stateless, secreto y expiracion propios, sin tabla ni revocacion activa — limitacion aceptada para el MVP, ver doc 05)
 
 ## Versionado HTTP actual
 

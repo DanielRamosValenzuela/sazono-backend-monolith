@@ -20,11 +20,10 @@ export class ListMenusService {
     authUser: JwtPayload,
     query: ListMenusQueryDto,
   ): Promise<MenuListItemResponseDto[]> {
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      query.branchId,
-      [Role.ADMIN, Role.WAITER],
-    );
+    await this.branchAccessService.ensureAccess(authUser, query.branchId, [
+      Role.ADMIN,
+      Role.WAITER,
+    ]);
 
     const [branchSettings, menus] = await Promise.all([
       this.prisma.branchSettings.findUnique({

@@ -20,11 +20,9 @@ export class CreatePreparationStationService {
     authUser: JwtPayload,
     dto: CreatePreparationStationDto,
   ): Promise<PreparationStationResponseDto> {
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      dto.branchId,
-      [Role.ADMIN],
-    );
+    await this.branchAccessService.ensureAccess(authUser, dto.branchId, [
+      Role.ADMIN,
+    ]);
 
     const normalizedName = dto.name.trim();
     const existingStation = await this.prisma.preparationStation.findFirst({

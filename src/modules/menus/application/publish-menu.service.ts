@@ -44,11 +44,9 @@ export class PublishMenuService {
       throw new BadRequestException('La carta indicada no existe.');
     }
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      menu.branchId,
-      [Role.ADMIN],
-    );
+    await this.branchAccessService.ensureAccess(authUser, menu.branchId, [
+      Role.ADMIN,
+    ]);
 
     if (menu.status !== MenuStatus.DRAFT) {
       throw new ConflictException(

@@ -13,8 +13,7 @@ export class ListBranchesService {
   ) {}
 
   async execute(authUser: JwtPayload): Promise<BranchResponseDto[]> {
-    const context =
-      await this.branchAccessService.getStaffContext(authUser);
+    const context = await this.branchAccessService.getStaffContext(authUser);
 
     const isRestaurantAdmin = context.adminBranchIds.size > 0;
 

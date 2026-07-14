@@ -26,8 +26,7 @@ export class UpdateBranchService {
     branchId: string,
     dto: UpdateBranchDto,
   ): Promise<BranchResponseDto> {
-    const context =
-      await this.branchAccessService.getStaffContext(authUser);
+    const context = await this.branchAccessService.getStaffContext(authUser);
 
     const hasChanges =
       dto.name !== undefined ||

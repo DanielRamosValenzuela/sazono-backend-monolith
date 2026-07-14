@@ -26,11 +26,11 @@ export class ListBillPaymentsService {
       throw new BadRequestException('La cuenta indicada no existe.');
     }
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      bill.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
-    );
+    await this.branchAccessService.ensureAccess(authUser, bill.branchId, [
+      Role.ADMIN,
+      Role.SUPERVISOR,
+      Role.CASHIER,
+    ]);
 
     const payments = await this.prisma.payment.findMany({
       where: {

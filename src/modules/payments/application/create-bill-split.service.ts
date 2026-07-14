@@ -40,11 +40,11 @@ export class CreateBillSplitService {
   ): Promise<BillSplitResponseDto> {
     const bill = await this.loadSplittableBill(billId);
 
-    await this.branchAccessService.ensureAccess(
-      authUser,
-      bill.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
-    );
+    await this.branchAccessService.ensureAccess(authUser, bill.branchId, [
+      Role.ADMIN,
+      Role.SUPERVISOR,
+      Role.CASHIER,
+    ]);
 
     return this.createSplit(bill, dto);
   }

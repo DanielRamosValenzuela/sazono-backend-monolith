@@ -1,11 +1,11 @@
-﻿import { BranchStatus } from '@prisma/client';
+import { BranchStatus } from '@prisma/client';
+import {
+  BranchAccessService,
+  type StaffContext,
+} from '../../../common/branch-access/branch-access.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import type {
-  BranchAccessService,
-  BranchesStaffContext,
-} from './branches-staff-access.service';
 import { ListBranchesService } from './list-branches.service';
 
 type BranchLookupResult = {
@@ -33,19 +33,19 @@ describe('ListBranchesService', () => {
     Promise<BranchLookupResult[]>,
     [unknown]
   >();
-  const getStaffContextMock = jest.fn<
-    Promise<BranchesStaffContext>,
-    [JwtPayload]
-  >();
+  const getStaffContextMock = jest.fn<Promise<StaffContext>, [JwtPayload]>();
 
   const prisma = {
     branch: {
       findMany: branchFindManyMock,
     },
   } as unknown as PrismaService;
-  const BranchAccessService = {
-    getStaffContext: getStaffContextMock,
-  } as unknown as BranchAccessService;
+  const branchAccessService = Object.assign(
+    Object.create(BranchAccessService.prototype) as BranchAccessService,
+    {
+      getStaffContext: getStaffContextMock,
+    },
+  );
 
   const authUser: JwtPayload = {
     sub: 'auth-1',
@@ -81,7 +81,7 @@ describe('ListBranchesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ListBranchesService(prisma, BranchAccessService);
+    service = new ListBranchesService(prisma, branchAccessService);
   });
 
   it('returns every restaurant branch when the caller is admin of at least one branch', async () => {

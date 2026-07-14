@@ -38,10 +38,7 @@ describe('GetBranchSummaryService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new GetBranchSummaryService(
-      BranchAccessService,
-      repository,
-    );
+    service = new GetBranchSummaryService(BranchAccessService, repository);
 
     ensureAccessMock.mockResolvedValue({
       staffUserId: 'staff-1',
