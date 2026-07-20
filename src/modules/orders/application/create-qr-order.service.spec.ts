@@ -58,6 +58,7 @@ describe('CreateQrOrderService', () => {
         preparationStationId: 'station-bar',
         quantity: 1,
         notes: null,
+        modifiers: [],
       },
     ]);
 
@@ -76,9 +77,9 @@ describe('CreateQrOrderService', () => {
     const orderCreateMock = jest
       .fn<Promise<unknown>, [unknown]>()
       .mockResolvedValue({ id: 'order-1' });
-    const orderItemCreateManyMock = jest
+    const orderItemCreateMock = jest
       .fn<Promise<unknown>, [unknown]>()
-      .mockResolvedValue({ count: 1 });
+      .mockResolvedValue({ id: 'order-item-1' });
     const billItemCreateManyMock = jest.fn<Promise<unknown>, [unknown]>();
     const stationTicketCreateMock = jest.fn<Promise<unknown>, [unknown]>();
 
@@ -92,7 +93,7 @@ describe('CreateQrOrderService', () => {
           bill: { create: billCreateMock },
           table: { update: tableUpdateMock },
           order: { create: orderCreateMock },
-          orderItem: { createMany: orderItemCreateManyMock },
+          orderItem: { create: orderItemCreateMock },
           billItem: { createMany: billItemCreateManyMock },
           stationTicket: { create: stationTicketCreateMock },
         }),

@@ -68,6 +68,7 @@ describe('GetPublishedMenuByQrService', () => {
               stationType: PreparationStationType.KITCHEN,
               status: PreparationStationStatus.ACTIVE,
             },
+            modifierGroups: [],
           },
         ],
       },

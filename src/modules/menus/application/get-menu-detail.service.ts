@@ -32,6 +32,18 @@ export class GetMenuDetailService {
                 media: {
                   orderBy: { sortOrder: 'asc' },
                 },
+                modifierGroups: {
+                  orderBy: { sortOrder: 'asc' },
+                  include: {
+                    modifierGroup: {
+                      include: {
+                        options: {
+                          orderBy: { sortOrder: 'asc' },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },

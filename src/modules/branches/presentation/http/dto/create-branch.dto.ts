@@ -3,8 +3,10 @@ import { Role } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsInt,
   IsOptional,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -31,6 +33,13 @@ class CreateBranchSettingsDto {
   @IsOptional()
   @IsBoolean()
   partialDeliveryEnabled?: boolean;
+
+  @ApiPropertyOptional({ nullable: true, example: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  autoDeliverAfterMinutes?: number | null;
 }
 
 export class CreateBranchDto {
@@ -62,6 +71,9 @@ class CreateBranchSettingsResponseDto {
 
   @ApiProperty()
   partialDeliveryEnabled!: boolean;
+
+  @ApiProperty({ nullable: true, required: false })
+  autoDeliverAfterMinutes!: number | null;
 }
 
 export class CreateBranchResponseDto {

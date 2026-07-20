@@ -19,6 +19,7 @@ export function mapBranchToResponse(
       qrPaymentMode: branch.settings?.qrPaymentMode ?? 'prepaid_order',
       splitBillEnabled: branch.settings?.splitBillEnabled ?? true,
       partialDeliveryEnabled: branch.settings?.partialDeliveryEnabled ?? true,
+      autoDeliverAfterMinutes: branch.settings?.autoDeliverAfterMinutes ?? null,
     },
   };
 }

@@ -4,9 +4,11 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -34,6 +36,18 @@ class UpdateBranchSettingsDto {
   @IsOptional()
   @IsBoolean()
   partialDeliveryEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 5,
+    description:
+      'Minutos tras los cuales un pedido listo se marca entregado automaticamente. Null desactiva la auto-entrega (requiere confirmacion manual).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  autoDeliverAfterMinutes?: number | null;
 }
 
 export class UpdateBranchDto {
@@ -79,6 +93,9 @@ class BranchSettingsResponseDto {
 
   @ApiProperty()
   partialDeliveryEnabled!: boolean;
+
+  @ApiProperty({ nullable: true, required: false })
+  autoDeliverAfterMinutes!: number | null;
 }
 
 export class BranchResponseDto {

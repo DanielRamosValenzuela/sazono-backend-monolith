@@ -132,6 +132,7 @@ describe('PublishMenuService', () => {
                   stationType: PreparationStationType.KITCHEN,
                   status: PreparationStationStatus.ACTIVE,
                 },
+                modifierGroups: [],
               },
             ],
           },

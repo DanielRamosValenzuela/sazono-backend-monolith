@@ -188,6 +188,7 @@ describe('UpdateBranchService', () => {
         qrPaymentMode: 'prepaid_order',
         splitBillEnabled: true,
         partialDeliveryEnabled: true,
+        autoDeliverAfterMinutes: null,
       },
     });
     expect(result).toEqual({
@@ -201,6 +202,7 @@ describe('UpdateBranchService', () => {
         qrPaymentMode: 'prepaid_order',
         splitBillEnabled: true,
         partialDeliveryEnabled: true,
+        autoDeliverAfterMinutes: null,
       },
     });
   });
@@ -263,6 +265,7 @@ describe('UpdateBranchService', () => {
         qrPaymentMode: 'postpaid_order',
         splitBillEnabled: true,
         partialDeliveryEnabled: true,
+        autoDeliverAfterMinutes: null,
       },
     });
     expect(result.settings.qrPaymentMode).toBe('postpaid_order');

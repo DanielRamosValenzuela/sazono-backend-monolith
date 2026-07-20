@@ -3,6 +3,7 @@ import {
   MenuCategoryStatus,
   MenuItemType,
   MenuStatus,
+  ModifierSelectionType,
   PreparationStationStatus,
   PreparationStationType,
 } from '@prisma/client';
@@ -21,6 +22,204 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+
+export class ModifierOptionResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  modifierOptionId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ example: '1500' })
+  priceDelta!: string;
+
+  @ApiProperty()
+  isAvailable!: boolean;
+
+  @ApiProperty()
+  sortOrder!: number;
+}
+
+export class ModifierGroupResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  modifierGroupId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  branchId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({
+    enum: ModifierSelectionType,
+    enumName: 'ModifierSelectionType',
+  })
+  selectionType!: ModifierSelectionType;
+
+  @ApiProperty()
+  minSelect!: number;
+
+  @ApiProperty({ nullable: true, required: false })
+  maxSelect!: number | null;
+
+  @ApiProperty()
+  isRequired!: boolean;
+
+  @ApiProperty()
+  sortOrder!: number;
+
+  @ApiProperty({ type: [ModifierOptionResponseDto] })
+  options!: ModifierOptionResponseDto[];
+}
+
+export class CreateModifierGroupDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiProperty({ example: 'Elige tu acompañamiento' })
+  @IsString()
+  @MaxLength(120)
+  name!: string;
+
+  @ApiProperty({
+    enum: ModifierSelectionType,
+    enumName: 'ModifierSelectionType',
+  })
+  @IsEnum(ModifierSelectionType)
+  selectionType!: ModifierSelectionType;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minSelect?: number;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxSelect?: number;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  isRequired?: boolean;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class UpdateModifierGroupDto {
+  @ApiPropertyOptional({ example: 'Elige tu acompañamiento' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @ApiPropertyOptional({
+    enum: ModifierSelectionType,
+    enumName: 'ModifierSelectionType',
+  })
+  @IsOptional()
+  @IsEnum(ModifierSelectionType)
+  selectionType?: ModifierSelectionType;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minSelect?: number;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxSelect?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isRequired?: boolean;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class CreateModifierOptionDto {
+  @ApiProperty({ example: 'Papas fritas' })
+  @IsString()
+  @MaxLength(120)
+  name!: string;
+
+  @ApiPropertyOptional({ example: '0' })
+  @IsOptional()
+  @IsNumberString()
+  priceDelta?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  isAvailable?: boolean;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class UpdateModifierOptionDto {
+  @ApiPropertyOptional({ example: 'Papas fritas' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @ApiPropertyOptional({ example: '0' })
+  @IsOptional()
+  @IsNumberString()
+  priceDelta?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isAvailable?: boolean;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class SetMenuItemModifierGroupsDto {
+  @ApiProperty({ type: [String], format: 'uuid' })
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  modifierGroupIds!: string[];
+}
+
+export class ListModifierGroupsQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  branchId!: string;
+}
 
 class PreparationStationSummaryResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -86,6 +285,9 @@ class MenuItemSummaryResponseDto {
 
   @ApiProperty({ type: PreparationStationSummaryResponseDto })
   preparationStation!: PreparationStationSummaryResponseDto;
+
+  @ApiProperty({ type: [ModifierGroupResponseDto] })
+  modifierGroups!: ModifierGroupResponseDto[];
 }
 
 export class MenuCategoryResponseDto {
@@ -187,6 +389,9 @@ export class MenuItemResponseDto {
 
   @ApiProperty({ type: PreparationStationSummaryResponseDto })
   preparationStation!: PreparationStationSummaryResponseDto;
+
+  @ApiProperty({ type: [ModifierGroupResponseDto] })
+  modifierGroups!: ModifierGroupResponseDto[];
 }
 
 export class MenuListItemResponseDto {

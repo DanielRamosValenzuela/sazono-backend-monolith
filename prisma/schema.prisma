@@ -82,6 +82,11 @@ enum MenuItemType {
   SERVICE
 }
 
+enum ModifierSelectionType {
+  ONE
+  MANY
+}
+
 enum PreparationStationType {
   KITCHEN
   BAR
@@ -129,7 +134,6 @@ enum OrderItemStatus {
 
 enum StationTicketStatus {
   PENDING
-  ACCEPTED
   IN_PROGRESS
   READY
   CANCELLED
@@ -237,6 +241,7 @@ model Branch {
   preparationStations PreparationStation[]
   orders              Order[]
   bills               Bill[]
+  modifierGroups      ModifierGroup[]
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
   stationTickets      StationTicket[]
@@ -251,6 +256,7 @@ model BranchSettings {
   qrPaymentMode          String   @default("prepaid_order") @map("qr_payment_mode")
   splitBillEnabled       Boolean  @default(true) @map("split_bill_enabled")
   partialDeliveryEnabled Boolean  @default(true) @map("partial_delivery_enabled")
+  autoDeliverAfterMinutes Int?    @map("auto_deliver_after_minutes")
   defaultMenuId          String?  @map("default_menu_id") @db.Uuid
   branch                 Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   defaultMenu            Menu?    @relation("BranchDefaultMenu", fields: [defaultMenuId], references: [id], onDelete: SetNull)
@@ -420,6 +426,7 @@ model MenuItem {
   preparationStation   PreparationStation @relation(fields: [preparationStationId], references: [id], onDelete: Restrict)
   media                MenuItemMedia[]
   orderItems           OrderItem[]
+  modifierGroups       MenuItemModifierGroup[]
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -441,6 +448,56 @@ model MenuItemMedia {
 
   @@index([menuItemId, sortOrder])
   @@map("menu_item_media")
+}
+
+model ModifierGroup {
+  id            String                  @id @default(uuid()) @db.Uuid
+  branchId      String                  @map("branch_id") @db.Uuid
+  name          String
+  selectionType ModifierSelectionType   @map("selection_type")
+  minSelect     Int                     @default(0) @map("min_select")
+  maxSelect     Int?                    @map("max_select")
+  isRequired    Boolean                 @default(false) @map("is_required")
+  sortOrder     Int                     @default(0) @map("sort_order")
+  branch        Branch                  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  options       ModifierOption[]
+  menuItems     MenuItemModifierGroup[]
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([branchId])
+  @@map("modifier_groups")
+}
+
+model ModifierOption {
+  id                 String              @id @default(uuid()) @db.Uuid
+  modifierGroupId    String              @map("modifier_group_id") @db.Uuid
+  name               String
+  priceDelta         Decimal             @default(0) @map("price_delta") @db.Decimal(12, 2)
+  isAvailable        Boolean             @default(true) @map("is_available")
+  sortOrder          Int                 @default(0) @map("sort_order")
+  modifierGroup      ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItemModifiers OrderItemModifier[]
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([modifierGroupId, sortOrder])
+  @@map("modifier_options")
+}
+
+model MenuItemModifierGroup {
+  id              String        @id @default(uuid()) @db.Uuid
+  menuItemId      String        @map("menu_item_id") @db.Uuid
+  modifierGroupId String        @map("modifier_group_id") @db.Uuid
+  sortOrder       Int           @default(0) @map("sort_order")
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([menuItemId, modifierGroupId])
+  @@index([modifierGroupId])
+  @@map("menu_item_modifier_groups")
 }
 
 model Translation {
@@ -528,12 +585,28 @@ model OrderItem {
   preparationStation   PreparationStation  @relation(fields: [preparationStationId], references: [id], onDelete: Restrict)
   stationTicketItems   StationTicketItem[]
   billItems            BillItem[]
+  modifiers            OrderItemModifier[]
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([orderId])
   @@index([preparationStationId, status])
   @@map("order_items")
+}
+
+model OrderItemModifier {
+  id                 String          @id @default(uuid()) @db.Uuid
+  orderItemId        String          @map("order_item_id") @db.Uuid
+  modifierOptionId   String?         @map("modifier_option_id") @db.Uuid
+  nameSnapshot       String          @map("name_snapshot")
+  priceDeltaSnapshot Decimal         @map("price_delta_snapshot") @db.Decimal(12, 2)
+  orderItem          OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierOption     ModifierOption? @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([orderItemId])
+  @@map("order_item_modifiers")
 }
 
 model StationTicket {

@@ -122,6 +122,7 @@ describe('ListBranchesService', () => {
           qrPaymentMode: 'prepaid_order',
           splitBillEnabled: true,
           partialDeliveryEnabled: true,
+          autoDeliverAfterMinutes: null,
         },
       },
       {
@@ -135,6 +136,7 @@ describe('ListBranchesService', () => {
           qrPaymentMode: 'prepaid_order',
           splitBillEnabled: true,
           partialDeliveryEnabled: true,
+          autoDeliverAfterMinutes: null,
         },
       },
     ]);

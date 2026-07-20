@@ -130,17 +130,26 @@ export class CreateQrOrderService {
         },
       });
 
-      await tx.orderItem.createMany({
-        data: resolvedItems.map((item) => ({
-          orderId: order.id,
-          menuItemId: item.menuItemId,
-          preparationStationId: item.preparationStationId,
-          nameSnapshot: item.name,
-          priceSnapshot: item.price,
-          quantity: item.quantity,
-          notes: item.notes,
-        })),
-      });
+      for (const item of resolvedItems) {
+        await tx.orderItem.create({
+          data: {
+            orderId: order.id,
+            menuItemId: item.menuItemId,
+            preparationStationId: item.preparationStationId,
+            nameSnapshot: item.name,
+            priceSnapshot: item.price,
+            quantity: item.quantity,
+            notes: item.notes,
+            modifiers: {
+              create: item.modifiers.map((modifier) => ({
+                modifierOptionId: modifier.modifierOptionId,
+                nameSnapshot: modifier.name,
+                priceDeltaSnapshot: modifier.priceDelta,
+              })),
+            },
+          },
+        });
+      }
 
       return order.id;
     });

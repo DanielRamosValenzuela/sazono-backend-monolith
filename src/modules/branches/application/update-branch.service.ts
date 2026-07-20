@@ -106,6 +106,11 @@ export class UpdateBranchService {
             dto.settings.partialDeliveryEnabled;
         }
 
+        if (dto.settings.autoDeliverAfterMinutes !== undefined) {
+          settingsUpdate.autoDeliverAfterMinutes =
+            dto.settings.autoDeliverAfterMinutes;
+        }
+
         await tx.branchSettings.upsert({
           where: {
             branchId,
@@ -117,6 +122,8 @@ export class UpdateBranchService {
             qrPaymentMode: dto.settings.qrPaymentMode ?? 'prepaid_order',
             splitBillEnabled: dto.settings.splitBillEnabled ?? true,
             partialDeliveryEnabled: dto.settings.partialDeliveryEnabled ?? true,
+            autoDeliverAfterMinutes:
+              dto.settings.autoDeliverAfterMinutes ?? null,
           },
         });
       }

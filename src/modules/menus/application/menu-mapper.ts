@@ -2,14 +2,68 @@ import type {
   MenuCategoryStatus,
   MenuItemType,
   MenuStatus,
+  ModifierSelectionType,
   PreparationStationStatus,
   PreparationStationType,
 } from '@prisma/client';
 import type {
   MenuDetailResponseDto,
   MenuListItemResponseDto,
+  ModifierGroupResponseDto,
+  ModifierOptionResponseDto,
   PreparationStationResponseDto,
 } from '../presentation/http/dto/menus.dto';
+
+type ModifierOptionRecord = {
+  id: string;
+  name: string;
+  priceDelta: { toString(): string };
+  isAvailable: boolean;
+  sortOrder: number;
+};
+
+type ModifierGroupRecord = {
+  id: string;
+  branchId: string;
+  name: string;
+  selectionType: ModifierSelectionType;
+  minSelect: number;
+  maxSelect: number | null;
+  isRequired: boolean;
+  sortOrder: number;
+  options: ModifierOptionRecord[];
+};
+
+export const mapModifierOption = (
+  option: ModifierOptionRecord,
+): ModifierOptionResponseDto => ({
+  modifierOptionId: option.id,
+  name: option.name,
+  priceDelta: option.priceDelta.toString(),
+  isAvailable: option.isAvailable,
+  sortOrder: option.sortOrder,
+});
+
+export const mapModifierGroup = (
+  group: ModifierGroupRecord,
+): ModifierGroupResponseDto => ({
+  modifierGroupId: group.id,
+  branchId: group.branchId,
+  name: group.name,
+  selectionType: group.selectionType,
+  minSelect: group.minSelect,
+  maxSelect: group.maxSelect,
+  isRequired: group.isRequired,
+  sortOrder: group.sortOrder,
+  options: group.options.map(mapModifierOption),
+});
+
+export const mapMenuItemModifierGroups = (
+  links: Array<{ sortOrder: number; modifierGroup: ModifierGroupRecord }>,
+): ModifierGroupResponseDto[] =>
+  [...links]
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((link) => mapModifierGroup(link.modifierGroup));
 
 export type TranslationEntry = {
   locale: string;
@@ -116,6 +170,10 @@ type MenuDetailWithRelations = {
         stationType: PreparationStationType;
         status: PreparationStationStatus;
       };
+      modifierGroups: Array<{
+        sortOrder: number;
+        modifierGroup: ModifierGroupRecord;
+      }>;
     }>;
   }>;
 };
@@ -193,6 +251,7 @@ export const mapMenuDetail = (
         stationType: item.preparationStation.stationType,
         status: item.preparationStation.status,
       },
+      modifierGroups: mapMenuItemModifierGroups(item.modifierGroups),
     })),
   })),
 });

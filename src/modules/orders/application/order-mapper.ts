@@ -35,6 +35,11 @@ export type OrderWithRelations = {
       stationType: PreparationStationType;
       status: PreparationStationStatus;
     };
+    modifiers: Array<{
+      modifierOptionId: string | null;
+      nameSnapshot: string;
+      priceDeltaSnapshot: Prisma.Decimal;
+    }>;
   }>;
   stationTickets: Array<{
     id: string;
@@ -53,6 +58,7 @@ export const ORDER_INCLUDE = {
     orderBy: [{ createdAt: 'asc' as const }],
     include: {
       preparationStation: true,
+      modifiers: true,
     },
   },
   stationTickets: {
@@ -96,6 +102,11 @@ export const mapOrder = (order: OrderWithRelations): OrderResponseDto => {
         stationType: item.preparationStation.stationType,
         status: item.preparationStation.status,
       },
+      modifiers: item.modifiers.map((modifier) => ({
+        modifierOptionId: modifier.modifierOptionId,
+        name: modifier.nameSnapshot,
+        priceDelta: modifier.priceDeltaSnapshot.toString(),
+      })),
     })),
     stationTickets: order.stationTickets.map((ticket) => ({
       stationTicketId: ticket.id,

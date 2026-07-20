@@ -53,7 +53,7 @@ export class CreateWaiterOrderService {
     const context = await this.branchAccessService.ensureAccess(
       authUser,
       tableSession.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],
+      [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER, Role.KITCHEN],
     );
 
     const resolvedItems = await this.orderableMenuItemResolverService.resolve(
@@ -100,6 +100,13 @@ export class CreateWaiterOrderService {
             priceSnapshot: item.price,
             quantity: item.quantity,
             notes: item.notes,
+            modifiers: {
+              create: item.modifiers.map((modifier) => ({
+                modifierOptionId: modifier.modifierOptionId,
+                nameSnapshot: modifier.name,
+                priceDeltaSnapshot: modifier.priceDelta,
+              })),
+            },
           },
         });
 

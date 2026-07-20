@@ -8,6 +8,12 @@ import {
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { CreateOrderItemDto } from '../presentation/http/dto/orders.dto';
 
+export type OrderableModifier = {
+  modifierOptionId: string;
+  name: string;
+  priceDelta: Prisma.Decimal;
+};
+
 export type OrderableMenuItem = {
   menuItemId: string;
   name: string;
@@ -15,6 +21,7 @@ export type OrderableMenuItem = {
   preparationStationId: string;
   quantity: number;
   notes: string | null;
+  modifiers: OrderableModifier[];
 };
 
 @Injectable()
@@ -55,6 +62,15 @@ export class OrderableMenuItemResolverService {
       include: {
         menuCategory: true,
         preparationStation: true,
+        modifierGroups: {
+          include: {
+            modifierGroup: {
+              include: {
+                options: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -86,14 +102,107 @@ export class OrderableMenuItemResolverService {
         );
       }
 
+      const modifiers = this.resolveModifiers(menuItem, itemDto);
+      const modifiersDelta = modifiers.reduce(
+        (total, modifier) => total.add(modifier.priceDelta),
+        new Prisma.Decimal(0),
+      );
+
       return {
         menuItemId: menuItem.id,
         name: menuItem.name,
-        price: menuItem.price,
+        price: menuItem.price.add(modifiersDelta),
         preparationStationId: menuItem.preparationStationId,
         quantity: itemDto.quantity,
         notes: itemDto.notes?.trim() || null,
+        modifiers,
       };
     });
+  }
+
+  private resolveModifiers(
+    menuItem: {
+      name: string;
+      modifierGroups: Array<{
+        modifierGroup: {
+          id: string;
+          name: string;
+          minSelect: number;
+          maxSelect: number | null;
+          isRequired: boolean;
+          options: Array<{
+            id: string;
+            name: string;
+            priceDelta: Prisma.Decimal;
+            isAvailable: boolean;
+          }>;
+        };
+      }>;
+    },
+    itemDto: CreateOrderItemDto,
+  ): OrderableModifier[] {
+    const selectedOptionIds = itemDto.modifierOptionIds ?? [];
+
+    const optionToGroup = new Map<
+      string,
+      {
+        group: (typeof menuItem.modifierGroups)[number]['modifierGroup'];
+        option: (typeof menuItem.modifierGroups)[number]['modifierGroup']['options'][number];
+      }
+    >();
+
+    for (const link of menuItem.modifierGroups) {
+      for (const option of link.modifierGroup.options) {
+        optionToGroup.set(option.id, { group: link.modifierGroup, option });
+      }
+    }
+
+    const selectedByGroupId = new Map<string, OrderableModifier[]>();
+
+    for (const optionId of selectedOptionIds) {
+      const resolved = optionToGroup.get(optionId);
+
+      if (!resolved) {
+        throw new BadRequestException(
+          `Uno de los modificadores seleccionados no pertenece al item "${menuItem.name}".`,
+        );
+      }
+
+      if (!resolved.option.isAvailable) {
+        throw new BadRequestException(
+          `El modificador "${resolved.option.name}" no esta disponible.`,
+        );
+      }
+
+      const groupSelections = selectedByGroupId.get(resolved.group.id) ?? [];
+      groupSelections.push({
+        modifierOptionId: resolved.option.id,
+        name: resolved.option.name,
+        priceDelta: resolved.option.priceDelta,
+      });
+      selectedByGroupId.set(resolved.group.id, groupSelections);
+    }
+
+    for (const link of menuItem.modifierGroups) {
+      const group = link.modifierGroup;
+      const selectedCount = selectedByGroupId.get(group.id)?.length ?? 0;
+      const effectiveMin = group.isRequired
+        ? Math.max(group.minSelect, 1)
+        : group.minSelect;
+
+      if (selectedCount < effectiveMin) {
+        throw new BadRequestException(
+          `Debes seleccionar al menos ${effectiveMin} opcion(es) de "${group.name}" para "${menuItem.name}".`,
+        );
+      }
+
+      if (group.maxSelect !== null && selectedCount > group.maxSelect) {
+        throw new BadRequestException(
+          `Puedes seleccionar como maximo ${group.maxSelect} opcion(es) de "${group.name}" para "${menuItem.name}".`,
+        );
+      }
+    }
+
+    return [...selectedByGroupId.values()].flat();
   }
 }

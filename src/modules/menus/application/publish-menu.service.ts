@@ -118,6 +118,18 @@ export class PublishMenuService {
                       sortOrder: 'asc',
                     },
                   },
+                  modifierGroups: {
+                    orderBy: { sortOrder: 'asc' },
+                    include: {
+                      modifierGroup: {
+                        include: {
+                          options: {
+                            orderBy: { sortOrder: 'asc' },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },

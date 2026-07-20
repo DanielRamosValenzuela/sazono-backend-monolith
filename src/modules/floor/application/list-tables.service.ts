@@ -25,6 +25,7 @@ export class ListTablesService {
       Role.SUPERVISOR,
       Role.WAITER,
       Role.CASHIER,
+      Role.KITCHEN,
     ]);
 
     const tables = await this.prisma.table.findMany({

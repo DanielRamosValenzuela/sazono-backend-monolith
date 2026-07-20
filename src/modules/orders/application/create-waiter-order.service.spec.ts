@@ -82,6 +82,7 @@ describe('CreateWaiterOrderService', () => {
         preparationStationId: 'station-bar',
         quantity: 2,
         notes: null,
+        modifiers: [],
       },
       {
         menuItemId: 'menu-item-2',
@@ -90,6 +91,7 @@ describe('CreateWaiterOrderService', () => {
         preparationStationId: 'station-kitchen',
         quantity: 1,
         notes: 'Sin cebolla.',
+        modifiers: [],
       },
     ]);
 
@@ -174,6 +176,119 @@ describe('CreateWaiterOrderService', () => {
       remainingAmount: new Prisma.Decimal(23700),
     });
     expect(stationTicketCreateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('snapshots selected modifiers and includes their price delta in priceSnapshot', async () => {
+    tableSessionFindUniqueMock.mockResolvedValue({
+      id: 'session-1',
+      branchId: 'branch-1',
+      status: TableSessionStatus.OPEN,
+      bill: {
+        id: 'bill-1',
+        tableSessionId: 'session-1',
+        subtotalAmount: new Prisma.Decimal(0),
+        tipAmount: new Prisma.Decimal(0),
+        totalAmount: new Prisma.Decimal(0),
+        remainingAmount: new Prisma.Decimal(0),
+      },
+    });
+    ensureAccessMock.mockResolvedValue({
+      staffUserId: 'staff-1',
+      restaurantId: 'restaurant-1',
+      branchId: 'branch-1',
+      roles: ['WAITER'],
+    });
+    resolveMock.mockResolvedValue([
+      {
+        menuItemId: 'menu-item-1',
+        name: 'Lomo saltado',
+        price: new Prisma.Decimal(13400),
+        preparationStationId: 'station-kitchen',
+        quantity: 1,
+        notes: null,
+        modifiers: [
+          {
+            modifierOptionId: 'option-1',
+            name: 'Papas fritas',
+            priceDelta: new Prisma.Decimal(1500),
+          },
+        ],
+      },
+    ]);
+
+    const orderCreateMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({ id: 'order-1', branchId: 'branch-1' });
+    const orderItemCreateMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({ id: 'order-item-1' });
+    const billItemCreateManyMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({ count: 1 });
+    const billUpdateMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({});
+    const stationTicketCreateMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({});
+    const tableSessionUpdateManyMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({ count: 0 });
+
+    transactionMock.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          order: { create: orderCreateMock },
+          orderItem: { create: orderItemCreateMock },
+          billItem: { createMany: billItemCreateManyMock },
+          bill: { update: billUpdateMock },
+          stationTicket: { create: stationTicketCreateMock },
+          tableSession: { updateMany: tableSessionUpdateManyMock },
+        }),
+    );
+
+    orderFindUniqueOrThrowMock.mockResolvedValue({
+      id: 'order-1',
+      tableSessionId: 'session-1',
+      billId: 'bill-1',
+      branchId: 'branch-1',
+      source: 'WAITER',
+      paymentPolicy: PaymentPolicy.POSTPAID,
+      status: OrderStatus.ROUTED,
+      notes: null,
+      submittedAt: new Date('2026-07-07T12:00:00.000Z'),
+      createdAt: new Date('2026-07-07T12:00:00.000Z'),
+      orderItems: [],
+      stationTickets: [],
+    });
+
+    await service.execute(authUser, {
+      tableSessionId: 'session-1',
+      items: [
+        {
+          menuItemId: 'menu-item-1',
+          quantity: 1,
+          modifierOptionIds: ['option-1'],
+        },
+      ],
+    });
+
+    const orderItemCreateArgs = orderItemCreateMock.mock.calls[0][0] as {
+      data: {
+        priceSnapshot: Prisma.Decimal;
+        modifiers: { create: Array<Record<string, unknown>> };
+      };
+    };
+    expect(orderItemCreateArgs.data.priceSnapshot).toEqual(
+      new Prisma.Decimal(13400),
+    );
+    expect(orderItemCreateArgs.data.modifiers.create).toEqual([
+      {
+        modifierOptionId: 'option-1',
+        nameSnapshot: 'Papas fritas',
+        priceDeltaSnapshot: new Prisma.Decimal(1500),
+      },
+    ]);
   });
 
   it('rejects orders over a session that is not active', async () => {

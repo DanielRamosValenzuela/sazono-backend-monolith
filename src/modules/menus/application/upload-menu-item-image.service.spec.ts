@@ -152,6 +152,7 @@ describe('UploadMenuItemImageService', () => {
         stationType: PreparationStationType.BAR,
         status: PreparationStationStatus.ACTIVE,
       },
+      modifierGroups: [],
     });
 
     const result = await service.execute(authUser, 'item-1', validFile);

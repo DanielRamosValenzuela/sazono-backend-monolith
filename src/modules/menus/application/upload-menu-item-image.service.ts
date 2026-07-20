@@ -8,6 +8,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { SupabaseService } from '../../../common/supabase/supabase.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { mapMenuItemModifierGroups } from './menu-mapper';
 import type { MenuItemResponseDto } from '../presentation/http/dto/menus.dto';
 
 const BUCKET_NAME = 'menu-media';
@@ -123,6 +124,18 @@ export class UploadMenuItemImageService {
             sortOrder: 'asc',
           },
         },
+        modifierGroups: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            modifierGroup: {
+              include: {
+                options: {
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -143,6 +156,7 @@ export class UploadMenuItemImageService {
         stationType: updated.preparationStation.stationType,
         status: updated.preparationStation.status,
       },
+      modifierGroups: mapMenuItemModifierGroups(updated.modifierGroups),
     };
   }
 }

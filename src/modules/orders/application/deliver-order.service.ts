@@ -34,6 +34,8 @@ export class DeliverOrderService {
       Role.ADMIN,
       Role.SUPERVISOR,
       Role.CASHIER,
+      Role.WAITER,
+      Role.KITCHEN,
     ]);
 
     if (order.status !== OrderStatus.READY) {

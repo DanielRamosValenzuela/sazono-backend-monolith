@@ -9,11 +9,11 @@ describe('computeOrderStatusFromTickets', () => {
     ).toBeNull();
   });
 
-  it('returns ROUTED when all active tickets are still pending or accepted', () => {
+  it('returns ROUTED when all active tickets are still pending', () => {
     expect(
       computeOrderStatusFromTickets([
         StationTicketStatus.PENDING,
-        StationTicketStatus.ACCEPTED,
+        StationTicketStatus.PENDING,
       ]),
     ).toBe(OrderStatus.ROUTED);
   });

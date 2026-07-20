@@ -114,6 +114,7 @@ export class CreateMenuItemService {
         stationType: item.preparationStation.stationType,
         status: item.preparationStation.status,
       },
+      modifierGroups: [],
     };
   }
 }

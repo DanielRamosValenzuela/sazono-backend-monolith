@@ -39,6 +39,13 @@ export class CreateOrderItemDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID('4', { each: true })
+  modifierOptionIds?: string[];
 }
 
 export class CreateWaiterOrderDto {
@@ -83,6 +90,29 @@ export class ListOrdersQueryDto {
   tableSessionId!: string;
 }
 
+export class ListBranchReadySummaryQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  branchId!: string;
+}
+
+export class BranchReadySummaryItemDto {
+  @ApiProperty({ format: 'uuid' })
+  tableSessionId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  tableId!: string;
+
+  @ApiProperty()
+  tableCode!: string;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
+  openedByStaffUserId!: string | null;
+
+  @ApiProperty({ example: 1 })
+  readyUndeliveredCount!: number;
+}
+
 export class CancelOrderDto {
   @ApiPropertyOptional({ example: 'Cliente cambio de opinion.' })
   @IsOptional()
@@ -109,6 +139,17 @@ class OrderPreparationStationSummaryDto {
     enumName: 'PreparationStationStatus',
   })
   status!: PreparationStationStatus;
+}
+
+class OrderItemModifierResponseDto {
+  @ApiProperty({ format: 'uuid', nullable: true })
+  modifierOptionId!: string | null;
+
+  @ApiProperty({ example: 'Papas fritas' })
+  name!: string;
+
+  @ApiProperty({ example: '1500' })
+  priceDelta!: string;
 }
 
 class OrderItemResponseDto {
@@ -138,6 +179,9 @@ class OrderItemResponseDto {
 
   @ApiProperty({ type: OrderPreparationStationSummaryDto })
   preparationStation!: OrderPreparationStationSummaryDto;
+
+  @ApiProperty({ type: [OrderItemModifierResponseDto] })
+  modifiers!: OrderItemModifierResponseDto[];
 }
 
 class OrderStationTicketSummaryDto {

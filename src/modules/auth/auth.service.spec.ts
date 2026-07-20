@@ -123,7 +123,7 @@ describe('AuthService.login', () => {
 
     expect(result.accessToken).toBe('signed-jwt');
     expect(result.expiresIn).toBe('8h');
-    expect(result.expiresAt).toBe('2026-07-15T06:20:00.000Z');
+    expect(result.expiresAt).toBe('2026-07-14T09:00:00.000Z');
     expect(result.user.restaurantId).toBe('restaurant-target');
   });
 
@@ -150,6 +150,6 @@ describe('AuthService.login', () => {
 
     expect(restaurantFindUniqueMock).not.toHaveBeenCalled();
     expect(result.user.profileType).toBe(LoginProfileType.PLATFORM_ADMIN);
-    expect(result.expiresAt).toBe('2026-07-15T06:20:00.000Z');
+    expect(result.expiresAt).toBe('2026-07-14T09:00:00.000Z');
   });
 });

@@ -7,6 +7,7 @@ import { Role, MenuStatus, PreparationStationStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { mapMenuItemModifierGroups } from './menu-mapper';
 import type {
   MenuItemResponseDto,
   UpdateMenuItemDto,
@@ -100,6 +101,18 @@ export class UpdateMenuItemService {
             sortOrder: 'asc',
           },
         },
+        modifierGroups: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            modifierGroup: {
+              include: {
+                options: {
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -120,6 +133,7 @@ export class UpdateMenuItemService {
         stationType: updated.preparationStation.stationType,
         status: updated.preparationStation.status,
       },
+      modifierGroups: mapMenuItemModifierGroups(updated.modifierGroups),
     };
   }
 }

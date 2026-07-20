@@ -4,11 +4,6 @@ export const STATION_TICKET_TRANSITIONS: Record<
   StationTicketStatus[]
 > = {
   [StationTicketStatus.PENDING]: [
-    StationTicketStatus.ACCEPTED,
-    StationTicketStatus.IN_PROGRESS,
-    StationTicketStatus.CANCELLED,
-  ],
-  [StationTicketStatus.ACCEPTED]: [
     StationTicketStatus.IN_PROGRESS,
     StationTicketStatus.CANCELLED,
   ],

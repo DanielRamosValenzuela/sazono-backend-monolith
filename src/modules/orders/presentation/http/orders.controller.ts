@@ -19,10 +19,13 @@ import { CancelOrderService } from '../../application/cancel-order.service';
 import { CreateWaiterOrderService } from '../../application/create-waiter-order.service';
 import { DeliverOrderService } from '../../application/deliver-order.service';
 import { GetOrderDetailService } from '../../application/get-order-detail.service';
+import { ListBranchReadySummaryService } from '../../application/list-branch-ready-summary.service';
 import { ListSessionOrdersService } from '../../application/list-session-orders.service';
 import {
+  BranchReadySummaryItemDto,
   CancelOrderDto,
   CreateWaiterOrderDto,
+  ListBranchReadySummaryQueryDto,
   ListOrdersQueryDto,
   OrderResponseDto,
 } from './dto/orders.dto';
@@ -37,6 +40,7 @@ export class OrdersController {
     private readonly getOrderDetailService: GetOrderDetailService,
     private readonly deliverOrderService: DeliverOrderService,
     private readonly cancelOrderService: CancelOrderService,
+    private readonly listBranchReadySummaryService: ListBranchReadySummaryService,
   ) {}
 
   @Post()
@@ -64,6 +68,20 @@ export class OrdersController {
     @Query() query: ListOrdersQueryDto,
   ): Promise<OrderResponseDto[]> {
     return this.listSessionOrdersService.execute(authUser, query);
+  }
+
+  @Get('branch-ready-summary')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Resume por sesion de mesa cuantas ordenes de la sucursal estan listas y sin entregar. Aplica de paso la auto-entrega configurada por sucursal.',
+  })
+  listBranchReadySummary(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Query() query: ListBranchReadySummaryQueryDto,
+  ): Promise<BranchReadySummaryItemDto[]> {
+    return this.listBranchReadySummaryService.execute(authUser, query);
   }
 
   @Get(':orderId')

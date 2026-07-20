@@ -29,17 +29,23 @@ import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface'
 import { CreateMenuCategoryService } from '../../application/create-menu-category.service';
 import { CreateMenuItemService } from '../../application/create-menu-item.service';
 import { CreateMenuService } from '../../application/create-menu.service';
+import { CreateModifierGroupService } from '../../application/create-modifier-group.service';
+import { CreateModifierOptionService } from '../../application/create-modifier-option.service';
 import { CreatePreparationStationService } from '../../application/create-preparation-station.service';
 import { GetMenuDetailService } from '../../application/get-menu-detail.service';
 import { ListMenusService } from '../../application/list-menus.service';
+import { ListModifierGroupsService } from '../../application/list-modifier-groups.service';
 import { ListPreparationStationsService } from '../../application/list-preparation-stations.service';
 import { PublishMenuService } from '../../application/publish-menu.service';
+import { SetMenuItemModifierGroupsService } from '../../application/set-menu-item-modifier-groups.service';
 import { UpdatePreparationStationService } from '../../application/update-preparation-station.service';
 import { RemoveMenuItemImageService } from '../../application/remove-menu-item-image.service';
 import { ReorderMenuCategoriesService } from '../../application/reorder-menu-categories.service';
 import { ReorderMenuItemsService } from '../../application/reorder-menu-items.service';
 import { UpdateMenuCategoryService } from '../../application/update-menu-category.service';
 import { UpdateMenuItemService } from '../../application/update-menu-item.service';
+import { UpdateModifierGroupService } from '../../application/update-modifier-group.service';
+import { UpdateModifierOptionService } from '../../application/update-modifier-option.service';
 import { UploadMenuItemImageService } from '../../application/upload-menu-item-image.service';
 import { UpsertMenuCategoryTranslationService } from '../../application/upsert-menu-category-translation.service';
 import { UpsertMenuItemTranslationService } from '../../application/upsert-menu-item-translation.service';
@@ -47,18 +53,26 @@ import {
   CreateMenuCategoryDto,
   CreateMenuDto,
   CreateMenuItemDto,
+  CreateModifierGroupDto,
+  CreateModifierOptionDto,
   CreatePreparationStationDto,
   ListMenusQueryDto,
+  ListModifierGroupsQueryDto,
   ListPreparationStationsQueryDto,
   MenuCategoryResponseDto,
   MenuDetailResponseDto,
   MenuItemResponseDto,
   MenuListItemResponseDto,
+  ModifierGroupResponseDto,
+  ModifierOptionResponseDto,
   PreparationStationResponseDto,
   ReorderMenuCategoriesDto,
   ReorderMenuItemsDto,
+  SetMenuItemModifierGroupsDto,
   UpdateMenuCategoryDto,
   UpdateMenuItemDto,
+  UpdateModifierGroupDto,
+  UpdateModifierOptionDto,
   UpdatePreparationStationDto,
   UpsertCategoryTranslationDto,
   UpsertItemTranslationDto,
@@ -79,6 +93,12 @@ export class MenusController {
     private readonly createMenuItemService: CreateMenuItemService,
     private readonly updateMenuCategoryService: UpdateMenuCategoryService,
     private readonly updateMenuItemService: UpdateMenuItemService,
+    private readonly createModifierGroupService: CreateModifierGroupService,
+    private readonly updateModifierGroupService: UpdateModifierGroupService,
+    private readonly listModifierGroupsService: ListModifierGroupsService,
+    private readonly createModifierOptionService: CreateModifierOptionService,
+    private readonly updateModifierOptionService: UpdateModifierOptionService,
+    private readonly setMenuItemModifierGroupsService: SetMenuItemModifierGroupsService,
     private readonly reorderMenuCategoriesService: ReorderMenuCategoriesService,
     private readonly reorderMenuItemsService: ReorderMenuItemsService,
     private readonly uploadMenuItemImageService: UploadMenuItemImageService,
@@ -269,6 +289,108 @@ export class MenusController {
     @Body() dto: UpdateMenuItemDto,
   ): Promise<MenuItemResponseDto> {
     return this.updateMenuItemService.execute(authUser, menuItemId, dto);
+  }
+
+  @Post('modifier-groups')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Crea un grupo de modificadores para una sucursal (reutilizable entre productos).',
+  })
+  createModifierGroup(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Body() dto: CreateModifierGroupDto,
+  ): Promise<ModifierGroupResponseDto> {
+    return this.createModifierGroupService.execute(authUser, dto);
+  }
+
+  @Get('modifier-groups')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Lista los grupos de modificadores disponibles en una sucursal.',
+  })
+  listModifierGroups(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Query() query: ListModifierGroupsQueryDto,
+  ): Promise<ModifierGroupResponseDto[]> {
+    return this.listModifierGroupsService.execute(authUser, query);
+  }
+
+  @Patch('modifier-groups/:modifierGroupId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Edita nombre, tipo de seleccion o cardinalidad de un grupo de modificadores.',
+  })
+  updateModifierGroup(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('modifierGroupId') modifierGroupId: string,
+    @Body() dto: UpdateModifierGroupDto,
+  ): Promise<ModifierGroupResponseDto> {
+    return this.updateModifierGroupService.execute(
+      authUser,
+      modifierGroupId,
+      dto,
+    );
+  }
+
+  @Post('modifier-groups/:modifierGroupId/options')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Agrega una opcion a un grupo de modificadores.',
+  })
+  createModifierOption(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('modifierGroupId') modifierGroupId: string,
+    @Body() dto: CreateModifierOptionDto,
+  ): Promise<ModifierOptionResponseDto> {
+    return this.createModifierOptionService.execute(
+      authUser,
+      modifierGroupId,
+      dto,
+    );
+  }
+
+  @Patch('modifier-options/:modifierOptionId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Edita nombre, costo adicional o disponibilidad de una opcion de modificador.',
+  })
+  updateModifierOption(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('modifierOptionId') modifierOptionId: string,
+    @Body() dto: UpdateModifierOptionDto,
+  ): Promise<ModifierOptionResponseDto> {
+    return this.updateModifierOptionService.execute(
+      authUser,
+      modifierOptionId,
+      dto,
+    );
+  }
+
+  @Put('items/:menuItemId/modifier-groups')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Reemplaza de una vez el conjunto de grupos de modificadores asignados a un item.',
+  })
+  setMenuItemModifierGroups(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('menuItemId') menuItemId: string,
+    @Body() dto: SetMenuItemModifierGroupsDto,
+  ): Promise<ModifierGroupResponseDto[]> {
+    return this.setMenuItemModifierGroupsService.execute(
+      authUser,
+      menuItemId,
+      dto,
+    );
   }
 
   @Put('items/:menuItemId/translations/:locale')
