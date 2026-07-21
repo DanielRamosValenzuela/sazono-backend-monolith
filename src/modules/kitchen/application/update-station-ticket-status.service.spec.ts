@@ -1,4 +1,5 @@
 ﻿import { ConflictException, ForbiddenException } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   OrderItemStatus,
   OrderStatus,
@@ -7,6 +8,7 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { STATION_TICKET_READY_EVENT } from '../domain/station-ticket-events';
 import { UpdateStationTicketStatusService } from './update-station-ticket-status.service';
 
 describe('UpdateStationTicketStatusService', () => {
@@ -26,6 +28,11 @@ describe('UpdateStationTicketStatusService', () => {
     ensureAccess: ensureAccessMock,
   } as unknown as BranchAccessService;
 
+  const emitMock = jest.fn();
+  const eventEmitter = {
+    emit: emitMock,
+  } as unknown as EventEmitter2;
+
   const authUser = {
     sub: 'auth-1',
     profileType: LoginProfileType.STAFF,
@@ -37,7 +44,11 @@ describe('UpdateStationTicketStatusService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpdateStationTicketStatusService(prisma, BranchAccessService);
+    service = new UpdateStationTicketStatusService(
+      prisma,
+      BranchAccessService,
+      eventEmitter,
+    );
   });
 
   const mappedTicket = {
@@ -56,6 +67,7 @@ describe('UpdateStationTicketStatusService', () => {
     order: {
       source: 'WAITER',
       notes: null,
+      createdByStaffUserId: 'staff-waiter-1',
       tableSession: {
         table: {
           code: 'M01',
@@ -136,6 +148,10 @@ describe('UpdateStationTicketStatusService', () => {
         data: { status: OrderStatus.PARTIALLY_READY },
       }),
     );
+    expect(emitMock).toHaveBeenCalledWith(STATION_TICKET_READY_EVENT, {
+      orderId: 'order-1',
+      createdByStaffUserId: 'staff-waiter-1',
+    });
   });
 
   it('rejects invalid transitions', async () => {

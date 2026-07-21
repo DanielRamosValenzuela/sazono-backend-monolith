@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcryptjs';
 import {
   PlatformAdminStatus,
   Prisma,
@@ -22,6 +23,7 @@ import {
   AuthenticatedProfileDto,
 } from './dto/auth-response.dto';
 import { LoginDto, LoginProfileType } from './dto/login.dto';
+import type { PinLoginDto, SetPinDto } from './dto/pin.dto';
 import {
   JwtPayload,
   RefreshTokenPayload,
@@ -47,6 +49,10 @@ interface SignedTokens {
 
 const DEFAULT_REFRESH_TOKEN_SECRET = 'change-me-refresh';
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = '30d' as StringValue;
+
+const PIN_SALT_ROUNDS = 10;
+const PIN_MAX_FAILED_ATTEMPTS = 5;
+const PIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -149,6 +155,131 @@ export class AuthService {
       },
       payload.restaurantId,
     );
+  }
+
+  async setPin(user: JwtPayload, dto: SetPinDto): Promise<void> {
+    if (user.profileType !== LoginProfileType.STAFF) {
+      throw new ForbiddenException(
+        'Solo un perfil staff puede configurar un PIN.',
+      );
+    }
+
+    const pinHash = await bcrypt.hash(dto.pin, PIN_SALT_ROUNDS);
+
+    await this.prisma.staffUser.update({
+      where: {
+        id: user.profileId,
+      },
+      data: {
+        pinHash,
+        pinSetAt: new Date(),
+        pinFailedAttempts: 0,
+        pinLockedUntil: null,
+      },
+    });
+  }
+
+  async loginWithPin(dto: PinLoginDto): Promise<AuthResponseDto> {
+    const staffUser = await this.prisma.staffUser.findUnique({
+      where: {
+        id: dto.staffUserId,
+      },
+      include: {
+        branchRoles: {
+          include: {
+            branch: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !staffUser ||
+      staffUser.status !== StaffUserStatus.ACTIVE ||
+      !staffUser.pinHash
+    ) {
+      throw new UnauthorizedException('PIN invalido.');
+    }
+
+    if (staffUser.pinLockedUntil && staffUser.pinLockedUntil > new Date()) {
+      throw new UnauthorizedException(
+        'PIN bloqueado temporalmente por demasiados intentos fallidos. Intenta mas tarde o entra con tu contrasena.',
+      );
+    }
+
+    const isValidPin = await bcrypt.compare(dto.pin, staffUser.pinHash);
+
+    if (!isValidPin) {
+      await this.registerFailedPinAttempt(
+        staffUser.id,
+        staffUser.pinFailedAttempts,
+      );
+
+      throw new UnauthorizedException('PIN invalido.');
+    }
+
+    await this.prisma.staffUser.update({
+      where: {
+        id: staffUser.id,
+      },
+      data: {
+        pinFailedAttempts: 0,
+        pinLockedUntil: null,
+      },
+    });
+
+    const authenticatedIdentity = await this.authProvider.getUserById(
+      staffUser.authUserId,
+    );
+
+    if (!authenticatedIdentity) {
+      throw new UnauthorizedException('PIN invalido.');
+    }
+
+    const profile = this.mapStaffUser(
+      staffUser.authUserId,
+      authenticatedIdentity.email ?? '',
+      staffUser,
+    );
+
+    const payload: JwtPayload = {
+      sub: staffUser.authUserId,
+      profileType: LoginProfileType.STAFF,
+      profileId: staffUser.id,
+      restaurantId: staffUser.restaurantId,
+    };
+
+    const { accessToken, refreshToken, expiresIn, expiresAt } =
+      await this.signTokens(payload);
+
+    return {
+      accessToken,
+      refreshToken,
+      tokenType: 'Bearer',
+      expiresIn,
+      expiresAt,
+      user: profile,
+    };
+  }
+
+  private async registerFailedPinAttempt(
+    staffUserId: string,
+    currentFailedAttempts: number,
+  ): Promise<void> {
+    const nextFailedAttempts = currentFailedAttempts + 1;
+    const shouldLock = nextFailedAttempts >= PIN_MAX_FAILED_ATTEMPTS;
+
+    await this.prisma.staffUser.update({
+      where: {
+        id: staffUserId,
+      },
+      data: {
+        pinFailedAttempts: shouldLock ? 0 : nextFailedAttempts,
+        ...(shouldLock
+          ? { pinLockedUntil: new Date(Date.now() + PIN_LOCKOUT_DURATION_MS) }
+          : {}),
+      },
+    });
   }
 
   private async signTokens(payload: JwtPayload): Promise<SignedTokens> {
@@ -341,22 +472,7 @@ export class AuthService {
       );
     }
 
-    return {
-      authIdentityId: authUserId,
-      profileType: LoginProfileType.STAFF,
-      profileId: selectedStaffUser.id,
-      email,
-      firstName: selectedStaffUser.firstName,
-      lastName: selectedStaffUser.lastName,
-      restaurantId: selectedStaffUser.restaurantId,
-      branchRoles: selectedStaffUser.branchRoles
-        .filter((branchRole) => branchRole.status === 'ACTIVE')
-        .map((branchRole) => ({
-          branchId: branchRole.branchId,
-          branchName: branchRole.branch.name,
-          role: branchRole.role,
-        })),
-    };
+    return this.mapStaffUser(authUserId, email, selectedStaffUser);
   }
 
   private mapPlatformAdmin(
@@ -373,6 +489,29 @@ export class AuthService {
       lastName: platformAdmin.lastName,
       restaurantId: null,
       branchRoles: [],
+    };
+  }
+
+  private mapStaffUser(
+    authUserId: string,
+    email: string,
+    staffUser: StaffUserRecord,
+  ): AuthenticatedProfileDto {
+    return {
+      authIdentityId: authUserId,
+      profileType: LoginProfileType.STAFF,
+      profileId: staffUser.id,
+      email,
+      firstName: staffUser.firstName,
+      lastName: staffUser.lastName,
+      restaurantId: staffUser.restaurantId,
+      branchRoles: staffUser.branchRoles
+        .filter((branchRole) => branchRole.status === 'ACTIVE')
+        .map((branchRole) => ({
+          branchId: branchRole.branchId,
+          branchName: branchRole.branch.name,
+          role: branchRole.role,
+        })),
     };
   }
 

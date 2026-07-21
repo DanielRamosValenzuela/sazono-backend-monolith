@@ -117,6 +117,7 @@ export class CloseTableSessionService {
       openedAt: closedSession.openedAt.toISOString(),
       closeReason: closedSession.closeReason,
       closedAt: closedSession.closedAt?.toISOString() ?? null,
+      assignedStaffUserId: closedSession.assignedStaffUserId,
     };
   }
 

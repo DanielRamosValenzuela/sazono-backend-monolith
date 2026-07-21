@@ -53,6 +53,18 @@ export class OpenTableSessionService {
 
     this.validateOpenedBySource(context.roles, dto.openedBySource);
 
+    const branchSettings = await this.prisma.branchSettings.findUnique({
+      where: {
+        branchId: table.branchId,
+      },
+      select: {
+        tableAssignmentEnabled: true,
+      },
+    });
+    const initialAssignedStaffUserId = branchSettings?.tableAssignmentEnabled
+      ? context.staffUserId
+      : null;
+
     const tableSession = await this.prisma.$transaction(async (tx) => {
       const existingActiveSession = await tx.tableSession.findFirst({
         where: {
@@ -75,6 +87,7 @@ export class OpenTableSessionService {
           branchId: table.branchId,
           openedBySource: dto.openedBySource,
           openedByStaffUserId: context.staffUserId,
+          assignedStaffUserId: initialAssignedStaffUserId,
         },
       });
 
@@ -107,6 +120,7 @@ export class OpenTableSessionService {
       openedAt: tableSession.openedAt.toISOString(),
       closeReason: tableSession.closeReason,
       closedAt: tableSession.closedAt?.toISOString() ?? null,
+      assignedStaffUserId: tableSession.assignedStaffUserId,
     };
   }
 

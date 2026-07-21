@@ -29,7 +29,7 @@ Se detecto en una revision que el rol `WAITER` tenia una mezcla de permisos de m
 
 **Permisos de mas removidos** (el `WAITER` ya NO puede):
 
-- `POST /orders/:id/deliver` — entregar una orden
+- `POST /orders/:id/deliver` — entregar una orden (nota: este permiso se reincorporo despues, ver seccion "Actualizacion" mas abajo)
 - `POST /orders/:id/cancel` — cancelar una orden (ni siquiera pre-produccion)
 - `GET /billing/branches/:id/open-bills` — ver todas las cuentas abiertas de la sucursal (es una vista de caja/supervisor)
 - `GET /payments/bills/:id` — ver historial completo de pagos de una cuenta
@@ -42,6 +42,15 @@ Para el caso de un QR de pago fallido, el `WAITER` no necesita historial de pago
 Antes solo existia `POST` (crear) y `GET` (listar) para `PreparationStation` — no habia forma de renombrar, cambiar tipo o desactivar una estacion ya creada sin tocar la base directamente.
 
 Nuevo endpoint: `PATCH /api/v1/menus/preparation-stations/:preparationStationId` (solo `ADMIN` de la sucursal), acepta `name`, `stationType` y/o `status` (`ACTIVE`/`INACTIVE`) de forma parcial. Valida que el nuevo nombre no choque con otra estacion activa de la misma sucursal (mismo criterio case-insensitive que la creacion).
+
+## Actualizacion: `KITCHEN` puede crear pedidos, entrega compartida (ver doc 17)
+
+En una ronda posterior de UX de mesero/cocina:
+
+- `Role.KITCHEN` se agrego a los `allowedRoles` de `create-waiter-order.service.ts` y `list-tables.service.ts` (mismos roles que ya tenia `WAITER`). `list-session-orders.service.ts` ya incluia `KITCHEN` desde antes, no se toco.
+- `POST /orders/:id/deliver` (`deliver-order.service.ts`) ahora permite `WAITER` y `KITCHEN` ademas de `ADMIN`/`SUPERVISOR`/`CASHIER`. El permiso se le habia quitado a `WAITER` en la revision documentada arriba, pero en la practica ningun boton del frontend llamaba ese endpoint, asi que nadie lo usaba de todas formas; se reincorporo al construir el flujo real de "marcar entregado" para mesero y cocina.
+
+Detalle completo en doc 17.
 
 ## Lo que se evaluo y se decidio NO hacer ahora
 

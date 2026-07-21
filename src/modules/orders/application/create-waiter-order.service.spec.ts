@@ -1,4 +1,5 @@
 ﻿import { BadRequestException } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BillStatus,
   OrderStatus,
@@ -8,6 +9,7 @@ import {
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
+import { ORDER_CREATED_EVENT } from '../domain/order-events';
 import { CreateWaiterOrderService } from './create-waiter-order.service';
 import type { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
@@ -36,6 +38,11 @@ describe('CreateWaiterOrderService', () => {
     resolve: resolveMock,
   } as unknown as OrderableMenuItemResolverService;
 
+  const emitMock = jest.fn();
+  const eventEmitter = {
+    emit: emitMock,
+  } as unknown as EventEmitter2;
+
   const authUser = {
     sub: 'auth-1',
     profileType: LoginProfileType.STAFF,
@@ -51,6 +58,7 @@ describe('CreateWaiterOrderService', () => {
       prisma,
       BranchAccessService,
       orderableMenuItemResolverService,
+      eventEmitter,
     );
   });
 
@@ -176,6 +184,10 @@ describe('CreateWaiterOrderService', () => {
       remainingAmount: new Prisma.Decimal(23700),
     });
     expect(stationTicketCreateMock).toHaveBeenCalledTimes(2);
+    expect(emitMock).toHaveBeenCalledWith(ORDER_CREATED_EVENT, {
+      orderId: 'order-1',
+      branchId: 'branch-1',
+    });
   });
 
   it('snapshots selected modifiers and includes their price delta in priceSnapshot', async () => {

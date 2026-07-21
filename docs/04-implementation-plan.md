@@ -72,6 +72,7 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - `MenuItem`
 - `Translation`
 - `MediaAsset`
+- `ModifierGroup` / `ModifierOption` (ver doc 10 y doc 17)
 
 ### Casos de uso minimos
 
@@ -140,6 +141,9 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Completar CRUD de estaciones de preparacion (`PATCH` para editar/desactivar; ver doc 15)
 - [x] Implementar modulo `leads` (formulario de contacto/demo de la landing; ver doc 16)
 - [x] Implementar busqueda publica de restaurantes por nombre (para la pantalla "ya soy cliente"; ver doc 16)
+- [x] Implementar modificadores de producto (grupos y opciones reutilizables, integrados al flujo de ordenes; ver doc 17)
+- [x] Quitar `ACCEPTED` del enum `StationTicketStatus` (no media nada de negocio real; ver doc 17)
+- [x] Permitir a `KITCHEN` crear pedidos y a `WAITER`/`KITCHEN` marcar entrega; endpoint de resumen de listos por sucursal con auto-entrega perezosa (ver doc 17)
 
 ## 7. Estado actual
 
@@ -175,6 +179,11 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - nuevo modulo `leads` (`POST /leads` publico, `GET /leads` platform_admin) para el formulario de contacto/demo de la landing
 - `restaurants` expone `GET /restaurants/search?q=` publico (prefijo de nombre, solo activos) para la pantalla "ya soy cliente"
 - ver doc 16 para el detalle de este slice
+- `menus` ahora soporta modificadores de producto (`ModifierGroup`/`ModifierOption`, reutilizables por sucursal) integrados al flujo de ordenes de mesero y QR, con snapshot de precio y nombre en `OrderItemModifier`
+- `StationTicketStatus` ya no tiene el valor `ACCEPTED` (quedan `PENDING`/`IN_PROGRESS`/`READY`/`CANCELLED`)
+- `KITCHEN` ahora puede crear pedidos (mismos roles que `WAITER`); `WAITER` y `KITCHEN` ahora pueden marcar una orden como entregada
+- nuevo endpoint `GET /orders/branch-ready-summary` con auto-entrega perezosa basada en `BranchSettings.autoDeliverAfterMinutes`
+- ver doc 17 para el detalle de este slice
 
 ## 8. Definition of Done backend MVP
 

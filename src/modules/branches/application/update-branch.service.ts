@@ -111,6 +111,11 @@ export class UpdateBranchService {
             dto.settings.autoDeliverAfterMinutes;
         }
 
+        if (dto.settings.tableAssignmentEnabled !== undefined) {
+          settingsUpdate.tableAssignmentEnabled =
+            dto.settings.tableAssignmentEnabled;
+        }
+
         await tx.branchSettings.upsert({
           where: {
             branchId,
@@ -124,6 +129,8 @@ export class UpdateBranchService {
             partialDeliveryEnabled: dto.settings.partialDeliveryEnabled ?? true,
             autoDeliverAfterMinutes:
               dto.settings.autoDeliverAfterMinutes ?? null,
+            tableAssignmentEnabled:
+              dto.settings.tableAssignmentEnabled ?? false,
           },
         });
       }

@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AbandonTableSessionService } from './application/abandon-table-session.service';
+import { AssignTableSessionService } from './application/assign-table-session.service';
 import { CreateTableService } from './application/create-table.service';
 import { CloseTableSessionService } from './application/close-table-session.service';
 import { GetCurrentTableSessionService } from './application/get-current-table-session.service';
@@ -20,6 +21,7 @@ import { FloorController } from './presentation/http/floor.controller';
     GetCurrentTableSessionService,
     CloseTableSessionService,
     AbandonTableSessionService,
+    AssignTableSessionService,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],

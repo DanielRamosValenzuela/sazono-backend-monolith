@@ -35,6 +35,9 @@ class CurrentTableSessionSummaryDto {
 
   @ApiProperty()
   openedAt!: string;
+
+  @ApiProperty({ nullable: true, required: false })
+  assignedStaffUserId!: string | null;
 }
 
 export class CreateTableDto {
@@ -96,6 +99,17 @@ export class AbandonTableSessionDto {
   closeReason!: string;
 }
 
+export class AssignTableSessionDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Staff a asignar. Si se omite, el solicitante se autoasigna la mesa ("tomar esta mesa"). Asignar a otro staff requiere rol ADMIN o SUPERVISOR.',
+  })
+  @IsOptional()
+  @IsUUID()
+  staffUserId?: string;
+}
+
 export class TableSessionResponseDto {
   @ApiProperty({ format: 'uuid' })
   tableSessionId!: string;
@@ -123,6 +137,9 @@ export class TableSessionResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   closedAt!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  assignedStaffUserId!: string | null;
 }
 
 export class TableResponseDto {

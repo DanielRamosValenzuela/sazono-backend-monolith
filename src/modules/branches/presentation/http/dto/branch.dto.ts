@@ -48,6 +48,15 @@ class UpdateBranchSettingsDto {
   @IsInt()
   @Min(1)
   autoDeliverAfterMinutes?: number | null;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Activa la asignacion formal de mesas a un mesero especifico. Desactivado, el mesero que abrio la mesa sigue siendo la unica referencia (comportamiento historico).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  tableAssignmentEnabled?: boolean;
 }
 
 export class UpdateBranchDto {
@@ -96,6 +105,9 @@ class BranchSettingsResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   autoDeliverAfterMinutes!: number | null;
+
+  @ApiProperty()
+  tableAssignmentEnabled!: boolean;
 }
 
 export class BranchResponseDto {

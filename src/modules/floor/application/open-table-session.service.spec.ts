@@ -38,10 +38,14 @@ type TransactionClient = {
 
 describe('OpenTableSessionService', () => {
   const findUniqueMock = jest.fn();
+  const branchSettingsFindUniqueMock = jest.fn();
   const transactionMock = jest.fn();
   const prisma = {
     table: {
       findUnique: findUniqueMock,
+    },
+    branchSettings: {
+      findUnique: branchSettingsFindUniqueMock,
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
@@ -55,6 +59,9 @@ describe('OpenTableSessionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    branchSettingsFindUniqueMock.mockResolvedValue({
+      tableAssignmentEnabled: false,
+    });
     service = new OpenTableSessionService(prisma, BranchAccessService);
   });
 

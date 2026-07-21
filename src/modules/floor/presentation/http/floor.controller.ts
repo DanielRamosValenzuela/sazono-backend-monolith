@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
 import { AbandonTableSessionService } from '../../application/abandon-table-session.service';
+import { AssignTableSessionService } from '../../application/assign-table-session.service';
 import { CreateTableService } from '../../application/create-table.service';
 import { CloseTableSessionService } from '../../application/close-table-session.service';
 import { GetCurrentTableSessionService } from '../../application/get-current-table-session.service';
@@ -23,6 +24,7 @@ import { ListTablesService } from '../../application/list-tables.service';
 import { OpenTableSessionService } from '../../application/open-table-session.service';
 import {
   AbandonTableSessionDto,
+  AssignTableSessionDto,
   CloseTableSessionDto,
   CreateTableDto,
   ListTablesQueryDto,
@@ -42,6 +44,7 @@ export class FloorController {
     private readonly getCurrentTableSessionService: GetCurrentTableSessionService,
     private readonly closeTableSessionService: CloseTableSessionService,
     private readonly abandonTableSessionService: AbandonTableSessionService,
+    private readonly assignTableSessionService: AssignTableSessionService,
   ) {}
 
   @Post('tables')
@@ -126,6 +129,25 @@ export class FloorController {
     @Body() dto: AbandonTableSessionDto,
   ): Promise<TableSessionResponseDto> {
     return this.abandonTableSessionService.execute(
+      authUser,
+      tableSessionId,
+      dto,
+    );
+  }
+
+  @Post('table-sessions/:tableSessionId/assign')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Asigna o reasigna la mesa a un miembro del staff. Requiere la asignacion formal activada en la sucursal. Mesero/cajero solo pueden autoasignarse; admin/supervisor puede asignar a cualquiera.',
+  })
+  assignTableSession(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('tableSessionId') tableSessionId: string,
+    @Body() dto: AssignTableSessionDto,
+  ): Promise<TableSessionResponseDto> {
+    return this.assignTableSessionService.execute(
       authUser,
       tableSessionId,
       dto,

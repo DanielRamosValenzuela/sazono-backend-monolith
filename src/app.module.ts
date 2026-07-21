@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validateEnvironment } from './common/config/validate-environment';
 import { BranchAccessModule } from './common/branch-access/branch-access.module';
+import { FirebaseModule } from './common/firebase/firebase.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
@@ -20,6 +21,7 @@ import { FloorModule } from './modules/floor/floor.module';
 import { KitchenModule } from './modules/kitchen/kitchen.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { MenusModule } from './modules/menus/menus.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
@@ -68,6 +70,7 @@ import { StaffModule } from './modules/staff/staff.module';
     PrismaModule,
     BranchAccessModule,
     SupabaseModule,
+    FirebaseModule,
     AuthModule,
     RestaurantsModule,
     BranchesModule,
@@ -80,6 +83,7 @@ import { StaffModule } from './modules/staff/staff.module';
     PaymentsModule,
     AnalyticsModule,
     LeadsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

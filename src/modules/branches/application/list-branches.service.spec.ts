@@ -123,6 +123,7 @@ describe('ListBranchesService', () => {
           splitBillEnabled: true,
           partialDeliveryEnabled: true,
           autoDeliverAfterMinutes: null,
+          tableAssignmentEnabled: false,
         },
       },
       {
@@ -137,6 +138,7 @@ describe('ListBranchesService', () => {
           splitBillEnabled: true,
           partialDeliveryEnabled: true,
           autoDeliverAfterMinutes: null,
+          tableAssignmentEnabled: false,
         },
       },
     ]);

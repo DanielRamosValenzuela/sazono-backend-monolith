@@ -189,6 +189,7 @@ describe('UpdateBranchService', () => {
         splitBillEnabled: true,
         partialDeliveryEnabled: true,
         autoDeliverAfterMinutes: null,
+        tableAssignmentEnabled: false,
       },
     });
     expect(result).toEqual({
@@ -203,6 +204,7 @@ describe('UpdateBranchService', () => {
         splitBillEnabled: true,
         partialDeliveryEnabled: true,
         autoDeliverAfterMinutes: null,
+        tableAssignmentEnabled: false,
       },
     });
   });
@@ -266,6 +268,7 @@ describe('UpdateBranchService', () => {
         splitBillEnabled: true,
         partialDeliveryEnabled: true,
         autoDeliverAfterMinutes: null,
+        tableAssignmentEnabled: false,
       },
     });
     expect(result.settings.qrPaymentMode).toBe('postpaid_order');

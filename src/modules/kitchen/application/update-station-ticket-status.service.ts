@@ -4,6 +4,7 @@
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   OrderItemStatus,
   OrderStatus,
@@ -14,6 +15,8 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { computeOrderStatusFromTickets } from '../../orders/domain/order-status-from-tickets';
 import { canTransitionStationTicket } from '../domain/station-ticket-transitions';
+import { STATION_TICKET_READY_EVENT } from '../domain/station-ticket-events';
+import type { StationTicketReadyEvent } from '../domain/station-ticket-events';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import {
   STATION_TICKET_INCLUDE,
@@ -44,6 +47,7 @@ export class UpdateStationTicketStatusService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly branchAccessService: BranchAccessService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async execute(
@@ -170,6 +174,15 @@ export class UpdateStationTicketStatusService {
       },
       include: STATION_TICKET_INCLUDE,
     });
+
+    if (dto.status === StationTicketStatus.READY) {
+      const event: StationTicketReadyEvent = {
+        orderId: updatedTicket.orderId,
+        createdByStaffUserId: updatedTicket.order.createdByStaffUserId,
+      };
+
+      this.eventEmitter.emit(STATION_TICKET_READY_EVENT, event);
+    }
 
     return mapStationTicket(updatedTicket);
   }

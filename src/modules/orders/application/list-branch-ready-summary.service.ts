@@ -31,10 +31,12 @@ export class ListBranchReadySummaryService {
 
     const branchSettings = await this.prisma.branchSettings.findUnique({
       where: { branchId: query.branchId },
-      select: { autoDeliverAfterMinutes: true },
+      select: { autoDeliverAfterMinutes: true, tableAssignmentEnabled: true },
     });
     const autoDeliverAfterMinutes =
       branchSettings?.autoDeliverAfterMinutes ?? null;
+    const isTableAssignmentEnabled =
+      branchSettings?.tableAssignmentEnabled ?? false;
 
     const readyOrders = await this.prisma.order.findMany({
       where: {
@@ -51,6 +53,7 @@ export class ListBranchReadySummaryService {
           select: {
             tableId: true,
             openedByStaffUserId: true,
+            assignedStaffUserId: true,
             table: {
               select: { code: true },
             },
@@ -123,6 +126,9 @@ export class ListBranchReadySummaryService {
         tableId: order.tableSession.tableId,
         tableCode: order.tableSession.table.code,
         openedByStaffUserId: order.tableSession.openedByStaffUserId,
+        assignedStaffUserId: isTableAssignmentEnabled
+          ? order.tableSession.assignedStaffUserId
+          : null,
         readyUndeliveredCount: 1,
       });
     }

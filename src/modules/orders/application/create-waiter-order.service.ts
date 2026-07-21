@@ -1,4 +1,5 @@
 ﻿import { BadRequestException, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BillStatus,
   OrderSource,
@@ -10,6 +11,8 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
 import { applyOrderChargeToBill } from './apply-order-charge-to-bill';
+import { ORDER_CREATED_EVENT } from '../domain/order-events';
+import type { OrderCreatedEvent } from '../domain/order-events';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
 import { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
@@ -25,6 +28,7 @@ export class CreateWaiterOrderService {
     private readonly prisma: PrismaService,
     private readonly branchAccessService: BranchAccessService,
     private readonly orderableMenuItemResolverService: OrderableMenuItemResolverService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async execute(
@@ -118,6 +122,13 @@ export class CreateWaiterOrderService {
 
       return order.id;
     });
+
+    const event: OrderCreatedEvent = {
+      orderId,
+      branchId: tableSession.branchId,
+    };
+
+    this.eventEmitter.emit(ORDER_CREATED_EVENT, event);
 
     const order = await this.prisma.order.findUniqueOrThrow({
       where: {

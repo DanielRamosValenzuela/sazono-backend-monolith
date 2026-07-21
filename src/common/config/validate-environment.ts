@@ -133,6 +133,18 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   DIRECT_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  FIREBASE_PROJECT_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  FIREBASE_CLIENT_EMAIL?: string;
+
+  @IsOptional()
+  @IsString()
+  FIREBASE_PRIVATE_KEY?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {

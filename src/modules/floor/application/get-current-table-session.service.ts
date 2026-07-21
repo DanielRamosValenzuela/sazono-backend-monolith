@@ -34,6 +34,17 @@ export class GetCurrentTableSessionService {
       Role.CASHIER,
     ]);
 
+    const branchSettings = await this.prisma.branchSettings.findUnique({
+      where: {
+        branchId: table.branchId,
+      },
+      select: {
+        tableAssignmentEnabled: true,
+      },
+    });
+    const isTableAssignmentEnabled =
+      branchSettings?.tableAssignmentEnabled ?? false;
+
     const currentSession = await this.prisma.tableSession.findFirst({
       where: {
         tableId,
@@ -61,6 +72,9 @@ export class GetCurrentTableSessionService {
       openedAt: currentSession.openedAt.toISOString(),
       closeReason: currentSession.closeReason,
       closedAt: currentSession.closedAt?.toISOString() ?? null,
+      assignedStaffUserId: isTableAssignmentEnabled
+        ? currentSession.assignedStaffUserId
+        : null,
     };
   }
 }

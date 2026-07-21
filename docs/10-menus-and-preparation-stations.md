@@ -29,6 +29,29 @@ Este slice deja la primera base real de carta digital para el MVP:
 - `PUT /api/v1/menus/categories/:menuCategoryId/translations/:locale` — crea o reemplaza la traduccion de `name` de la categoria para ese locale
 - `PUT /api/v1/menus/items/:menuItemId/translations/:locale` — crea o reemplaza la traduccion de `name`/`description` del item para ese locale
 - `POST /api/v1/menus/:menuId/publish`
+- `POST /api/v1/menus/modifier-groups`
+- `GET /api/v1/menus/modifier-groups?branchId=`
+- `PATCH /api/v1/menus/modifier-groups/:modifierGroupId`
+- `POST /api/v1/menus/modifier-groups/:modifierGroupId/options`
+- `PATCH /api/v1/menus/modifier-options/:modifierOptionId`
+- `PUT /api/v1/menus/items/:menuItemId/modifier-groups` — reemplaza de una vez el conjunto completo de grupos de modificadores asignados a un item (delete+recreate en transaccion)
+
+## Modificadores de producto
+
+Sub-dominio nuevo dentro de `src/modules/menus` (`src/modules/menus/application/*modifier*`). Sigue el patron de Square/Toast en vez de modelar el modificador como un campo del item: el item base se conecta a uno o mas **grupos** de modificadores reutilizables, y cada grupo tiene sus propias **opciones**.
+
+Modelo de datos (4 tablas nuevas):
+
+- `modifier_groups` — `branchId`, `name`, `selectionType` (`ONE`/`MANY`, enum `ModifierSelectionType`), `minSelect`, `maxSelect`, `isRequired`, `sortOrder`. Los grupos estan anclados a la sucursal, no a un producto: un grupo como "Termino de coccion" se crea una vez y se reutiliza en varios items.
+- `modifier_options` — `modifierGroupId`, `name`, `priceDelta` (`DECIMAL(12,2)`, puede ser 0 o negativo), `isAvailable`, `sortOrder`.
+- `menu_item_modifier_groups` — tabla puente N:N entre `menu_item` y `modifier_group`, con `sortOrder` propio para el orden de despliegue en el item.
+- `order_item_modifiers` — snapshot al momento de ordenar: `orderItemId`, `modifierOptionId` (nullable, sobrevive si la opcion se borra despues), `nameSnapshot`, `priceDeltaSnapshot`.
+
+Todos los servicios de escritura (`create-modifier-group`, `update-modifier-group`, `create-modifier-option`, `update-modifier-option`, `set-menu-item-modifier-groups`) exigen `ensureAccess(..., [Role.ADMIN])`, igual que el resto de la administracion de carta. `list-modifier-groups.service.ts` es de lectura.
+
+`menu-mapper.ts` expone `mapModifierGroup`, `mapModifierOption` y `mapMenuItemModifierGroups`. `MenuItemResponseDto` y `MenuItemSummaryResponseDto` ahora incluyen `modifierGroups: ModifierGroupResponseDto[]` — todo query que devuelve detalle de item (`get-menu-detail`, `get-published-menu-by-qr`, `publish-menu`, `update-menu-item`, subir/quitar imagen) incluye la relacion correspondiente.
+
+El consumo en el flujo de ordenes (calculo de precio, validacion de min/max/required, snapshot en `OrderItemModifier`) esta documentado en doc 11.
 
 ## Reglas activas
 

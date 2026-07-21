@@ -40,6 +40,11 @@ class CreateBranchSettingsDto {
   @IsInt()
   @Min(1)
   autoDeliverAfterMinutes?: number | null;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  tableAssignmentEnabled?: boolean;
 }
 
 export class CreateBranchDto {
@@ -74,6 +79,9 @@ class CreateBranchSettingsResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   autoDeliverAfterMinutes!: number | null;
+
+  @ApiProperty()
+  tableAssignmentEnabled!: boolean;
 }
 
 export class CreateBranchResponseDto {

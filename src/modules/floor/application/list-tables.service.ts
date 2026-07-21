@@ -28,6 +28,17 @@ export class ListTablesService {
       Role.KITCHEN,
     ]);
 
+    const branchSettings = await this.prisma.branchSettings.findUnique({
+      where: {
+        branchId: query.branchId,
+      },
+      select: {
+        tableAssignmentEnabled: true,
+      },
+    });
+    const isTableAssignmentEnabled =
+      branchSettings?.tableAssignmentEnabled ?? false;
+
     const tables = await this.prisma.table.findMany({
       where: {
         branchId: query.branchId,
@@ -62,6 +73,9 @@ export class ListTablesService {
             status: table.tableSessions[0].status,
             openedBySource: table.tableSessions[0].openedBySource,
             openedAt: table.tableSessions[0].openedAt.toISOString(),
+            assignedStaffUserId: isTableAssignmentEnabled
+              ? table.tableSessions[0].assignedStaffUserId
+              : null,
           }
         : null,
     }));

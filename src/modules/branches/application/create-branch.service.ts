@@ -96,6 +96,8 @@ export class CreateBranchService {
                 dto.settings?.partialDeliveryEnabled ?? true,
               autoDeliverAfterMinutes:
                 dto.settings?.autoDeliverAfterMinutes ?? null,
+              tableAssignmentEnabled:
+                dto.settings?.tableAssignmentEnabled ?? false,
             },
           },
         },
@@ -129,6 +131,8 @@ export class CreateBranchService {
         partialDeliveryEnabled: branch.settings?.partialDeliveryEnabled ?? true,
         autoDeliverAfterMinutes:
           branch.settings?.autoDeliverAfterMinutes ?? null,
+        tableAssignmentEnabled:
+          branch.settings?.tableAssignmentEnabled ?? false,
       },
     };
   }

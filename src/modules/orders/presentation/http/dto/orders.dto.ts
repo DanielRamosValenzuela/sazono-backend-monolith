@@ -109,6 +109,9 @@ export class BranchReadySummaryItemDto {
   @ApiProperty({ format: 'uuid', nullable: true })
   openedByStaffUserId!: string | null;
 
+  @ApiProperty({ format: 'uuid', nullable: true })
+  assignedStaffUserId!: string | null;
+
   @ApiProperty({ example: 1 })
   readyUndeliveredCount!: number;
 }

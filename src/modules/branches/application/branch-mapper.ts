@@ -20,6 +20,7 @@ export function mapBranchToResponse(
       splitBillEnabled: branch.settings?.splitBillEnabled ?? true,
       partialDeliveryEnabled: branch.settings?.partialDeliveryEnabled ?? true,
       autoDeliverAfterMinutes: branch.settings?.autoDeliverAfterMinutes ?? null,
+      tableAssignmentEnabled: branch.settings?.tableAssignmentEnabled ?? false,
     },
   };
 }
