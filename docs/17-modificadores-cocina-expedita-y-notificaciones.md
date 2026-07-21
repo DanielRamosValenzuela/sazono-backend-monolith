@@ -107,5 +107,5 @@ No hay `@nestjs/schedule` instalado en el proyecto — esto es expiracion perezo
 
 No implementado en esta ronda, documentado explicitamente como pendiente:
 
-1. **Asignacion formal de mesas a un mesero especifico.** Hoy el filtro "mis mesas" del frontend usa `openedByStaffUserId` (quien abrio la sesion) como aproximacion interina — no cubre cambios de turno (si otro mesero toma la mesa a mitad de servicio, `openedByStaffUserId` no cambia).
-2. **"Mesa virtual" para pedidos de mostrador/para llevar sin mesa fisica real** (patron usado por la competencia, ej. Toteat). Hoy toda orden requiere una `TableSession` sobre una `Table` real.
+1. ~~**Asignacion formal de mesas a un mesero especifico.**~~ Resuelto, ver doc 18.
+2. **"Mesa virtual" para pedidos de mostrador/para llevar sin mesa fisica real** (patron usado por la competencia, ej. Toteat). Hoy toda orden requiere una `TableSession` sobre una `Table` real. Sigue pendiente — bloqueado por una decision de modelo de datos, ver doc 18 para el detalle.

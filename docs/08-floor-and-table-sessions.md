@@ -16,6 +16,7 @@ El modulo `floor` cubre la operacion basica del salon:
 - `POST /api/v1/floor/table-sessions/open`
 - `GET /api/v1/floor/tables/:tableId/current-session`
 - `POST /api/v1/floor/table-sessions/:tableSessionId/close`
+- `POST /api/v1/floor/table-sessions/:tableSessionId/assign` (ver "Asignacion formal" mas abajo)
 
 ## Reglas activas
 
@@ -26,6 +27,10 @@ El modulo `floor` cubre la operacion basica del salon:
 - cerrar una sesion exige `Bill.remaining_amount = 0`
 - cerrar una sesion marca la mesa como `AVAILABLE`
 - no se puede abrir sesion sobre una mesa `DISABLED`
+
+## Asignacion formal (opcional, ver doc 18)
+
+`TableSession` tiene un campo `assignedStaffUserId`, separado de `openedByStaffUserId` (que sigue siendo inmutable). Solo se usa si `BranchSettings.tableAssignmentEnabled` esta en `true` para la sucursal — apagado por defecto, no cambia nada para una sucursal que no lo active. Con la funcion activada: al abrir una sesion se autoasigna a quien la abre; `WAITER`/`CASHIER` solo pueden reasignarse la mesa a si mismos; `ADMIN`/`SUPERVISOR` pueden reasignarla a cualquier staff con rol operativo activo en la sucursal. Detalle completo (schema, migracion, permisos, revision) en doc 18.
 
 ## Permisos actuales
 

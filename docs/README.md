@@ -19,6 +19,7 @@
 15. [15 Branch Access, Waiter Permissions and Stations](D:\Programacion\Sazono\sazono-backend-monolith\docs\15-branch-access-and-waiter-permissions.md)
 16. [16 Leads and Restaurant Search](D:\Programacion\Sazono\sazono-backend-monolith\docs\16-leads-and-restaurant-search.md)
 17. [17 Modificadores, Cocina Expedita y Notificaciones](D:\Programacion\Sazono\sazono-backend-monolith\docs\17-modificadores-cocina-expedita-y-notificaciones.md)
+18. [18 Asignación Formal de Mesas](D:\Programacion\Sazono\sazono-backend-monolith\docs\18-asignacion-formal-de-mesas.md)
 
 ## Objetivo
 
