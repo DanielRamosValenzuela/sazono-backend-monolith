@@ -20,6 +20,7 @@
 16. [16 Leads and Restaurant Search](D:\Programacion\Sazono\sazono-backend-monolith\docs\16-leads-and-restaurant-search.md)
 17. [17 Modificadores, Cocina Expedita y Notificaciones](D:\Programacion\Sazono\sazono-backend-monolith\docs\17-modificadores-cocina-expedita-y-notificaciones.md)
 18. [18 Asignación Formal de Mesas](D:\Programacion\Sazono\sazono-backend-monolith\docs\18-asignacion-formal-de-mesas.md)
+19. [19 Notificaciones Push y Login por PIN](D:\Programacion\Sazono\sazono-backend-monolith\docs\19-notificaciones-push-y-login-por-pin.md)
 
 ## Objetivo
 
