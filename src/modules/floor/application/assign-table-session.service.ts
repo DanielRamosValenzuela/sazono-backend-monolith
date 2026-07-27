@@ -3,24 +3,19 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { BranchRoleStatus, Role, StaffUserStatus } from '@prisma/client';
+import { BranchRoleStatus, StaffUserStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../domain/active-table-session-statuses';
+import {
+  FLOOR_ASSIGN_ROLES,
+  FLOOR_REASSIGN_ANYONE_ROLES,
+} from '../domain/floor-assignment-roles';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
   AssignTableSessionDto,
   TableSessionResponseDto,
 } from '../presentation/http/dto/floor.dto';
-
-const FLOOR_ASSIGN_ROLES: Role[] = [
-  Role.ADMIN,
-  Role.SUPERVISOR,
-  Role.WAITER,
-  Role.CASHIER,
-];
-
-const FLOOR_REASSIGN_ANYONE_ROLES: Role[] = [Role.ADMIN, Role.SUPERVISOR];
 
 @Injectable()
 export class AssignTableSessionService {
@@ -126,6 +121,7 @@ export class AssignTableSessionService {
       closeReason: updatedSession.closeReason,
       closedAt: updatedSession.closedAt?.toISOString() ?? null,
       assignedStaffUserId: updatedSession.assignedStaffUserId,
+      guestCount: updatedSession.guestCount,
     };
   }
 }

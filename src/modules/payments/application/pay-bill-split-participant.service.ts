@@ -9,15 +9,20 @@ import {
   BillSplitParticipantStatus,
   BillStatus,
   PaymentAttemptStatus,
-  PaymentStatus,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
+import { buildCheckoutFromDto } from './build-checkout-from-dto';
+import { ChargePaymentService } from './charge-payment.service';
+import { PaymentChannel } from '../domain/payment-channel';
+import { FailPaymentService } from './fail-payment.service';
+import { FinalizePaymentService } from './finalize-payment.service';
+import { mapPaymentResult } from './payment-result-mapper';
 import {
-  PAYMENT_PROVIDER,
-  type PaymentProviderPort,
-} from './ports/payment-provider.port';
+  OFFLINE_PAYMENT_RECORDER,
+  type OfflinePaymentRecorderPort,
+} from './ports/offline-payment-recorder.port';
 import { updateBillSplitStatus } from './update-bill-split-status';
 import type {
   PayBillSplitParticipantDto,
@@ -34,8 +39,11 @@ const PAYABLE_PARTICIPANT_STATUSES: BillSplitParticipantStatus[] = [
 export class PayBillSplitParticipantService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(PAYMENT_PROVIDER)
-    private readonly paymentProvider: PaymentProviderPort,
+    @Inject(OFFLINE_PAYMENT_RECORDER)
+    private readonly offlinePaymentRecorder: OfflinePaymentRecorderPort,
+    private readonly chargePaymentService: ChargePaymentService,
+    private readonly finalizePaymentService: FinalizePaymentService,
+    private readonly failPaymentService: FailPaymentService,
   ) {}
   async execute(
     participantToken: string,
@@ -102,74 +110,61 @@ export class PayBillSplitParticipantService {
     }
 
     const paidAmount = allocationRemaining.add(tipDelta);
+    const currency = bill.branch.restaurant.currency;
+    const checkout = buildCheckoutFromDto(dto);
 
     const attempt = await this.prisma.paymentAttempt.create({
       data: {
         billId: bill.id,
         amount: paidAmount,
-        provider: this.paymentProvider.providerName,
+        provider: this.offlinePaymentRecorder.providerName,
         status: PaymentAttemptStatus.PENDING,
       },
     });
 
-    const chargeResult = await this.paymentProvider.charge({
+    const chargeResult = await this.chargePaymentService.execute({
+      channel: PaymentChannel.QR_ONLINE,
+      restaurantId: bill.branch.restaurantId,
+      attemptId: attempt.id,
       amount: paidAmount,
-      currency: bill.branch.restaurant.currency,
+      currency,
       description: `Split bill participante ${participant.id}`,
+      checkout,
     });
 
     if (!chargeResult.approved) {
-      await this.prisma.$transaction([
-        this.prisma.paymentAttempt.update({
-          where: {
-            id: attempt.id,
-          },
-          data: {
-            status: PaymentAttemptStatus.FAILED,
-            providerReference: chargeResult.providerReference ?? null,
-            failureReason:
-              chargeResult.failureReason ?? 'Pago rechazado por el proveedor.',
-          },
-        }),
-        this.prisma.billSplitParticipant.update({
+      await this.prisma.$transaction(async (tx) => {
+        await this.failPaymentService.execute(tx, {
+          attemptId: attempt.id,
+          providerReference: chargeResult.providerReference,
+          failureReason:
+            chargeResult.failureReason ?? 'Pago rechazado por el proveedor.',
+        });
+
+        await tx.billSplitParticipant.update({
           where: {
             id: participant.id,
           },
           data: {
             status: BillSplitParticipantStatus.FAILED,
           },
-        }),
-      ]);
+        });
+      });
 
       throw new ConflictException(
         'El pago fue rechazado por el proveedor. Puedes reintentarlo.',
       );
     }
 
-    const paidAt = new Date();
-
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.paymentAttempt.update({
-        where: {
-          id: attempt.id,
-        },
-        data: {
-          status: PaymentAttemptStatus.SUCCEEDED,
-          providerReference: chargeResult.providerReference ?? null,
-        },
-      });
-
-      const payment = await tx.payment.create({
-        data: {
-          billId: bill.id,
-          billSplitParticipantId: participant.id,
-          amount: paidAmount,
-          currency: bill.branch.restaurant.currency,
-          provider: this.paymentProvider.providerName,
-          providerReference: chargeResult.providerReference ?? null,
-          status: PaymentStatus.PAID,
-          paidAt,
-        },
+      const payment = await this.finalizePaymentService.execute(tx, {
+        attemptId: attempt.id,
+        billId: bill.id,
+        billSplitParticipantId: participant.id,
+        amount: paidAmount,
+        currency,
+        provider: chargeResult.providerName,
+        providerReference: chargeResult.providerReference,
       });
 
       const billAfterPayment = await applyPaymentToBill(
@@ -199,24 +194,6 @@ export class PayBillSplitParticipantService {
       return { payment, billAfterPayment };
     });
 
-    return {
-      paymentId: result.payment.id,
-      billId: result.payment.billId,
-      amount: result.payment.amount.toString(),
-      currency: result.payment.currency,
-      provider: result.payment.provider,
-      providerReference: result.payment.providerReference,
-      status: result.payment.status,
-      paidAt: result.payment.paidAt?.toISOString() ?? null,
-      bill: {
-        billId: result.billAfterPayment.billId,
-        status: result.billAfterPayment.status,
-        subtotalAmount: result.billAfterPayment.subtotalAmount.toString(),
-        tipAmount: result.billAfterPayment.tipAmount.toString(),
-        totalAmount: result.billAfterPayment.totalAmount.toString(),
-        remainingAmount: result.billAfterPayment.remainingAmount.toString(),
-      },
-      order: null,
-    };
+    return mapPaymentResult(result.payment, result.billAfterPayment, null);
   }
 }

@@ -67,6 +67,7 @@ export class ListTablesService {
       capacity: table.capacity,
       status: table.status,
       qrToken: table.qrToken,
+      zoneId: table.zoneId,
       currentSession: table.tableSessions[0]
         ? {
             tableSessionId: table.tableSessions[0].id,
@@ -76,6 +77,7 @@ export class ListTablesService {
             assignedStaffUserId: isTableAssignmentEnabled
               ? table.tableSessions[0].assignedStaffUserId
               : null,
+            guestCount: table.tableSessions[0].guestCount,
           }
         : null,
     }));

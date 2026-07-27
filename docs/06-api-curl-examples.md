@@ -235,6 +235,7 @@ curl --request POST "http://localhost:3000/api/v1/floor/tables" \
   "code": "M01",
   "name": "Mesa terraza 1",
   "capacity": 4,
+  "zoneId": null,
   "status": "AVAILABLE",
   "qrToken": "uuid",
   "currentSession": null
@@ -258,13 +259,15 @@ curl --request GET "http://localhost:3000/api/v1/floor/tables?branchId=<BRANCH_I
     "code": "M01",
     "name": "Mesa terraza 1",
     "capacity": 4,
+    "zoneId": null,
     "status": "OCCUPIED",
     "qrToken": "uuid",
     "currentSession": {
       "tableSessionId": "uuid",
       "status": "OPEN",
       "openedBySource": "WAITER",
-      "openedAt": "2026-07-03T12:00:00.000Z"
+      "openedAt": "2026-07-03T12:00:00.000Z",
+      "guestCount": 4
     }
   }
 ]
@@ -278,7 +281,8 @@ curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/open" \
   --header "Content-Type: application/json" \
   --data '{
     "tableId": "<TABLE_ID>",
-    "openedBySource": "WAITER"
+    "openedBySource": "WAITER",
+    "guestCount": 4
   }'
 ```
 
@@ -293,7 +297,8 @@ curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/open" \
   "openedBySource": "WAITER",
   "openedAt": "2026-07-03T12:00:00.000Z",
   "closeReason": null,
-  "closedAt": null
+  "closedAt": null,
+  "guestCount": 4
 }
 ```
 
@@ -315,7 +320,8 @@ curl --request GET "http://localhost:3000/api/v1/floor/tables/<TABLE_ID>/current
   "openedBySource": "WAITER",
   "openedAt": "2026-07-03T12:00:00.000Z",
   "closeReason": null,
-  "closedAt": null
+  "closedAt": null,
+  "guestCount": 4
 }
 ```
 
@@ -367,7 +373,8 @@ curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/<TABLE_SE
   "openedBySource": "WAITER",
   "openedAt": "2026-07-03T12:00:00.000Z",
   "closeReason": "Cuenta cerrada manualmente por caja.",
-  "closedAt": "2026-07-03T13:00:00.000Z"
+  "closedAt": "2026-07-03T13:00:00.000Z",
+  "guestCount": 4
 }
 ```
 

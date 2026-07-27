@@ -3,6 +3,7 @@ import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { PaymentChannel } from '../domain/payment-channel';
 import { SettleBillPaymentService } from './settle-bill-payment.service';
 import type {
   PayBillDto,
@@ -45,11 +46,13 @@ export class PayBillService {
     ]);
 
     return this.settleBillPaymentService.execute(
+      PaymentChannel.STAFF_OFFLINE,
       {
         id: bill.id,
         status: bill.status,
         remainingAmount: bill.remainingAmount,
         currency: bill.branch.restaurant.currency,
+        restaurantId: bill.branch.restaurantId,
       },
       new Prisma.Decimal(dto.amount),
       new Prisma.Decimal(dto.tipAmount ?? 0),

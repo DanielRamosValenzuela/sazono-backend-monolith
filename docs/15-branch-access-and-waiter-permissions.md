@@ -56,6 +56,10 @@ Detalle completo en doc 17.
 
 Endpoint nuevo `POST /floor/table-sessions/:id/assign`. `WAITER`/`CASHIER` solo pueden autoasignarse una mesa; `ADMIN`/`SUPERVISOR` pueden asignarla a cualquier staff con rol operativo activo en la sucursal — el unico endpoint del modulo `floor` donde el permiso depende de si el `staffUserId` del body es el propio o el de otra persona, no solo del rol del solicitante. Detalle completo en doc 18.
 
+## Actualizacion: zonas de mesa (ver doc 20)
+
+`WAITER` (junto con `CASHIER` y `KITCHEN`) puede leer las zonas de la sucursal via `GET /zones`, mismo nivel de acceso que ya tenia para `GET /tables`. El resto de la gestion de zonas — crear, renombrar y eliminar zona, asignar una mesa a una zona, asignar el staff de una zona y listar el personal de la sucursal para el selector — son 6 endpoints que siguen restringidos a `ADMIN`/`SUPERVISOR`; `WAITER` no puede tocarlos. Detalle completo en doc 20.
+
 ## Lo que se evaluo y se decidio NO hacer ahora
 
 Durante la misma revision se identifico que el modulo `kitchen` no tiene aislamiento granular por estacion: cualquier staff con rol `KITCHEN` o `BAR` en una sucursal puede ver los tickets de TODAS las estaciones de esa sucursal (el filtro `preparationStationId` en `GET /kitchen/station-tickets` es opcional, no obligatorio por asignacion de staff). Se decidio conscientemente diferir esto:

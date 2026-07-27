@@ -42,7 +42,7 @@ Este slice conecta la carta publicada con la operacion real de la mesa:
 
 - el endpoint es publico y se resuelve por `qrToken` de la mesa
 - la sucursal debe tener `qrOrderingEnabled`
-- si la mesa no tiene sesion activa, el pedido abre la `TableSession` (origen `QR`) y su `Bill`
+- si la mesa no tiene sesion activa, el pedido abre la `TableSession` (origen `QR`) y su `Bill`; esa sesion queda sin `guestCount` (el frontend muestra una etiqueta explicativa en vez de dejarlo en blanco, ver doc 20)
 - la orden nace `AWAITING_PAYMENT`: no genera cargos en la cuenta ni tickets hasta que payments apruebe el pago
 - el cliente puede consultar sus ordenes de la sesion activa con el mismo `qrToken`
 - tambien soporta `modifierOptionIds` por item, con la misma validacion y snapshot que la orden de mesero (mismo `orderable-menu-item-resolver.service.ts`); `create-qr-order.service.ts` crea los `order_items` con un loop de `orderItem.create` individuales (antes `createMany`), necesario para poder anidar la creacion de sus modificadores por item

@@ -32,6 +32,22 @@ El modulo `floor` cubre la operacion basica del salon:
 
 `TableSession` tiene un campo `assignedStaffUserId`, separado de `openedByStaffUserId` (que sigue siendo inmutable). Solo se usa si `BranchSettings.tableAssignmentEnabled` esta en `true` para la sucursal — apagado por defecto, no cambia nada para una sucursal que no lo active. Con la funcion activada: al abrir una sesion se autoasigna a quien la abre; `WAITER`/`CASHIER` solo pueden reasignarse la mesa a si mismos; `ADMIN`/`SUPERVISOR` pueden reasignarla a cualquier staff con rol operativo activo en la sucursal. Detalle completo (schema, migracion, permisos, revision) en doc 18.
 
+## Comensales y zonas de mesa (ver doc 20)
+
+Desde doc 20: abrir una `TableSession` por mesero o cajero (`POST /floor/table-sessions/open`) ahora exige `guestCount` (entero 1 a 30) en el body. Las sesiones abiertas por QR no pasan por este endpoint y quedan sin ese dato.
+
+Endpoints nuevos, todos bajo `/api/v1/floor`, mismo guard que el resto del modulo:
+
+- `GET /zones?branchId=` - lista zonas de una sucursal (roles: `ADMIN`, `SUPERVISOR`, `WAITER`, `CASHIER`, `KITCHEN`)
+- `POST /zones` - crea zona (`ADMIN`, `SUPERVISOR`)
+- `PATCH /zones/:zoneId` - renombra zona (`ADMIN`, `SUPERVISOR`)
+- `DELETE /zones/:zoneId` - elimina zona (`ADMIN`, `SUPERVISOR`)
+- `PATCH /tables/:tableId/zone` - asigna/quita zona de una mesa (`ADMIN`, `SUPERVISOR`)
+- `PUT /zones/:zoneId/staff` - reemplaza el equipo de una zona (`ADMIN`, `SUPERVISOR`)
+- `GET /branch-staff?branchId=` - lista personal de la sucursal para poblar selectores (`ADMIN`, `SUPERVISOR` unicamente)
+
+Ademas, la regla "una mesa solo puede tener una `TableSession` activa" ahora tiene respaldo de un indice unico parcial a nivel de base de datos (antes solo era un chequeo de aplicacion con una condicion de carrera real entre dos aperturas simultaneas). Detalle completo en doc 20.
+
 ## Permisos actuales
 
 - crear mesas: `ADMIN` o `SUPERVISOR`

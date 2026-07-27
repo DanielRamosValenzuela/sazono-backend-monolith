@@ -5,6 +5,8 @@ import { CreateBillSplitService } from '../../application/create-bill-split.serv
 import { GetBillSplitParticipantService } from '../../application/get-bill-split-participant.service';
 import { GetCurrentBillSplitService } from '../../application/get-current-bill-split.service';
 import { GetQrBillService } from '../../application/get-qr-bill.service';
+import { GetQrOrderPaymentStatusService } from '../../application/get-qr-order-payment-status.service';
+import { GetQrPaymentConfigService } from '../../application/get-qr-payment-config.service';
 import { PayBillSplitParticipantService } from '../../application/pay-bill-split-participant.service';
 import { PayQrBillService } from '../../application/pay-qr-bill.service';
 import { PayQrOrderService } from '../../application/pay-qr-order.service';
@@ -13,10 +15,12 @@ import {
   BillSplitResponseDto,
   BillSummaryResponseDto,
   CreateBillSplitDto,
-  PayBillDto,
   PayBillSplitParticipantDto,
+  PayQrBillDto,
   PayQrOrderDto,
   PaymentResultResponseDto,
+  QrOrderPaymentStatusResponseDto,
+  QrPaymentConfigResponseDto,
 } from './dto/payments.dto';
 
 @ApiTags('qr')
@@ -26,6 +30,8 @@ export class QrPaymentsController {
     private readonly payQrOrderService: PayQrOrderService,
     private readonly payQrBillService: PayQrBillService,
     private readonly getQrBillService: GetQrBillService,
+    private readonly getQrOrderPaymentStatusService: GetQrOrderPaymentStatusService,
+    private readonly getQrPaymentConfigService: GetQrPaymentConfigService,
     private readonly createBillSplitService: CreateBillSplitService,
     private readonly getCurrentBillSplitService: GetCurrentBillSplitService,
     private readonly payBillSplitParticipantService: PayBillSplitParticipantService,
@@ -41,6 +47,29 @@ export class QrPaymentsController {
     @Param('qrToken') qrToken: string,
   ): Promise<BillSummaryResponseDto | null> {
     return this.getQrBillService.execute(qrToken);
+  }
+
+  @Get('tables/:qrToken/payment-config')
+  @ApiOperation({
+    summary:
+      'Retorna si hay una pasarela de pago conectada para la mesa y su llave publica. Endpoint publico.',
+  })
+  getQrPaymentConfig(
+    @Param('qrToken') qrToken: string,
+  ): Promise<QrPaymentConfigResponseDto> {
+    return this.getQrPaymentConfigService.execute(qrToken);
+  }
+
+  @Get('tables/:qrToken/orders/:orderId/payment-status')
+  @ApiOperation({
+    summary:
+      'Consulta el estado del ultimo intento de pago de una orden QR (para polling desde el navegador). Endpoint publico.',
+  })
+  getQrOrderPaymentStatus(
+    @Param('qrToken') qrToken: string,
+    @Param('orderId') orderId: string,
+  ): Promise<QrOrderPaymentStatusResponseDto> {
+    return this.getQrOrderPaymentStatusService.execute(qrToken, orderId);
   }
 
   @Post('tables/:qrToken/orders/:orderId/pay')
@@ -63,7 +92,7 @@ export class QrPaymentsController {
   })
   payQrBill(
     @Param('qrToken') qrToken: string,
-    @Body() dto: PayBillDto,
+    @Body() dto: PayQrBillDto,
   ): Promise<PaymentResultResponseDto> {
     return this.payQrBillService.execute(qrToken, dto);
   }

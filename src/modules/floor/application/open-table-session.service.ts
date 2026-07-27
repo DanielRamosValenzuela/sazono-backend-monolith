@@ -5,6 +5,7 @@
 } from '@nestjs/common';
 import {
   BillStatus,
+  Prisma,
   Role,
   TableSessionOpenedBySource,
   TableStatus,
@@ -65,51 +66,66 @@ export class OpenTableSessionService {
       ? context.staffUserId
       : null;
 
-    const tableSession = await this.prisma.$transaction(async (tx) => {
-      const existingActiveSession = await tx.tableSession.findFirst({
-        where: {
-          tableId: table.id,
-          status: {
-            in: ACTIVE_TABLE_SESSION_STATUSES,
-          },
-        },
-      });
+    let tableSession;
 
-      if (existingActiveSession) {
+    try {
+      tableSession = await this.prisma.$transaction(async (tx) => {
+        const existingActiveSession = await tx.tableSession.findFirst({
+          where: {
+            tableId: table.id,
+            status: {
+              in: ACTIVE_TABLE_SESSION_STATUSES,
+            },
+          },
+        });
+
+        if (existingActiveSession) {
+          throw new ConflictException(
+            'La mesa ya tiene una sesion activa y no puede abrir otra.',
+          );
+        }
+
+        const createdSession = await tx.tableSession.create({
+          data: {
+            tableId: table.id,
+            branchId: table.branchId,
+            openedBySource: dto.openedBySource,
+            openedByStaffUserId: context.staffUserId,
+            assignedStaffUserId: initialAssignedStaffUserId,
+            guestCount: dto.guestCount,
+          },
+        });
+
+        await tx.bill.create({
+          data: {
+            tableSessionId: createdSession.id,
+            branchId: table.branchId,
+            status: BillStatus.OPEN,
+          },
+        });
+
+        await tx.table.update({
+          where: {
+            id: table.id,
+          },
+          data: {
+            status: TableStatus.OCCUPIED,
+          },
+        });
+
+        return createdSession;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException(
           'La mesa ya tiene una sesion activa y no puede abrir otra.',
         );
       }
-
-      const createdSession = await tx.tableSession.create({
-        data: {
-          tableId: table.id,
-          branchId: table.branchId,
-          openedBySource: dto.openedBySource,
-          openedByStaffUserId: context.staffUserId,
-          assignedStaffUserId: initialAssignedStaffUserId,
-        },
-      });
-
-      await tx.bill.create({
-        data: {
-          tableSessionId: createdSession.id,
-          branchId: table.branchId,
-          status: BillStatus.OPEN,
-        },
-      });
-
-      await tx.table.update({
-        where: {
-          id: table.id,
-        },
-        data: {
-          status: TableStatus.OCCUPIED,
-        },
-      });
-
-      return createdSession;
-    });
+      throw error;
+    }
 
     return {
       tableSessionId: tableSession.id,
@@ -121,6 +137,7 @@ export class OpenTableSessionService {
       closeReason: tableSession.closeReason,
       closedAt: tableSession.closedAt?.toISOString() ?? null,
       assignedStaffUserId: tableSession.assignedStaffUserId,
+      guestCount: tableSession.guestCount,
     };
   }
 

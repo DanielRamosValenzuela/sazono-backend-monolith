@@ -75,6 +75,7 @@ export class GetCurrentTableSessionService {
       assignedStaffUserId: isTableAssignmentEnabled
         ? currentSession.assignedStaffUserId
         : null,
+      guestCount: currentSession.guestCount,
     };
   }
 }

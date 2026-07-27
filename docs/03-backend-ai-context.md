@@ -46,7 +46,7 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - ya existe un endpoint de bootstrap para crear restaurante y primer admin
 - ya existe un endpoint para crear la primera sucursal y autoasignar rol `ADMIN`
 - ya existen endpoints para listar y crear usuarios internos con roles por sucursal
-- `floor` ya cubre mesas, apertura de sesion, retoma y cierre manual
+- `floor` ya cubre mesas, apertura de sesion, retoma y cierre manual; ahora exige `guestCount` al abrir mesa y soporta zonas de mesa opcionales con aviso no bloqueante (ver doc 20)
 - `billing` ya expone la cuenta operativa actual por `TableSession`
 - `menus` ya cubre estaciones de preparacion, versiones draft, categorias, items y publicacion por sucursal
 - `menus` expone lectura publica de carta por `qrToken` bajo `/api/v1/qr`
@@ -54,7 +54,12 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - `kitchen` ya opera tickets por estacion con transiciones validadas y recomputo del estado de la orden
 - la politica de impuestos esta aislada en `billing/domain/tax-policy.ts`: los precios ya incluyen IVA
 - `payments` ya cubre prepago QR con reintento, pago de cuenta abierta (QR y caja), propina y pagos parciales
-- el proveedor de pago vive tras el puerto `PAYMENT_PROVIDER`; el MVP usa un adapter manual que aprueba de inmediato
+- el cobro vive tras `ChargePaymentService`, que enruta por canal
+  (`STAFF_OFFLINE` via `OFFLINE_PAYMENT_RECORDER`, `QR_ONLINE` via
+  `PAYMENT_GATEWAY_RESOLVER`); la pasarela real (Mercado Pago Chile,
+  Checkout API + OAuth marketplace por restaurante) ya esta implementada
+  pero queda inactiva hasta configurar credenciales
+  (`MERCADOPAGO_ENABLED=false` por default no rompe el arranque, ver doc 21)
 - split bill, entrega, cancelacion de ordenes y abandono de mesa ya estan implementados
 - `platform_admin` ya puede listar, ver el detalle (con `branches` y `staff` con email resuelto) y editar cualquier restaurante, ademas de ver metricas agregadas de plataforma (ver doc 14)
 - `staff` ya puede listar y editar sucursales (`GET`/`PATCH /branches`), y editar staff existente (`PATCH /staff/:id`) con reglas de proteccion contra auto-desactivarse o dejar el restaurante sin `ADMIN`
@@ -82,13 +87,19 @@ Eso implica un estado transitorio valido:
 
 ## Siguiente paso sugerido para este repo
 
-1. adapter de pasarela de pago real cuando se elija el proveedor (Webpay, MercadoPago, Stripe, etc.)
-2. reembolsos y anulaciones con impacto financiero en ordenes prepagadas
-3. modelo de monetizacion de la plataforma (suscripcion o cobro de Sazono a los restaurantes); hoy no existe
+1. reembolsos y anulaciones con impacto financiero en ordenes prepagadas
+2. modelo de monetizacion de la plataforma (suscripcion o cobro de Sazono a los restaurantes); hoy no existe
 
 Evaluado y diferido a proposito (ver doc 15):
 
 - aislamiento granular por estacion de cocina (hoy cualquier staff `KITCHEN`/`BAR` de la sucursal ve todas las estaciones, no solo la suya) — no es fuga entre tenants, se resuelve primero a nivel de UI si hace falta antes de invertir en una migracion de schema nueva
+
+Ya resuelto (ver doc 21):
+
+- adapter de pasarela de pago real (Mercado Pago Chile, Checkout API +
+  OAuth marketplace por restaurante); queda inactiva hasta que cada
+  restaurante conecte su cuenta y se configuren las credenciales del
+  ambiente
 
 Ya resuelto (ver doc frontend 09):
 

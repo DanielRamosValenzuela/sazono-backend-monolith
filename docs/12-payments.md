@@ -32,15 +32,30 @@ Este slice cierra el ciclo comercial de la mesa:
 
 ## Proveedor de pago
 
-El cobro esta aislado detras del puerto `PAYMENT_PROVIDER`
-(`src/modules/payments/application/ports/payment-provider.port.ts`).
+Nota (2026-07-27): esta seccion describe el MVP original de un solo
+adapter manual. Desde la integracion de Mercado Pago Chile (Checkout API,
+marketplace no custodial via OAuth por restaurante), el cobro real pasa por
+`ChargePaymentService`, que decide entre el registro manual
+(`OFFLINE_PAYMENT_RECORDER`, canal `STAFF_OFFLINE`) y la pasarela conectada
+del restaurante (`PAYMENT_GATEWAY_RESOLVER`, canal `QR_ONLINE`). El detalle
+completo (arquitectura, OAuth, webhook de confirmacion, `binary_mode`,
+pruebas locales, limitaciones) vive en doc 21
+(`21-mercado-pago-integracion.md`); `src/modules/payments/README.md` sigue
+siendo la referencia linea a linea de cada endpoint. El resto de esta pagina
+(reglas de negocio de prepago QR, split, invariantes) sigue vigente.
 
-El MVP usa `ManualPaymentProviderAdapter`: aprueba el cobro de inmediato y
-representa el pago validado en el punto de venta o un provider simulado.
+## Proveedor de pago (MVP original, historico)
 
-Integrar una pasarela real (Webpay/Transbank, MercadoPago, Stripe, etc.)
-significa escribir un nuevo adapter de ese puerto. Los casos de uso, las
-reglas y los contratos HTTP no cambian.
+Diseño original antes de Mercado Pago: el cobro estaba aislado detras de un
+unico puerto `PAYMENT_PROVIDER` con un solo adapter manual
+(`ManualPaymentProviderAdapter`) que aprobaba de inmediato.
+
+Ese puerto y ese adapter ya no existen en el codigo: fueron reemplazados por
+`PAYMENT_GATEWAY_RESOLVER` (resuelve la cuenta Mercado Pago conectada del
+restaurante, canal `QR_ONLINE`) y `OFFLINE_PAYMENT_RECORDER`
+(`OfflinePaymentRecorderAdapter`, canal `STAFF_OFFLINE`), descritos en la
+seccion anterior. Los casos de uso, las reglas de negocio y los contratos
+HTTP no cambiaron con la migracion.
 
 ## Reglas activas
 
@@ -76,5 +91,9 @@ reglas y los contratos HTTP no cambian.
 
 ## Lo que falta despues
 
-- adapter de pasarela real con webhooks de confirmacion asincrona
 - reembolsos y anulaciones con impacto financiero en ordenes prepagadas
+- application_fee de plataforma (reservado en el puerto, todavia sin activar)
+- reconciliacion completa desde el webhook para el caso raro de un intento
+  que quedo `PENDING` de una orden QR o un split participant (hoy el webhook
+  finaliza el pago y el saldo de la cuenta, pero no re-ejecuta el ruteo a
+  cocina ni la actualizacion del split; ver `src/modules/payments/README.md`)

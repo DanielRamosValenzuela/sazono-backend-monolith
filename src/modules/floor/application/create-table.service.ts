@@ -57,6 +57,7 @@ export class CreateTableService {
       capacity: table.capacity,
       status: table.status,
       qrToken: table.qrToken,
+      zoneId: table.zoneId,
       currentSession: null,
     };
   }

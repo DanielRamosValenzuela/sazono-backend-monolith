@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,19 +21,32 @@ import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface'
 import { AbandonTableSessionService } from '../../application/abandon-table-session.service';
 import { AssignTableSessionService } from '../../application/assign-table-session.service';
 import { CreateTableService } from '../../application/create-table.service';
+import { CreateTableZoneService } from '../../application/create-table-zone.service';
 import { CloseTableSessionService } from '../../application/close-table-session.service';
+import { DeleteTableZoneService } from '../../application/delete-table-zone.service';
 import { GetCurrentTableSessionService } from '../../application/get-current-table-session.service';
+import { ListBranchStaffService } from '../../application/list-branch-staff.service';
 import { ListTablesService } from '../../application/list-tables.service';
+import { ListTableZonesService } from '../../application/list-table-zones.service';
 import { OpenTableSessionService } from '../../application/open-table-session.service';
+import { RenameTableZoneService } from '../../application/rename-table-zone.service';
+import { SetTableZoneService } from '../../application/set-table-zone.service';
+import { SetZoneStaffService } from '../../application/set-zone-staff.service';
 import {
   AbandonTableSessionDto,
   AssignTableSessionDto,
+  BranchStaffMemberResponseDto,
   CloseTableSessionDto,
   CreateTableDto,
+  CreateTableZoneDto,
   ListTablesQueryDto,
   OpenTableSessionDto,
+  RenameTableZoneDto,
+  SetTableZoneDto,
+  SetZoneStaffDto,
   TableResponseDto,
   TableSessionResponseDto,
+  TableZoneResponseDto,
 } from './dto/floor.dto';
 
 @ApiTags('floor')
@@ -45,6 +61,13 @@ export class FloorController {
     private readonly closeTableSessionService: CloseTableSessionService,
     private readonly abandonTableSessionService: AbandonTableSessionService,
     private readonly assignTableSessionService: AssignTableSessionService,
+    private readonly createTableZoneService: CreateTableZoneService,
+    private readonly listTableZonesService: ListTableZonesService,
+    private readonly renameTableZoneService: RenameTableZoneService,
+    private readonly deleteTableZoneService: DeleteTableZoneService,
+    private readonly setTableZoneService: SetTableZoneService,
+    private readonly setZoneStaffService: SetZoneStaffService,
+    private readonly listBranchStaffService: ListBranchStaffService,
   ) {}
 
   @Post('tables')
@@ -152,5 +175,100 @@ export class FloorController {
       tableSessionId,
       dto,
     );
+  }
+
+  @Get('zones')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Lista las zonas de mesas de una sucursal.',
+  })
+  listTableZones(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Query() query: ListTablesQueryDto,
+  ): Promise<TableZoneResponseDto[]> {
+    return this.listTableZonesService.execute(authUser, query);
+  }
+
+  @Post('zones')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Crea una zona de mesas dentro de una sucursal.',
+  })
+  createTableZone(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Body() dto: CreateTableZoneDto,
+  ): Promise<TableZoneResponseDto> {
+    return this.createTableZoneService.execute(authUser, dto);
+  }
+
+  @Patch('zones/:zoneId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Renombra una zona de mesas existente.',
+  })
+  renameTableZone(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('zoneId') zoneId: string,
+    @Body() dto: RenameTableZoneDto,
+  ): Promise<TableZoneResponseDto> {
+    return this.renameTableZoneService.execute(authUser, zoneId, dto);
+  }
+
+  @Delete('zones/:zoneId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Elimina una zona de mesas.',
+  })
+  deleteTableZone(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('zoneId') zoneId: string,
+  ): Promise<void> {
+    return this.deleteTableZoneService.execute(authUser, zoneId);
+  }
+
+  @Patch('tables/:tableId/zone')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Asigna o quita la zona de una mesa.',
+  })
+  setTableZone(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('tableId') tableId: string,
+    @Body() dto: SetTableZoneDto,
+  ): Promise<TableResponseDto> {
+    return this.setTableZoneService.execute(authUser, tableId, dto);
+  }
+
+  @Put('zones/:zoneId/staff')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Reemplaza el equipo asignado a una zona de mesas.',
+  })
+  setZoneStaff(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('zoneId') zoneId: string,
+    @Body() dto: SetZoneStaffDto,
+  ): Promise<TableZoneResponseDto> {
+    return this.setZoneStaffService.execute(authUser, zoneId, dto);
+  }
+
+  @Get('branch-staff')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Lista el equipo con rol operativo activo en una sucursal, para gestionar zonas.',
+  })
+  listBranchStaff(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Query() query: ListTablesQueryDto,
+  ): Promise<BranchStaffMemberResponseDto[]> {
+    return this.listBranchStaffService.execute(authUser, query);
   }
 }

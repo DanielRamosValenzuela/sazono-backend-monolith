@@ -8,7 +8,6 @@ import {
 import {
   OrderStatus,
   PaymentAttemptStatus,
-  PaymentStatus,
   Prisma,
   TableStatus,
 } from '@prisma/client';
@@ -16,10 +15,16 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyOrderChargeToBill } from '../../orders/application/apply-order-charge-to-bill';
 import { routeOrderToStations } from '../../orders/application/route-order-to-stations';
 import { applyPaymentToBill } from './apply-payment-to-bill';
+import { buildCheckoutFromDto } from './build-checkout-from-dto';
+import { ChargePaymentService } from './charge-payment.service';
+import { PaymentChannel } from '../domain/payment-channel';
+import { FailPaymentService } from './fail-payment.service';
+import { FinalizePaymentService } from './finalize-payment.service';
+import { mapPaymentResult } from './payment-result-mapper';
 import {
-  PAYMENT_PROVIDER,
-  type PaymentProviderPort,
-} from './ports/payment-provider.port';
+  OFFLINE_PAYMENT_RECORDER,
+  type OfflinePaymentRecorderPort,
+} from './ports/offline-payment-recorder.port';
 import type {
   PayQrOrderDto,
   PaymentResultResponseDto,
@@ -34,8 +39,11 @@ const PAYABLE_ORDER_STATUSES: OrderStatus[] = [
 export class PayQrOrderService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(PAYMENT_PROVIDER)
-    private readonly paymentProvider: PaymentProviderPort,
+    @Inject(OFFLINE_PAYMENT_RECORDER)
+    private readonly offlinePaymentRecorder: OfflinePaymentRecorderPort,
+    private readonly chargePaymentService: ChargePaymentService,
+    private readonly finalizePaymentService: FinalizePaymentService,
+    private readonly failPaymentService: FailPaymentService,
   ) {}
   async execute(
     qrToken: string,
@@ -85,6 +93,8 @@ export class PayQrOrderService {
       throw new BadRequestException('La propina no puede ser negativa.');
     }
 
+    const checkout = buildCheckoutFromDto(dto);
+
     const orderAmount = order.orderItems.reduce(
       (total, item) => total.add(item.priceSnapshot.mul(item.quantity)),
       new Prisma.Decimal(0),
@@ -97,46 +107,44 @@ export class PayQrOrderService {
         orderId: order.id,
         billId: order.billId,
         amount: paidAmount,
-        provider: this.paymentProvider.providerName,
+        provider: this.offlinePaymentRecorder.providerName,
         status: PaymentAttemptStatus.PENDING,
       },
     });
 
-    const chargeResult = await this.paymentProvider.charge({
+    const chargeResult = await this.chargePaymentService.execute({
+      channel: PaymentChannel.QR_ONLINE,
+      restaurantId: order.branch.restaurantId,
+      attemptId: attempt.id,
       amount: paidAmount,
       currency,
       description: `Orden QR ${order.id}`,
+      checkout,
     });
 
     if (!chargeResult.approved) {
-      await this.prisma.$transaction([
-        this.prisma.paymentAttempt.update({
-          where: {
-            id: attempt.id,
-          },
-          data: {
-            status: PaymentAttemptStatus.FAILED,
-            providerReference: chargeResult.providerReference ?? null,
-            failureReason:
-              chargeResult.failureReason ?? 'Pago rechazado por el proveedor.',
-          },
-        }),
-        this.prisma.order.update({
+      await this.prisma.$transaction(async (tx) => {
+        await this.failPaymentService.execute(tx, {
+          attemptId: attempt.id,
+          providerReference: chargeResult.providerReference,
+          failureReason:
+            chargeResult.failureReason ?? 'Pago rechazado por el proveedor.',
+        });
+
+        await tx.order.update({
           where: {
             id: order.id,
           },
           data: {
             status: OrderStatus.PAYMENT_FAILED,
           },
-        }),
-      ]);
+        });
+      });
 
       throw new ConflictException(
         'El pago fue rechazado por el proveedor. Puedes reintentarlo.',
       );
     }
-
-    const paidAt = new Date();
 
     const result = await this.prisma.$transaction(async (tx) => {
       const currentOrder = await tx.order.findUniqueOrThrow({
@@ -149,26 +157,13 @@ export class PayQrOrderService {
         throw new ConflictException('La orden ya fue pagada o cancelada.');
       }
 
-      await tx.paymentAttempt.update({
-        where: {
-          id: attempt.id,
-        },
-        data: {
-          status: PaymentAttemptStatus.SUCCEEDED,
-          providerReference: chargeResult.providerReference ?? null,
-        },
-      });
-
-      const payment = await tx.payment.create({
-        data: {
-          billId: order.billId,
-          amount: paidAmount,
-          currency,
-          provider: this.paymentProvider.providerName,
-          providerReference: chargeResult.providerReference ?? null,
-          status: PaymentStatus.PAID,
-          paidAt,
-        },
+      const payment = await this.finalizePaymentService.execute(tx, {
+        attemptId: attempt.id,
+        billId: order.billId,
+        amount: paidAmount,
+        currency,
+        provider: chargeResult.providerName,
+        providerReference: chargeResult.providerReference,
       });
 
       const bill = await tx.bill.findUniqueOrThrow({
@@ -212,27 +207,9 @@ export class PayQrOrderService {
       return { payment, billAfterPayment, updatedOrder };
     });
 
-    return {
-      paymentId: result.payment.id,
-      billId: result.payment.billId,
-      amount: result.payment.amount.toString(),
-      currency: result.payment.currency,
-      provider: result.payment.provider,
-      providerReference: result.payment.providerReference,
-      status: result.payment.status,
-      paidAt: result.payment.paidAt?.toISOString() ?? null,
-      bill: {
-        billId: result.billAfterPayment.billId,
-        status: result.billAfterPayment.status,
-        subtotalAmount: result.billAfterPayment.subtotalAmount.toString(),
-        tipAmount: result.billAfterPayment.tipAmount.toString(),
-        totalAmount: result.billAfterPayment.totalAmount.toString(),
-        remainingAmount: result.billAfterPayment.remainingAmount.toString(),
-      },
-      order: {
-        orderId: result.updatedOrder.id,
-        status: result.updatedOrder.status,
-      },
-    };
+    return mapPaymentResult(result.payment, result.billAfterPayment, {
+      orderId: result.updatedOrder.id,
+      status: result.updatedOrder.status,
+    });
   }
 }

@@ -44,9 +44,7 @@ export class UpdateModifierOptionService {
       where: { id: modifierOptionId },
       data: {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-        ...(dto.priceDelta !== undefined
-          ? { priceDelta: dto.priceDelta }
-          : {}),
+        ...(dto.priceDelta !== undefined ? { priceDelta: dto.priceDelta } : {}),
         ...(dto.isAvailable !== undefined
           ? { isAvailable: dto.isAvailable }
           : {}),

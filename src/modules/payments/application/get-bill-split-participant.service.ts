@@ -1,10 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { PaymentAccountStatus, PaymentGatewayProvider } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
 import type { BillSplitParticipantDetailResponseDto } from '../presentation/http/dto/payments.dto';
 
 @Injectable()
 export class GetBillSplitParticipantService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly restaurantPaymentAccountRepository: RestaurantPaymentAccountRepository,
+  ) {}
 
   async execute(
     participantToken: string,
@@ -38,7 +43,7 @@ export class GetBillSplitParticipantService {
 
     const bill = participant.billSplit.bill;
 
-    return {
+    const participantDetail = {
       participantId: participant.id,
       displayName: participant.displayName,
       allocatedAmount: participant.allocatedAmount.toString(),
@@ -46,6 +51,30 @@ export class GetBillSplitParticipantService {
       status: participant.status,
       currency: bill.branch.restaurant.currency,
       billStatus: bill.status,
+    };
+
+    const account =
+      await this.restaurantPaymentAccountRepository.findByRestaurant(
+        bill.branch.restaurantId,
+      );
+
+    if (
+      account &&
+      account.status === PaymentAccountStatus.CONNECTED &&
+      account.publicKey
+    ) {
+      return {
+        ...participantDetail,
+        gatewayConnected: true,
+        provider: PaymentGatewayProvider.MERCADO_PAGO,
+        publicKey: account.publicKey,
+        environment: account.environment,
+      };
+    }
+
+    return {
+      ...participantDetail,
+      gatewayConnected: false,
     };
   }
 }

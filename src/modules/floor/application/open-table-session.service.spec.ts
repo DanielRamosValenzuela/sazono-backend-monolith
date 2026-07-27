@@ -1,6 +1,7 @@
 ﻿import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   BillStatus,
+  Prisma,
   Role,
   TableSessionOpenedBySource,
   TableSessionStatus,
@@ -27,6 +28,7 @@ type TransactionClient = {
         openedAt: Date;
         closeReason: string | null;
         closedAt: Date | null;
+        guestCount: number | null;
       }>,
       [unknown]
     >;
@@ -92,6 +94,7 @@ describe('OpenTableSessionService', () => {
           openedAt: Date;
           closeReason: string | null;
           closedAt: Date | null;
+          guestCount: number | null;
         }>,
         [unknown]
       >()
@@ -104,6 +107,7 @@ describe('OpenTableSessionService', () => {
         openedAt: new Date('2026-07-03T12:00:00.000Z'),
         closeReason: null,
         closedAt: null,
+        guestCount: 4,
       });
     const createBillMock = jest
       .fn<Promise<unknown>, [unknown]>()
@@ -138,11 +142,13 @@ describe('OpenTableSessionService', () => {
       {
         tableId: 'table-1',
         openedBySource: TableSessionOpenedBySource.WAITER,
+        guestCount: 4,
       },
     );
 
     expect(result.tableSessionId).toBe('session-1');
     expect(result.status).toBe(TableSessionStatus.OPEN);
+    expect(result.guestCount).toBe(4);
     const createBillArgs = createBillMock.mock.calls[0]?.[0] as {
       data: {
         tableSessionId: string;
@@ -174,6 +180,7 @@ describe('OpenTableSessionService', () => {
         {
           tableId: 'table-1',
           openedBySource: TableSessionOpenedBySource.WAITER,
+          guestCount: 4,
         },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -207,6 +214,7 @@ describe('OpenTableSessionService', () => {
         openedAt: Date;
         closeReason: string | null;
         closedAt: Date | null;
+        guestCount: number | null;
       }>,
       [unknown]
     >();
@@ -240,6 +248,80 @@ describe('OpenTableSessionService', () => {
         {
           tableId: 'table-1',
           openedBySource: TableSessionOpenedBySource.WAITER,
+          guestCount: 4,
+        },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects opening a session when the unique active session index is violated at the database level', async () => {
+    findUniqueMock.mockResolvedValue({
+      id: 'table-1',
+      branchId: 'branch-1',
+      status: TableStatus.AVAILABLE,
+    });
+    ensureAccessMock.mockResolvedValue({
+      staffUserId: 'staff-1',
+      restaurantId: 'restaurant-1',
+      branchId: 'branch-1',
+      roles: [Role.WAITER],
+    });
+
+    const findFirstSessionMock = jest
+      .fn<Promise<null | { id: string }>, [unknown]>()
+      .mockResolvedValue(null);
+    const createSessionMock = jest
+      .fn<
+        Promise<{
+          id: string;
+          tableId: string;
+          branchId: string;
+          status: TableSessionStatus;
+          openedBySource: TableSessionOpenedBySource;
+          openedAt: Date;
+          closeReason: string | null;
+          closedAt: Date | null;
+          guestCount: number | null;
+        }>,
+        [unknown]
+      >()
+      .mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+    const createBillMock = jest.fn<Promise<unknown>, [unknown]>();
+    const updateTableMock = jest.fn<Promise<unknown>, [unknown]>();
+
+    transactionMock.mockImplementation(
+      (callback: (transactionClient: TransactionClient) => Promise<unknown>) =>
+        callback({
+          bill: {
+            create: createBillMock,
+          },
+          tableSession: {
+            findFirst: findFirstSessionMock,
+            create: createSessionMock,
+          },
+          table: {
+            update: updateTableMock,
+          },
+        }),
+    );
+
+    await expect(
+      service.execute(
+        {
+          sub: 'auth-1',
+          profileType: LoginProfileType.STAFF,
+          profileId: 'staff-1',
+          restaurantId: 'restaurant-1',
+        },
+        {
+          tableId: 'table-1',
+          openedBySource: TableSessionOpenedBySource.WAITER,
+          guestCount: 4,
         },
       ),
     ).rejects.toBeInstanceOf(ConflictException);

@@ -21,6 +21,7 @@
 17. [17 Modificadores, Cocina Expedita y Notificaciones](D:\Programacion\Sazono\sazono-backend-monolith\docs\17-modificadores-cocina-expedita-y-notificaciones.md)
 18. [18 Asignación Formal de Mesas](D:\Programacion\Sazono\sazono-backend-monolith\docs\18-asignacion-formal-de-mesas.md)
 19. [19 Notificaciones Push y Login por PIN](D:\Programacion\Sazono\sazono-backend-monolith\docs\19-notificaciones-push-y-login-por-pin.md)
+20. [20 Comensales por Sesión y Zonas de Mesas](D:\Programacion\Sazono\sazono-backend-monolith\docs\20-comensales-y-zonas-de-mesa.md)
 
 ## Objetivo
 

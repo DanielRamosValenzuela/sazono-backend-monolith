@@ -2,9 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TableStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
+import { buildCheckoutFromDto } from './build-checkout-from-dto';
+import { PaymentChannel } from '../domain/payment-channel';
 import { SettleBillPaymentService } from './settle-bill-payment.service';
 import type {
-  PayBillDto,
+  PayQrBillDto,
   PaymentResultResponseDto,
 } from '../presentation/http/dto/payments.dto';
 
@@ -16,7 +18,7 @@ export class PayQrBillService {
   ) {}
   async execute(
     qrToken: string,
-    dto: PayBillDto,
+    dto: PayQrBillDto,
   ): Promise<PaymentResultResponseDto> {
     const table = await this.prisma.table.findUnique({
       where: {
@@ -52,14 +54,17 @@ export class PayQrBillService {
     }
 
     return this.settleBillPaymentService.execute(
+      PaymentChannel.QR_ONLINE,
       {
         id: activeSession.bill.id,
         status: activeSession.bill.status,
         remainingAmount: activeSession.bill.remainingAmount,
         currency: activeSession.branch.restaurant.currency,
+        restaurantId: activeSession.branch.restaurantId,
       },
       new Prisma.Decimal(dto.amount),
       new Prisma.Decimal(dto.tipAmount ?? 0),
+      buildCheckoutFromDto(dto),
     );
   }
 }

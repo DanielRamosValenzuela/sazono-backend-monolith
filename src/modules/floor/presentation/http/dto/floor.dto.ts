@@ -6,13 +6,16 @@ import {
 } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 const INTERNAL_TABLE_SESSION_OPENED_BY_SOURCES = [
@@ -38,6 +41,9 @@ class CurrentTableSessionSummaryDto {
 
   @ApiProperty({ nullable: true, required: false })
   assignedStaffUserId!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  guestCount!: number | null;
 }
 
 export class CreateTableDto {
@@ -78,6 +84,13 @@ export class OpenTableSessionDto {
   })
   @IsIn(INTERNAL_TABLE_SESSION_OPENED_BY_SOURCES)
   openedBySource!: TableSessionOpenedBySource;
+
+  @ApiProperty({ example: 4 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  guestCount!: number;
 }
 
 export class CloseTableSessionDto {
@@ -140,6 +153,9 @@ export class TableSessionResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   assignedStaffUserId!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  guestCount!: number | null;
 }
 
 export class TableResponseDto {
@@ -164,9 +180,74 @@ export class TableResponseDto {
   @ApiProperty()
   qrToken!: string;
 
+  @ApiProperty({ nullable: true, required: false, format: 'uuid' })
+  zoneId!: string | null;
+
   @ApiPropertyOptional({
     type: CurrentTableSessionSummaryDto,
     nullable: true,
   })
   currentSession!: CurrentTableSessionSummaryDto | null;
+}
+
+export class CreateTableZoneDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiProperty({ example: 'Terraza' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  name!: string;
+}
+
+export class RenameTableZoneDto {
+  @ApiProperty({ example: 'Terraza' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  name!: string;
+}
+
+export class SetTableZoneDto {
+  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string | null;
+}
+
+export class SetZoneStaffDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  staffUserIds!: string[];
+}
+
+export class TableZoneResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  zoneId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  branchId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ type: [String] })
+  tableIds!: string[];
+
+  @ApiProperty({ type: [String] })
+  staffUserIds!: string[];
+}
+
+export class BranchStaffMemberResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  staffUserId!: string;
+
+  @ApiProperty()
+  firstName!: string;
+
+  @ApiProperty()
+  lastName!: string;
 }

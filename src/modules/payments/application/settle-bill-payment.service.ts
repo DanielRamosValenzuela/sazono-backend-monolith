@@ -4,18 +4,21 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import {
-  BillStatus,
-  PaymentAttemptStatus,
-  PaymentStatus,
-  Prisma,
-} from '@prisma/client';
+import { BillStatus, PaymentAttemptStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import {
-  PAYMENT_PROVIDER,
-  type PaymentProviderPort,
-} from './ports/payment-provider.port';
+  ChargePaymentService,
+  type ChargePaymentCheckout,
+} from './charge-payment.service';
+import { FailPaymentService } from './fail-payment.service';
+import { FinalizePaymentService } from './finalize-payment.service';
+import { mapPaymentResult } from './payment-result-mapper';
+import {
+  OFFLINE_PAYMENT_RECORDER,
+  type OfflinePaymentRecorderPort,
+} from './ports/offline-payment-recorder.port';
+import type { PaymentChannel } from '../domain/payment-channel';
 import type { PaymentResultResponseDto } from '../presentation/http/dto/payments.dto';
 
 const PAYABLE_BILL_STATUSES: BillStatus[] = [
@@ -28,19 +31,25 @@ type PayableBill = {
   status: BillStatus;
   remainingAmount: Prisma.Decimal;
   currency: string;
+  restaurantId: string;
 };
 @Injectable()
 export class SettleBillPaymentService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(PAYMENT_PROVIDER)
-    private readonly paymentProvider: PaymentProviderPort,
+    @Inject(OFFLINE_PAYMENT_RECORDER)
+    private readonly offlinePaymentRecorder: OfflinePaymentRecorderPort,
+    private readonly chargePaymentService: ChargePaymentService,
+    private readonly finalizePaymentService: FinalizePaymentService,
+    private readonly failPaymentService: FailPaymentService,
   ) {}
 
   async execute(
+    channel: PaymentChannel,
     bill: PayableBill,
     amount: Prisma.Decimal,
     tipDelta: Prisma.Decimal,
+    checkout?: ChargePaymentCheckout,
   ): Promise<PaymentResultResponseDto> {
     if (!PAYABLE_BILL_STATUSES.includes(bill.status)) {
       throw new ConflictException(
@@ -68,28 +77,27 @@ export class SettleBillPaymentService {
       data: {
         billId: bill.id,
         amount: paidAmount,
-        provider: this.paymentProvider.providerName,
+        provider: this.offlinePaymentRecorder.providerName,
         status: PaymentAttemptStatus.PENDING,
       },
     });
 
-    const chargeResult = await this.paymentProvider.charge({
+    const chargeResult = await this.chargePaymentService.execute({
+      channel,
+      restaurantId: bill.restaurantId,
+      attemptId: attempt.id,
       amount: paidAmount,
       currency: bill.currency,
       description: `Pago de cuenta ${bill.id}`,
+      checkout,
     });
 
     if (!chargeResult.approved) {
-      await this.prisma.paymentAttempt.update({
-        where: {
-          id: attempt.id,
-        },
-        data: {
-          status: PaymentAttemptStatus.FAILED,
-          providerReference: chargeResult.providerReference ?? null,
-          failureReason:
-            chargeResult.failureReason ?? 'Pago rechazado por el proveedor.',
-        },
+      await this.failPaymentService.execute(this.prisma, {
+        attemptId: attempt.id,
+        providerReference: chargeResult.providerReference,
+        failureReason:
+          chargeResult.failureReason ?? 'Pago rechazado por el proveedor.',
       });
 
       throw new ConflictException(
@@ -97,29 +105,14 @@ export class SettleBillPaymentService {
       );
     }
 
-    const paidAt = new Date();
-
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.paymentAttempt.update({
-        where: {
-          id: attempt.id,
-        },
-        data: {
-          status: PaymentAttemptStatus.SUCCEEDED,
-          providerReference: chargeResult.providerReference ?? null,
-        },
-      });
-
-      const payment = await tx.payment.create({
-        data: {
-          billId: bill.id,
-          amount: paidAmount,
-          currency: bill.currency,
-          provider: this.paymentProvider.providerName,
-          providerReference: chargeResult.providerReference ?? null,
-          status: PaymentStatus.PAID,
-          paidAt,
-        },
+      const payment = await this.finalizePaymentService.execute(tx, {
+        attemptId: attempt.id,
+        billId: bill.id,
+        amount: paidAmount,
+        currency: bill.currency,
+        provider: chargeResult.providerName,
+        providerReference: chargeResult.providerReference,
       });
 
       const billAfterPayment = await applyPaymentToBill(
@@ -132,24 +125,6 @@ export class SettleBillPaymentService {
       return { payment, billAfterPayment };
     });
 
-    return {
-      paymentId: result.payment.id,
-      billId: result.payment.billId,
-      amount: result.payment.amount.toString(),
-      currency: result.payment.currency,
-      provider: result.payment.provider,
-      providerReference: result.payment.providerReference,
-      status: result.payment.status,
-      paidAt: result.payment.paidAt?.toISOString() ?? null,
-      bill: {
-        billId: result.billAfterPayment.billId,
-        status: result.billAfterPayment.status,
-        subtotalAmount: result.billAfterPayment.subtotalAmount.toString(),
-        tipAmount: result.billAfterPayment.tipAmount.toString(),
-        totalAmount: result.billAfterPayment.totalAmount.toString(),
-        remainingAmount: result.billAfterPayment.remainingAmount.toString(),
-      },
-      order: null,
-    };
+    return mapPaymentResult(result.payment, result.billAfterPayment, null);
   }
 }

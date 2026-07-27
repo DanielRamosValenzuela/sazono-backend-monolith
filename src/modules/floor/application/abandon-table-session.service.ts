@@ -109,6 +109,7 @@ export class AbandonTableSessionService {
       closeReason: abandonedSession.closeReason,
       closedAt: abandonedSession.closedAt?.toISOString() ?? null,
       assignedStaffUserId: abandonedSession.assignedStaffUserId,
+      guestCount: abandonedSession.guestCount,
     };
   }
 }

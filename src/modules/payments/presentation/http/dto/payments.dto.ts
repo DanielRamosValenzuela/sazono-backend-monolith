@@ -5,6 +5,8 @@ import {
   BillSplitStatus,
   BillStatus,
   OrderStatus,
+  PaymentAttemptStatus,
+  PaymentGatewayProvider,
   PaymentStatus,
 } from '@prisma/client';
 import { Type } from 'class-transformer';
@@ -12,10 +14,14 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsEmail,
+  IsInt,
   IsNumberString,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -27,6 +33,41 @@ export class PayQrOrderDto {
   @IsOptional()
   @IsNumberString()
   tipAmount?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Token de tarjeta generado por MercadoPago.js en el navegador. Si se envia, se intenta cobrar de verdad con la pasarela conectada del restaurante.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  cardToken?: string;
+
+  @ApiPropertyOptional({ example: 'visa' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentMethodId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Identificador del banco emisor de la tarjeta.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  issuerId?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  installments?: number;
+
+  @ApiPropertyOptional({ example: 'cliente@correo.cl' })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  payerEmail?: string;
 }
 
 export class PayBillDto {
@@ -44,6 +85,43 @@ export class PayBillDto {
   @IsOptional()
   @IsNumberString()
   tipAmount?: string;
+}
+
+export class PayQrBillDto extends PayBillDto {
+  @ApiPropertyOptional({
+    description:
+      'Token de tarjeta generado por MercadoPago.js en el navegador. Si se envia, se intenta cobrar de verdad con la pasarela conectada del restaurante.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  cardToken?: string;
+
+  @ApiPropertyOptional({ example: 'visa' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentMethodId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Identificador del banco emisor de la tarjeta.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  issuerId?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  installments?: number;
+
+  @ApiPropertyOptional({ example: 'cliente@correo.cl' })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  payerEmail?: string;
 }
 
 export class BillSummaryResponseDto {
@@ -143,6 +221,41 @@ export class PayBillSplitParticipantDto {
   @IsOptional()
   @IsNumberString()
   tipAmount?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Token de tarjeta generado por MercadoPago.js en el navegador. Si se envia, se intenta cobrar de verdad con la pasarela conectada del restaurante.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  cardToken?: string;
+
+  @ApiPropertyOptional({ example: 'visa' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentMethodId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Identificador del banco emisor de la tarjeta.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  issuerId?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  installments?: number;
+
+  @ApiPropertyOptional({ example: 'cliente@correo.cl' })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  payerEmail?: string;
 }
 
 class BillSplitParticipantResponseDto {
@@ -194,6 +307,27 @@ export class BillSplitParticipantDetailResponseDto {
 
   @ApiProperty({ enum: BillStatus, enumName: 'BillStatus' })
   billStatus!: BillStatus;
+
+  @ApiProperty({
+    description:
+      'Si es false no hay ninguna pasarela conectada y el participante solo puede pagar de forma manual.',
+  })
+  gatewayConnected!: boolean;
+
+  @ApiPropertyOptional({
+    enum: PaymentGatewayProvider,
+    enumName: 'PaymentGatewayProvider',
+  })
+  provider?: PaymentGatewayProvider;
+
+  @ApiPropertyOptional({
+    description:
+      'Llave publica de la pasarela, segura para usar en el navegador.',
+  })
+  publicKey?: string;
+
+  @ApiPropertyOptional({ example: 'sandbox' })
+  environment?: string;
 }
 
 export class BillSplitResponseDto {
@@ -240,4 +374,60 @@ export class PaymentSummaryResponseDto {
 
   @ApiProperty()
   createdAt!: string;
+}
+
+export class QrOrderPaymentStatusResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  orderId!: string;
+
+  @ApiProperty({ enum: OrderStatus, enumName: 'OrderStatus' })
+  orderStatus!: OrderStatus;
+
+  @ApiProperty({
+    enum: PaymentAttemptStatus,
+    enumName: 'PaymentAttemptStatus',
+    nullable: true,
+    required: false,
+  })
+  attemptStatus!: PaymentAttemptStatus | null;
+
+  @ApiProperty({
+    enum: PaymentStatus,
+    enumName: 'PaymentStatus',
+    nullable: true,
+    required: false,
+  })
+  paymentStatus!: PaymentStatus | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  providerReference!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  failureReason!: string | null;
+
+  @ApiProperty()
+  updatedAt!: string;
+}
+
+export class QrPaymentConfigResponseDto {
+  @ApiProperty({
+    description:
+      'Si es false no hay ninguna pasarela conectada y el pago QR solo puede registrarse manualmente.',
+  })
+  gatewayConnected!: boolean;
+
+  @ApiPropertyOptional({
+    enum: PaymentGatewayProvider,
+    enumName: 'PaymentGatewayProvider',
+  })
+  provider?: PaymentGatewayProvider;
+
+  @ApiPropertyOptional({
+    description:
+      'Llave publica de la pasarela, segura para usar en el navegador.',
+  })
+  publicKey?: string;
+
+  @ApiPropertyOptional({ example: 'sandbox' })
+  environment?: string;
 }

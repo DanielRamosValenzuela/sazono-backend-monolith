@@ -8,15 +8,18 @@ import {
   TableStatus,
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
+import { ChargePaymentService } from './charge-payment.service';
+import { FailPaymentService } from './fail-payment.service';
+import { FinalizePaymentService } from './finalize-payment.service';
 import { PayQrOrderService } from './pay-qr-order.service';
-import type { PaymentProviderPort } from './ports/payment-provider.port';
+import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
+import type { OfflinePaymentRecorderPort } from './ports/offline-payment-recorder.port';
+import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 
 describe('PayQrOrderService', () => {
   const tableFindUniqueMock = jest.fn();
   const orderFindUniqueMock = jest.fn();
   const attemptCreateMock = jest.fn();
-  const attemptUpdateMock = jest.fn();
-  const orderUpdateMock = jest.fn();
   const transactionMock = jest.fn();
   const prisma = {
     table: {
@@ -24,26 +27,45 @@ describe('PayQrOrderService', () => {
     },
     order: {
       findUnique: orderFindUniqueMock,
-      update: orderUpdateMock,
     },
     paymentAttempt: {
       create: attemptCreateMock,
-      update: attemptUpdateMock,
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const chargeMock = jest.fn();
-  const paymentProvider: PaymentProviderPort = {
+  const recordMock = jest.fn();
+  const offlinePaymentRecorder: OfflinePaymentRecorderPort = {
     providerName: 'MANUAL',
-    charge: chargeMock,
+    record: recordMock,
   };
+  const resolveMock = jest.fn().mockResolvedValue(null);
+  const paymentGatewayResolver: PaymentGatewayResolverPort = {
+    resolve: resolveMock,
+  };
+  const mercadoPagoConfig = {
+    qrGatewayRequired: false,
+  } as unknown as MercadoPagoConfigService;
+  const chargePaymentService = new ChargePaymentService(
+    offlinePaymentRecorder,
+    paymentGatewayResolver,
+    mercadoPagoConfig,
+  );
+  const finalizePaymentService = new FinalizePaymentService();
+  const failPaymentService = new FailPaymentService();
 
   let service: PayQrOrderService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new PayQrOrderService(prisma, paymentProvider);
+    resolveMock.mockResolvedValue(null);
+    service = new PayQrOrderService(
+      prisma,
+      offlinePaymentRecorder,
+      chargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
   });
 
   const table = {
@@ -60,6 +82,7 @@ describe('PayQrOrderService', () => {
       tableId: 'table-1',
     },
     branch: {
+      restaurantId: 'restaurant-1',
       restaurant: {
         currency: 'CLP',
       },
@@ -79,16 +102,13 @@ describe('PayQrOrderService', () => {
     tableFindUniqueMock.mockResolvedValue(table);
     orderFindUniqueMock.mockResolvedValue(awaitingOrder);
     attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
-    chargeMock.mockResolvedValue({
-      approved: true,
-      providerReference: 'manual-ref-1',
-    });
+    recordMock.mockResolvedValue({ providerReference: 'manual-ref-1' });
 
     const txOrderFindUniqueOrThrowMock = jest.fn().mockResolvedValue({
       id: 'order-1',
       status: OrderStatus.AWAITING_PAYMENT,
     });
-    const txAttemptUpdateMock = jest.fn().mockResolvedValue({});
+    const txAttemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });
     const txPaymentCreateMock = jest.fn().mockResolvedValue({
       id: 'payment-1',
       billId: 'bill-1',
@@ -137,7 +157,7 @@ describe('PayQrOrderService', () => {
             findUniqueOrThrow: txOrderFindUniqueOrThrowMock,
             update: txOrderUpdateMock,
           },
-          paymentAttempt: { update: txAttemptUpdateMock },
+          paymentAttempt: { updateMany: txAttemptUpdateManyMock },
           payment: { create: txPaymentCreateMock },
           bill: {
             findUniqueOrThrow: txBillFindUniqueOrThrowMock,
@@ -160,31 +180,55 @@ describe('PayQrOrderService', () => {
     expect(txBillItemCreateManyMock).toHaveBeenCalled();
     expect(txStationTicketCreateMock).toHaveBeenCalledTimes(1);
     expect(txSessionUpdateManyMock).toHaveBeenCalled();
+    expect(resolveMock).toHaveBeenCalledWith('restaurant-1');
   });
 
   it('marks the order as PAYMENT_FAILED when the provider rejects the charge', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
     orderFindUniqueMock.mockResolvedValue(awaitingOrder);
     attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
-    chargeMock.mockResolvedValue({
+
+    const chargeExecuteMock = jest.fn().mockResolvedValue({
       approved: false,
+      providerName: 'MANUAL',
       failureReason: 'Fondos insuficientes.',
     });
-    transactionMock.mockResolvedValue([]);
+    const rejectingChargePaymentService = {
+      execute: chargeExecuteMock,
+    } as unknown as ChargePaymentService;
+    const rejectingService = new PayQrOrderService(
+      prisma,
+      offlinePaymentRecorder,
+      rejectingChargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
+
+    const txAttemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });
+    const txOrderUpdateMock = jest.fn().mockResolvedValue({});
+
+    transactionMock.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          paymentAttempt: { updateMany: txAttemptUpdateManyMock },
+          order: { update: txOrderUpdateMock },
+        }),
+    );
 
     await expect(
-      service.execute('qr-token-1', 'order-1', {}),
+      rejectingService.execute('qr-token-1', 'order-1', {}),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(attemptUpdateMock).toHaveBeenCalledWith(
+    expect(txAttemptUpdateManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 'attempt-1', status: PaymentAttemptStatus.PENDING },
         data: expect.objectContaining({
           status: PaymentAttemptStatus.FAILED,
           failureReason: 'Fondos insuficientes.',
-        }) as unknown,
+        }),
       }),
     );
-    expect(orderUpdateMock).toHaveBeenCalledWith(
+    expect(txOrderUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { status: OrderStatus.PAYMENT_FAILED },
       }),

@@ -1,37 +1,65 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   BillStatus,
+  PaymentAttemptStatus,
   PaymentStatus,
   Prisma,
   TableSessionStatus,
 } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
+import { ChargePaymentService } from './charge-payment.service';
+import { FailPaymentService } from './fail-payment.service';
+import { FinalizePaymentService } from './finalize-payment.service';
+import { PaymentChannel } from '../domain/payment-channel';
 import { SettleBillPaymentService } from './settle-bill-payment.service';
-import type { PaymentProviderPort } from './ports/payment-provider.port';
+import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
+import type { OfflinePaymentRecorderPort } from './ports/offline-payment-recorder.port';
+import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 
 describe('SettleBillPaymentService', () => {
   const attemptCreateMock = jest.fn();
-  const attemptUpdateMock = jest.fn();
+  const attemptUpdateManyMock = jest.fn();
   const transactionMock = jest.fn();
   const prisma = {
     paymentAttempt: {
       create: attemptCreateMock,
-      update: attemptUpdateMock,
+      updateMany: attemptUpdateManyMock,
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
-  const chargeMock = jest.fn();
-  const paymentProvider: PaymentProviderPort = {
+  const recordMock = jest.fn();
+  const offlinePaymentRecorder: OfflinePaymentRecorderPort = {
     providerName: 'MANUAL',
-    charge: chargeMock,
+    record: recordMock,
   };
+  const resolveMock = jest.fn().mockResolvedValue(null);
+  const paymentGatewayResolver: PaymentGatewayResolverPort = {
+    resolve: resolveMock,
+  };
+  const mercadoPagoConfig = {
+    qrGatewayRequired: false,
+  } as unknown as MercadoPagoConfigService;
+  const chargePaymentService = new ChargePaymentService(
+    offlinePaymentRecorder,
+    paymentGatewayResolver,
+    mercadoPagoConfig,
+  );
+  const finalizePaymentService = new FinalizePaymentService();
+  const failPaymentService = new FailPaymentService();
 
   let service: SettleBillPaymentService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new SettleBillPaymentService(prisma, paymentProvider);
+    resolveMock.mockResolvedValue(null);
+    service = new SettleBillPaymentService(
+      prisma,
+      offlinePaymentRecorder,
+      chargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
   });
 
   const openBill = {
@@ -39,16 +67,14 @@ describe('SettleBillPaymentService', () => {
     status: BillStatus.OPEN,
     remainingAmount: new Prisma.Decimal(23600),
     currency: 'CLP',
+    restaurantId: 'restaurant-1',
   };
 
   it('settles a partial payment with tip and leaves the bill partially paid', async () => {
     attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
-    chargeMock.mockResolvedValue({
-      approved: true,
-      providerReference: 'manual-ref-1',
-    });
+    recordMock.mockResolvedValue({ providerReference: 'manual-ref-1' });
 
-    const txAttemptUpdateMock = jest.fn().mockResolvedValue({});
+    const txAttemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });
     const txPaymentCreateMock = jest.fn().mockResolvedValue({
       id: 'payment-1',
       billId: 'bill-1',
@@ -75,7 +101,7 @@ describe('SettleBillPaymentService', () => {
     transactionMock.mockImplementation(
       (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
-          paymentAttempt: { update: txAttemptUpdateMock },
+          paymentAttempt: { updateMany: txAttemptUpdateManyMock },
           payment: { create: txPaymentCreateMock },
           bill: {
             findUniqueOrThrow: txBillFindUniqueOrThrowMock,
@@ -85,6 +111,7 @@ describe('SettleBillPaymentService', () => {
         }),
     );
     const result = await service.execute(
+      PaymentChannel.STAFF_OFFLINE,
       openBill,
       new Prisma.Decimal(10000),
       new Prisma.Decimal(1000),
@@ -95,14 +122,12 @@ describe('SettleBillPaymentService', () => {
     expect(result.bill.totalAmount).toBe('24600');
     expect(result.bill.remainingAmount).toBe('13600');
     expect(txSessionUpdateManyMock).not.toHaveBeenCalled();
+    expect(resolveMock).not.toHaveBeenCalled();
   });
 
   it('marks the session PAYMENT_COMPLETED when the payment settles the full balance', async () => {
     attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
-    chargeMock.mockResolvedValue({
-      approved: true,
-      providerReference: 'manual-ref-2',
-    });
+    recordMock.mockResolvedValue({ providerReference: 'manual-ref-2' });
 
     const txPaymentCreateMock = jest.fn().mockResolvedValue({
       id: 'payment-1',
@@ -132,7 +157,9 @@ describe('SettleBillPaymentService', () => {
     transactionMock.mockImplementation(
       (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
-          paymentAttempt: { update: jest.fn().mockResolvedValue({}) },
+          paymentAttempt: {
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          },
           payment: { create: txPaymentCreateMock },
           bill: {
             findUniqueOrThrow: txBillFindUniqueOrThrowMock,
@@ -143,6 +170,7 @@ describe('SettleBillPaymentService', () => {
     );
 
     const result = await service.execute(
+      PaymentChannel.QR_ONLINE,
       openBill,
       new Prisma.Decimal(23600),
       new Prisma.Decimal(0),
@@ -150,6 +178,7 @@ describe('SettleBillPaymentService', () => {
 
     expect(result.bill.status).toBe(BillStatus.PAID);
     expect(result.bill.remainingAmount).toBe('0');
+    expect(resolveMock).toHaveBeenCalledWith('restaurant-1');
 
     const sessionUpdateArgs = txSessionUpdateManyMock.mock.calls[0][0] as {
       where: Record<string, unknown>;
@@ -164,6 +193,7 @@ describe('SettleBillPaymentService', () => {
   it('rejects payments above the remaining balance', async () => {
     await expect(
       service.execute(
+        PaymentChannel.STAFF_OFFLINE,
         openBill,
         new Prisma.Decimal(30000),
         new Prisma.Decimal(0),
@@ -176,10 +206,94 @@ describe('SettleBillPaymentService', () => {
   it('rejects payments over a bill that is not payable', async () => {
     await expect(
       service.execute(
+        PaymentChannel.STAFF_OFFLINE,
         { ...openBill, status: BillStatus.PAID },
         new Prisma.Decimal(1000),
         new Prisma.Decimal(0),
       ),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('records the failed attempt and rejects when the charge is not approved', async () => {
+    attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
+    attemptUpdateManyMock.mockResolvedValue({ count: 1 });
+
+    const chargeExecuteMock = jest.fn().mockResolvedValue({
+      approved: false,
+      providerName: 'MANUAL',
+      failureReason: 'Fondos insuficientes.',
+    });
+    const rejectingChargePaymentService = {
+      execute: chargeExecuteMock,
+    } as unknown as ChargePaymentService;
+
+    const rejectingService = new SettleBillPaymentService(
+      prisma,
+      offlinePaymentRecorder,
+      rejectingChargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
+
+    await expect(
+      rejectingService.execute(
+        PaymentChannel.STAFF_OFFLINE,
+        openBill,
+        new Prisma.Decimal(10000),
+        new Prisma.Decimal(0),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(attemptUpdateManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'attempt-1', status: PaymentAttemptStatus.PENDING },
+        data: expect.objectContaining({
+          status: PaymentAttemptStatus.FAILED,
+          failureReason: 'Fondos insuficientes.',
+        }),
+      }),
+    );
+  });
+
+  it('forwards the checkout payload to the charge service for QR_ONLINE without ever building one for STAFF_OFFLINE', async () => {
+    attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
+    attemptUpdateManyMock.mockResolvedValue({ count: 1 });
+
+    const chargeExecuteMock = jest.fn().mockResolvedValue({
+      approved: false,
+      providerName: 'MERCADO_PAGO',
+      failureReason: 'La tarjeta no tiene saldo suficiente.',
+    });
+    const spyingChargePaymentService = {
+      execute: chargeExecuteMock,
+    } as unknown as ChargePaymentService;
+
+    const spyingService = new SettleBillPaymentService(
+      prisma,
+      offlinePaymentRecorder,
+      spyingChargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
+
+    const checkout = {
+      cardToken: 'card-token-1',
+      paymentMethodId: 'visa',
+      installments: 1,
+    };
+
+    await expect(
+      spyingService.execute(
+        PaymentChannel.QR_ONLINE,
+        openBill,
+        new Prisma.Decimal(10000),
+        new Prisma.Decimal(0),
+        checkout,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(chargeExecuteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: PaymentChannel.QR_ONLINE, checkout }),
+    );
   });
 });

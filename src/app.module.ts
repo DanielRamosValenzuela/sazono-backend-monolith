@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validateEnvironment } from './common/config/validate-environment';
 import { BranchAccessModule } from './common/branch-access/branch-access.module';
+import { CryptoModule } from './common/crypto/crypto.module';
 import { FirebaseModule } from './common/firebase/firebase.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
@@ -69,6 +70,7 @@ import { StaffModule } from './modules/staff/staff.module';
     }),
     PrismaModule,
     BranchAccessModule,
+    CryptoModule,
     SupabaseModule,
     FirebaseModule,
     AuthModule,

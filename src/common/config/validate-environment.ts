@@ -145,6 +145,106 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FIREBASE_PRIVATE_KEY?: string;
+
+  @Transform(({ value }) => toBoolean(value, false))
+  @IsBoolean()
+  MERCADOPAGO_ENABLED = false;
+
+  @IsOptional()
+  @IsString()
+  MERCADOPAGO_CLIENT_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  MERCADOPAGO_CLIENT_SECRET?: string;
+
+  @IsOptional()
+  @IsIn(['sandbox', 'production'])
+  MERCADOPAGO_ENVIRONMENT?: 'sandbox' | 'production';
+
+  @IsOptional()
+  @IsString()
+  MERCADOPAGO_OAUTH_REDIRECT_URI?: string;
+
+  @IsOptional()
+  @IsString()
+  MERCADOPAGO_WEBHOOK_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  MERCADOPAGO_WEBHOOK_SECRET?: string;
+
+  @Transform(({ value }) => toNumber(value, 300))
+  @IsInt()
+  @Min(1)
+  MERCADOPAGO_WEBHOOK_TOLERANCE_SECONDS = 300;
+
+  @Transform(({ value }) => toBoolean(value, false))
+  @IsBoolean()
+  MERCADOPAGO_OAUTH_PKCE_ENABLED = false;
+
+  @IsOptional()
+  @IsString()
+  PAYMENTS_ENCRYPTION_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  PAYMENTS_OAUTH_UI_RETURN_URL?: string;
+
+  @Transform(({ value }) => toBoolean(value, false))
+  @IsBoolean()
+  PAYMENTS_QR_GATEWAY_REQUIRED = false;
+
+  @Transform(({ value }) => toNumber(value, 0))
+  @IsInt()
+  @Min(0)
+  PAYMENTS_APPLICATION_FEE_BPS = 0;
+
+  @Transform(({ value }) => toNumber(value, 15000))
+  @IsInt()
+  @Min(1)
+  MERCADOPAGO_TIMEOUT_MS = 15000;
+}
+
+const MERCADOPAGO_REQUIRED_VARIABLE_NAMES: Array<keyof EnvironmentVariables> = [
+  'MERCADOPAGO_CLIENT_ID',
+  'MERCADOPAGO_CLIENT_SECRET',
+  'MERCADOPAGO_OAUTH_REDIRECT_URI',
+  'MERCADOPAGO_WEBHOOK_URL',
+  'MERCADOPAGO_WEBHOOK_SECRET',
+  'PAYMENTS_OAUTH_UI_RETURN_URL',
+  'PAYMENTS_ENCRYPTION_KEY',
+];
+
+const PAYMENTS_ENCRYPTION_KEY_LENGTH_BYTES = 32;
+
+function validateMercadoPagoCrossFields(
+  validatedConfig: EnvironmentVariables,
+): void {
+  if (!validatedConfig.MERCADOPAGO_ENABLED) {
+    return;
+  }
+
+  const missingVariableNames = MERCADOPAGO_REQUIRED_VARIABLE_NAMES.filter(
+    (variableName) => !validatedConfig[variableName],
+  );
+
+  if (missingVariableNames.length > 0) {
+    throw new Error(
+      `MERCADOPAGO_ENABLED=true requiere las siguientes variables: ${missingVariableNames.join(', ')}`,
+    );
+  }
+
+  const encryptionKeyBytes = Buffer.from(
+    validatedConfig.PAYMENTS_ENCRYPTION_KEY as string,
+    'base64',
+  );
+
+  if (encryptionKeyBytes.length !== PAYMENTS_ENCRYPTION_KEY_LENGTH_BYTES) {
+    throw new Error(
+      `PAYMENTS_ENCRYPTION_KEY debe decodificar a ${PAYMENTS_ENCRYPTION_KEY_LENGTH_BYTES} bytes en base64 (se obtuvieron ${encryptionKeyBytes.length}). Genera una con: openssl rand -base64 32`,
+    );
+  }
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
@@ -159,6 +259,8 @@ export function validateEnvironment(config: Record<string, unknown>) {
   if (errors.length > 0) {
     throw new Error(errors.toString());
   }
+
+  validateMercadoPagoCrossFields(validatedConfig);
 
   return validatedConfig;
 }

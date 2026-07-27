@@ -152,7 +152,7 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - el bootstrap SaaS crea restaurante y primer admin mediante Supabase Auth + Prisma
 - ya existe creacion de sucursal con asignacion automatica de rol `ADMIN` al creador
 - ya existe alta y listado de `staff_users` con roles activos por sucursal
-- `floor` ya soporta mesas, apertura manual de `TableSession`, retoma y cierre manual
+- `floor` ya soporta mesas, apertura manual de `TableSession`, retoma y cierre manual; ahora exige `guestCount` al abrir mesa y soporta zonas de mesa opcionales con aviso no bloqueante (ver doc 20)
 - abrir una `TableSession` ahora crea su `Bill` operativa en el mismo flujo
 - `billing` ya expone lectura de la cuenta activa por `TableSession`
 - `menus` ya soporta estaciones de preparacion, versiones draft, categorias, items y publicacion por sucursal
@@ -161,11 +161,11 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - `kitchen` ya lista tickets por estacion y avanza sus estados sincronizando items y orden
 - la politica de impuestos vive aislada en `billing/domain/tax-policy.ts` (precios con IVA incluido)
 - `payments` ya aprueba el prepago QR (cargo + ruteo en la misma transaccion), paga cuenta abierta desde QR y desde caja, con propina, pagos parciales y reintento ante fallo
-- el proveedor de pago esta aislado tras el puerto `PAYMENT_PROVIDER` con un adapter manual; la pasarela real sera un nuevo adapter
+- el cobro esta aislado tras `ChargePaymentService`, que enruta por canal (`STAFF_OFFLINE` via `OFFLINE_PAYMENT_RECORDER`, `QR_ONLINE` via `PAYMENT_GATEWAY_RESOLVER`); la pasarela real (Mercado Pago Chile, OAuth por restaurante) ya esta implementada, ver doc 21
 - al saldar la cuenta la sesion pasa a `PAYMENT_COMPLETED`; el cierre de mesa sigue siendo manual
 - split bill simple (`BY_AMOUNT`) dentro de la misma cuenta, con pago por participante via token QR
 - entrega de ordenes (`DELIVERED`), cancelacion antes/durante produccion y abandono de mesa por caja/supervisor
-- el backend MVP operacional esta completo; pendiente menor: pasarela de pago real (multimedia de carta y multi idioma ya se resolvieron, ver doc 10)
+- el backend MVP operacional esta completo; la pasarela de pago real (Mercado Pago) ya esta implementada (ver doc 21), igual que multimedia de carta y multi idioma (ver doc 10)
 - `restaurants` ahora expone CRUD de lectura/edicion para `platform_admin` (listar, detalle con equipo, editar, activar/desactivar) y metricas agregadas de plataforma
 - `branches` ahora expone listado y edicion (`PATCH`) para `staff`, incluyendo merge parcial de `branch_settings`
 - `staff` ahora expone edicion (`PATCH /staff/:id`) con reglas de proteccion: no auto-desactivarse, no dejar el restaurante sin `ADMIN`

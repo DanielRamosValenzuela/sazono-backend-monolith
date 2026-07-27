@@ -54,9 +54,7 @@ export class UpdateModifierGroupService {
           : {}),
         ...(dto.minSelect !== undefined ? { minSelect: dto.minSelect } : {}),
         ...(dto.maxSelect !== undefined ? { maxSelect: dto.maxSelect } : {}),
-        ...(dto.isRequired !== undefined
-          ? { isRequired: dto.isRequired }
-          : {}),
+        ...(dto.isRequired !== undefined ? { isRequired: dto.isRequired } : {}),
         ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       },
       include: {
