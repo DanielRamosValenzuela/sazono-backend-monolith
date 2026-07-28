@@ -1,6 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { PaymentAttempt } from '@prisma/client';
-import { OrderStatus, PaymentAttemptStatus, Prisma } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentAttemptStatus,
+  PaymentGatewayProvider,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import { FailPaymentService } from './fail-payment.service';
@@ -10,6 +15,7 @@ import {
   type PaymentGatewayResolverPort,
 } from './ports/payment-gateway-resolver.port';
 import type {
+  GatewayCredentials,
   GatewayPaymentSnapshot,
   PaymentGatewayPort,
 } from './ports/payment-gateway.port';
@@ -49,6 +55,7 @@ type AttemptContext = {
 type Correlation = {
   context: AttemptContext;
   gateway: PaymentGatewayPort;
+  credentials: GatewayCredentials;
   snapshot?: GatewayPaymentSnapshot;
 };
 
@@ -130,7 +137,10 @@ export class HandleMercadoPagoWebhookService {
 
       const snapshot =
         correlation.snapshot ??
-        (await correlation.gateway.getPayment(resourceId));
+        (await correlation.gateway.getPayment(
+          resourceId,
+          correlation.credentials,
+        ));
 
       if (!snapshot) {
         await this.markProcessed(
@@ -174,7 +184,7 @@ export class HandleMercadoPagoWebhookService {
         return null;
       }
 
-      const resolvedGateway = await this.paymentGatewayResolver.resolve(
+      const resolvedGateway = await this.resolveMercadoPagoGateway(
         context.restaurantId,
       );
 
@@ -182,10 +192,32 @@ export class HandleMercadoPagoWebhookService {
         return null;
       }
 
-      return { context, gateway: resolvedGateway.gateway };
+      return {
+        context,
+        gateway: resolvedGateway.gateway,
+        credentials: resolvedGateway.credentials,
+      };
     }
 
     return this.correlateByExternalAccount(resourceId, body);
+  }
+
+  private async resolveMercadoPagoGateway(restaurantId: string): Promise<{
+    gateway: PaymentGatewayPort;
+    credentials: GatewayCredentials;
+  } | null> {
+    const availableGateways =
+      await this.paymentGatewayResolver.resolveAvailable(restaurantId);
+    const resolvedGateway = availableGateways.find(
+      (candidate) => candidate.provider === PaymentGatewayProvider.MERCADO_PAGO,
+    );
+
+    return resolvedGateway
+      ? {
+          gateway: resolvedGateway.gateway,
+          credentials: resolvedGateway.credentials,
+        }
+      : null;
   }
 
   private async correlateByExternalAccount(
@@ -207,7 +239,7 @@ export class HandleMercadoPagoWebhookService {
       return null;
     }
 
-    const resolvedGateway = await this.paymentGatewayResolver.resolve(
+    const resolvedGateway = await this.resolveMercadoPagoGateway(
       account.restaurantId,
     );
 
@@ -215,7 +247,10 @@ export class HandleMercadoPagoWebhookService {
       return null;
     }
 
-    const snapshot = await resolvedGateway.gateway.getPayment(resourceId);
+    const snapshot = await resolvedGateway.gateway.getPayment(
+      resourceId,
+      resolvedGateway.credentials,
+    );
 
     if (!snapshot?.externalReference) {
       return null;
@@ -235,7 +270,12 @@ export class HandleMercadoPagoWebhookService {
       return null;
     }
 
-    return { context, gateway: resolvedGateway.gateway, snapshot };
+    return {
+      context,
+      gateway: resolvedGateway.gateway,
+      credentials: resolvedGateway.credentials,
+      snapshot,
+    };
   }
 
   private async resolveAttemptContext(

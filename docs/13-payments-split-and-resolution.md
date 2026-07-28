@@ -73,6 +73,14 @@ agregado para esto). Abandono tiene su propio dialog con motivo obligatorio
 (`widgets/floor-console/ui/abandon-session-dialog.tsx`). Ver doc frontend 07
 para el detalle.
 
+**Gap conocido: el pago de participante solo ofrece Mercado Pago, nunca
+Transbank**, aunque el endpoint de cobro con redireccion
+(`POST split-participants/:token/pay/redirect`) ya existe y funciona igual
+que en los otros dos flujos de pago QR. El detalle completo (causa exacta en
+el backend, estado del frontend, y por que no es solo un problema de docs)
+esta en `src/modules/payments/README.md` (seccion "Transbank Webpay Plus
+Mall") y en `docs/24-pagos-vision-general.md` (matriz de capacidad).
+
 ## Definition of Done alcanzada
 
 Con este slice el backend MVP cubre el flujo completo:

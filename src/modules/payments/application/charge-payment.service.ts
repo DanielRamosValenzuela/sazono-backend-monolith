@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { assertNever } from '../domain/assert-never';
 import { PaymentChannel } from '../domain/payment-channel';
 import { MERCADOPAGO_PROVIDER_NAME } from '../domain/mercado-pago-status';
 import { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
@@ -12,6 +13,7 @@ import {
   type PaymentGatewayResolverPort,
   type ResolvedPaymentGateway,
 } from './ports/payment-gateway-resolver.port';
+import type { GatewayChargeOutcome } from './ports/payment-gateway.port';
 
 export type ChargePaymentCheckout = {
   cardToken: string;
@@ -31,12 +33,23 @@ export type ChargePaymentRequest = {
   checkout?: ChargePaymentCheckout;
 };
 
-export type ChargePaymentResult = {
-  approved: boolean;
-  providerName: string;
-  providerReference?: string;
-  failureReason?: string;
-};
+export type ChargePaymentResult =
+  | {
+      kind: 'SETTLED';
+      approved: boolean;
+      providerName: string;
+      providerReference?: string;
+      failureReason?: string;
+    }
+  | {
+      kind: 'REDIRECT';
+      providerName: string;
+      providerReference: string;
+      redirectUrl: string;
+      method: 'POST';
+      fields: Record<string, string>;
+      expiresAt: Date;
+    };
 
 const NO_GATEWAY_CONNECTED_FAILURE_REASON =
   'Este restaurante todavia no tiene una pasarela de pago conectada.';
@@ -58,20 +71,20 @@ export class ChargePaymentService {
       return this.recordOffline(request);
     }
 
-    const resolvedGateway = await this.paymentGatewayResolver.resolve(
-      request.restaurantId,
-    );
+    const availableGateways =
+      await this.paymentGatewayResolver.resolveAvailable(request.restaurantId);
+    const preferredGateway = availableGateways[0] ?? null;
 
-    if (resolvedGateway !== null && request.checkout !== undefined) {
+    if (preferredGateway !== null && request.checkout !== undefined) {
       return this.chargeThroughGateway(
-        resolvedGateway,
+        preferredGateway,
         request,
         request.checkout,
       );
     }
 
     if (this.mercadoPagoConfig.qrGatewayRequired) {
-      return this.rejectMissingGatewayOrCheckout(resolvedGateway);
+      return this.rejectMissingGatewayOrCheckout(preferredGateway);
     }
 
     return this.recordOffline(request);
@@ -89,20 +102,40 @@ export class ChargePaymentService {
       currency: request.currency,
       description: request.description,
       externalReference: request.attemptId,
-      cardToken: checkout.cardToken,
-      paymentMethodId: checkout.paymentMethodId,
-      installments: checkout.installments,
-      issuerId: checkout.issuerId,
-      payerEmail: checkout.payerEmail,
+      credentials: resolvedGateway.credentials,
       notificationUrl: this.resolveWebhookNotificationUrl(),
+      checkoutPayload: checkout,
     });
 
-    return {
-      approved: outcome.outcome === 'APPROVED',
-      providerName: resolvedGateway.gateway.providerName,
-      providerReference: outcome.providerReference,
-      failureReason: outcome.failureReason,
-    };
+    return this.toChargePaymentResult(resolvedGateway, outcome);
+  }
+
+  private toChargePaymentResult(
+    resolvedGateway: ResolvedPaymentGateway,
+    outcome: GatewayChargeOutcome,
+  ): ChargePaymentResult {
+    switch (outcome.kind) {
+      case 'SETTLED':
+        return {
+          kind: 'SETTLED',
+          approved: outcome.result === 'APPROVED',
+          providerName: resolvedGateway.gateway.providerName,
+          providerReference: outcome.providerReference,
+          failureReason: outcome.failureReason,
+        };
+      case 'REDIRECT':
+        return {
+          kind: 'REDIRECT',
+          providerName: resolvedGateway.gateway.providerName,
+          providerReference: outcome.providerReference,
+          redirectUrl: outcome.redirectUrl,
+          method: outcome.method,
+          fields: outcome.fields,
+          expiresAt: outcome.expiresAt,
+        };
+      default:
+        return assertNever(outcome);
+    }
   }
 
   private resolveWebhookNotificationUrl(): string | undefined {
@@ -117,6 +150,7 @@ export class ChargePaymentService {
     resolvedGateway: ResolvedPaymentGateway | null,
   ): ChargePaymentResult {
     return {
+      kind: 'SETTLED',
       approved: false,
       providerName:
         resolvedGateway?.gateway.providerName ?? MERCADOPAGO_PROVIDER_NAME,
@@ -136,6 +170,7 @@ export class ChargePaymentService {
     });
 
     return {
+      kind: 'SETTLED',
       approved: true,
       providerName: this.offlinePaymentRecorder.providerName,
       providerReference: record.providerReference,

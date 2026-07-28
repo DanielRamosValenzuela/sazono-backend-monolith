@@ -1,4 +1,9 @@
-import { OrderStatus, PaymentAttemptStatus, Prisma } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentAttemptStatus,
+  PaymentGatewayProvider,
+  Prisma,
+} from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { FailPaymentService } from './fail-payment.service';
 import { FinalizePaymentService } from './finalize-payment.service';
@@ -41,13 +46,15 @@ describe('HandleMercadoPagoWebhookService', () => {
   const getPaymentMock = jest.fn();
   const gateway: PaymentGatewayPort = {
     providerName: 'MERCADO_PAGO',
+    checkoutMode: 'embedded',
     charge: jest.fn(),
     getPayment: getPaymentMock,
   };
+  const credentials = { accessToken: 'APP_USR-restaurant-token' };
 
-  const resolveMock = jest.fn();
+  const resolveAvailableMock = jest.fn();
   const paymentGatewayResolver: PaymentGatewayResolverPort = {
-    resolve: resolveMock,
+    resolveAvailable: resolveAvailableMock,
   };
 
   const findByExternalAccountIdMock = jest.fn();
@@ -64,12 +71,18 @@ describe('HandleMercadoPagoWebhookService', () => {
     jest.clearAllMocks();
     paymentWebhookEventCreateMock.mockResolvedValue({ id: 'event-1' });
     paymentWebhookEventUpdateMock.mockResolvedValue({});
-    resolveMock.mockResolvedValue({
-      gateway,
-      accountId: 'account-1',
-      publicKey: null,
-      environment: 'sandbox',
-    });
+    resolveAvailableMock.mockResolvedValue([
+      {
+        provider: PaymentGatewayProvider.MERCADO_PAGO,
+        gateway,
+        accountId: 'account-1',
+        publicKey: null,
+        environment: 'sandbox',
+        checkoutMode: 'embedded',
+        displayPriority: 0,
+        credentials,
+      },
+    ]);
     service = new HandleMercadoPagoWebhookService(
       prisma,
       paymentGatewayResolver,
@@ -112,7 +125,7 @@ describe('HandleMercadoPagoWebhookService', () => {
 
     expect(result).toEqual({ status: 'DUPLICATE' });
     expect(paymentWebhookEventCreateMock).not.toHaveBeenCalled();
-    expect(resolveMock).not.toHaveBeenCalled();
+    expect(resolveAvailableMock).not.toHaveBeenCalled();
     expect(paymentAttemptFindFirstMock).not.toHaveBeenCalled();
     expect(getPaymentMock).not.toHaveBeenCalled();
   });
@@ -195,8 +208,8 @@ describe('HandleMercadoPagoWebhookService', () => {
     });
 
     expect(result).toEqual({ status: 'PROCESSED' });
-    expect(resolveMock).toHaveBeenCalledWith('restaurant-1');
-    expect(getPaymentMock).toHaveBeenCalledWith('999999999');
+    expect(resolveAvailableMock).toHaveBeenCalledWith('restaurant-1');
+    expect(getPaymentMock).toHaveBeenCalledWith('999999999', credentials);
     expect(txAttemptUpdateManyMock).toHaveBeenCalledWith({
       where: { id: 'attempt-1', status: PaymentAttemptStatus.PENDING },
       data: expect.objectContaining({
@@ -316,7 +329,7 @@ describe('HandleMercadoPagoWebhookService', () => {
     });
 
     expect(result).toEqual({ status: 'DEFERRED' });
-    expect(resolveMock).not.toHaveBeenCalled();
+    expect(resolveAvailableMock).not.toHaveBeenCalled();
     expect(paymentWebhookEventUpdateMock).toHaveBeenCalledWith({
       where: { id: 'event-1' },
       data: { processedAt: expect.any(Date), processError: expect.any(String) },

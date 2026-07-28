@@ -15,6 +15,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsEmail,
+  IsEnum,
   IsInt,
   IsNumberString,
   IsOptional,
@@ -409,25 +410,146 @@ export class QrOrderPaymentStatusResponseDto {
   updatedAt!: string;
 }
 
-export class QrPaymentConfigResponseDto {
+export class QrPaymentConfigOptionResponseDto {
   @ApiProperty({
-    description:
-      'Si es false no hay ninguna pasarela conectada y el pago QR solo puede registrarse manualmente.',
-  })
-  gatewayConnected!: boolean;
-
-  @ApiPropertyOptional({
     enum: PaymentGatewayProvider,
     enumName: 'PaymentGatewayProvider',
   })
-  provider?: PaymentGatewayProvider;
+  provider!: PaymentGatewayProvider;
+
+  @ApiProperty({
+    enum: ['embedded', 'redirect'],
+    description:
+      'embedded: se cobra con un SDK en el navegador. redirect: hay que enviar al cliente a una URL externa.',
+  })
+  checkoutMode!: 'embedded' | 'redirect';
 
   @ApiPropertyOptional({
     description:
-      'Llave publica de la pasarela, segura para usar en el navegador.',
+      'Llave publica de la pasarela, segura para usar en el navegador. Solo aplica a pasarelas embedded.',
   })
   publicKey?: string;
 
-  @ApiPropertyOptional({ example: 'sandbox' })
-  environment?: string;
+  @ApiProperty({ example: 'sandbox' })
+  environment!: string;
+
+  @ApiProperty({
+    description:
+      'true para la opcion de mayor prioridad de visualizacion del restaurante.',
+  })
+  isPreferred!: boolean;
+}
+
+export class QrPaymentConfigResponseDto {
+  @ApiProperty({
+    type: [QrPaymentConfigOptionResponseDto],
+    description:
+      'Pasarelas conectadas y disponibles para pagar, ordenadas por prioridad. Vacio si el pago QR solo puede registrarse manualmente.',
+  })
+  options!: QrPaymentConfigOptionResponseDto[];
+}
+
+export class StartRedirectOrderPaymentDto {
+  @ApiProperty({
+    enum: PaymentGatewayProvider,
+    enumName: 'PaymentGatewayProvider',
+    description:
+      'Pasarela de redireccion elegida por el cliente entre las que devuelve GET .../payment-config.',
+  })
+  @IsEnum(PaymentGatewayProvider)
+  provider!: PaymentGatewayProvider;
+
+  @ApiPropertyOptional({
+    example: '1000',
+    description: 'Propina opcional que se suma al total de la orden.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  tipAmount?: string;
+}
+
+export class StartRedirectBillPaymentDto {
+  @ApiProperty({
+    enum: PaymentGatewayProvider,
+    enumName: 'PaymentGatewayProvider',
+    description:
+      'Pasarela de redireccion elegida por el cliente entre las que devuelve GET .../payment-config.',
+  })
+  @IsEnum(PaymentGatewayProvider)
+  provider!: PaymentGatewayProvider;
+
+  @ApiProperty({
+    example: '11800',
+    description: 'Monto a pagar contra el saldo pendiente de la cuenta.',
+  })
+  @IsNumberString()
+  amount!: string;
+
+  @ApiPropertyOptional({
+    example: '1000',
+    description: 'Propina opcional que se suma al total de la cuenta.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  tipAmount?: string;
+}
+
+export class StartRedirectSplitParticipantPaymentDto {
+  @ApiProperty({
+    enum: PaymentGatewayProvider,
+    enumName: 'PaymentGatewayProvider',
+    description:
+      'Pasarela de redireccion elegida por el cliente entre las que devuelve GET .../payment-config.',
+  })
+  @IsEnum(PaymentGatewayProvider)
+  provider!: PaymentGatewayProvider;
+
+  @ApiPropertyOptional({
+    example: '1000',
+    description: 'Propina opcional que se suma al total de la cuenta.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  tipAmount?: string;
+}
+
+export class RedirectPaymentResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  attemptId!: string;
+
+  @ApiProperty({
+    enum: PaymentGatewayProvider,
+    enumName: 'PaymentGatewayProvider',
+  })
+  provider!: PaymentGatewayProvider;
+
+  @ApiProperty({
+    description: 'URL de la pasarela a la que hay que enviar el form-POST.',
+  })
+  redirectUrl!: string;
+
+  @ApiProperty({ enum: ['POST'] })
+  method!: 'POST';
+
+  @ApiProperty({
+    type: Object,
+    description: 'Campos que hay que enviar en el form-POST de redireccion.',
+  })
+  fields!: Record<string, string>;
+
+  @ApiProperty({
+    description: 'Momento en que expira la sesion de pago de la pasarela.',
+  })
+  expiresAt!: string;
+}
+
+export class ConfirmRedirectPaymentResponseDto {
+  @ApiProperty({ enum: ['APPROVED', 'REJECTED', 'ABORTED', 'TIMEOUT'] })
+  status!: 'APPROVED' | 'REJECTED' | 'ABORTED' | 'TIMEOUT';
+
+  @ApiPropertyOptional({ type: PaymentResultResponseDto, nullable: true })
+  payment!: PaymentResultResponseDto | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  failureReason?: string;
 }

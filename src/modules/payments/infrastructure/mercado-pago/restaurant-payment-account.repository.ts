@@ -42,6 +42,32 @@ export class RestaurantPaymentAccountRepository {
     });
   }
 
+  findByRestaurantAndProvider(
+    restaurantId: string,
+    provider: PaymentGatewayProvider,
+  ): Promise<RestaurantPaymentAccount | null> {
+    return this.prisma.restaurantPaymentAccount.findUnique({
+      where: {
+        restaurantId_provider: {
+          restaurantId,
+          provider,
+        },
+      },
+    });
+  }
+
+  findConnectedByRestaurant(
+    restaurantId: string,
+  ): Promise<RestaurantPaymentAccount[]> {
+    return this.prisma.restaurantPaymentAccount.findMany({
+      where: {
+        restaurantId,
+        status: PaymentAccountStatus.CONNECTED,
+      },
+      orderBy: [{ displayPriority: 'desc' }, { connectedAt: 'asc' }],
+    });
+  }
+
   async upsertFromOAuthTokens(
     restaurantId: string,
     tokens: MercadoPagoOAuthTokenResponse,
@@ -93,8 +119,17 @@ export class RestaurantPaymentAccountRepository {
   async getValidAccessToken(restaurantId: string): Promise<string | null> {
     const account = await this.findByRestaurant(restaurantId);
 
+    if (!account) {
+      return null;
+    }
+
+    return this.getValidAccessTokenForAccount(account);
+  }
+
+  async getValidAccessTokenForAccount(
+    account: RestaurantPaymentAccount,
+  ): Promise<string | null> {
     if (
-      !account ||
       account.status !== PaymentAccountStatus.CONNECTED ||
       !account.accessTokenCipher
     ) {
@@ -107,8 +142,118 @@ export class RestaurantPaymentAccountRepository {
 
     return this.secretCipher.decrypt(account.accessTokenCipher, {
       provider: account.provider,
-      restaurantId,
+      restaurantId: account.restaurantId,
     });
+  }
+
+  async pause(
+    restaurantId: string,
+    provider: PaymentGatewayProvider,
+  ): Promise<number> {
+    const result = await this.prisma.restaurantPaymentAccount.updateMany({
+      where: {
+        restaurantId,
+        provider,
+        status: PaymentAccountStatus.CONNECTED,
+      },
+      data: {
+        status: PaymentAccountStatus.PAUSED,
+      },
+    });
+
+    return result.count;
+  }
+
+  async resume(
+    restaurantId: string,
+    provider: PaymentGatewayProvider,
+  ): Promise<number> {
+    const result = await this.prisma.restaurantPaymentAccount.updateMany({
+      where: {
+        restaurantId,
+        provider,
+        status: PaymentAccountStatus.PAUSED,
+      },
+      data: {
+        status: PaymentAccountStatus.CONNECTED,
+      },
+    });
+
+    return result.count;
+  }
+
+  async setPreferred(
+    restaurantId: string,
+    provider: PaymentGatewayProvider,
+  ): Promise<number> {
+    const aggregate = await this.prisma.restaurantPaymentAccount.aggregate({
+      where: {
+        restaurantId,
+      },
+      _max: {
+        displayPriority: true,
+      },
+    });
+    const nextPriority = (aggregate._max.displayPriority ?? 0) + 1;
+
+    const result = await this.prisma.restaurantPaymentAccount.updateMany({
+      where: {
+        restaurantId,
+        provider,
+      },
+      data: {
+        displayPriority: nextPriority,
+      },
+    });
+
+    return result.count;
+  }
+
+  async upsertManualConnection(
+    restaurantId: string,
+    provider: PaymentGatewayProvider,
+    params: { environment: string; childCommerceCode: string },
+  ): Promise<RestaurantPaymentAccount> {
+    const sharedData = {
+      status: PaymentAccountStatus.CONNECTED,
+      environment: params.environment,
+      childCommerceCode: params.childCommerceCode,
+      connectedAt: new Date(),
+      lastErrorMessage: null,
+    };
+
+    return this.prisma.restaurantPaymentAccount.upsert({
+      where: {
+        restaurantId_provider: {
+          restaurantId,
+          provider,
+        },
+      },
+      create: {
+        restaurantId,
+        provider,
+        ...sharedData,
+      },
+      update: sharedData,
+    });
+  }
+
+  async markManualDisconnected(
+    restaurantId: string,
+    provider: PaymentGatewayProvider,
+  ): Promise<number> {
+    const result = await this.prisma.restaurantPaymentAccount.updateMany({
+      where: {
+        restaurantId,
+        provider,
+      },
+      data: {
+        status: PaymentAccountStatus.DISCONNECTED,
+        childCommerceCode: null,
+      },
+    });
+
+    return result.count;
   }
 
   async markDisconnected(restaurantId: string): Promise<void> {

@@ -22,6 +22,16 @@
 18. [18 Asignación Formal de Mesas](D:\Programacion\Sazono\sazono-backend-monolith\docs\18-asignacion-formal-de-mesas.md)
 19. [19 Notificaciones Push y Login por PIN](D:\Programacion\Sazono\sazono-backend-monolith\docs\19-notificaciones-push-y-login-por-pin.md)
 20. [20 Comensales por Sesión y Zonas de Mesas](D:\Programacion\Sazono\sazono-backend-monolith\docs\20-comensales-y-zonas-de-mesa.md)
+21. [21 Integración de Mercado Pago](D:\Programacion\Sazono\sazono-backend-monolith\docs\21-mercado-pago-integracion.md)
+22. [22 Integración de Transbank Webpay Plus Mall](D:\Programacion\Sazono\sazono-backend-monolith\docs\22-transbank-webpay-integracion.md)
+23. [23 Arquitectura Multi-Proveedor de Pago](D:\Programacion\Sazono\sazono-backend-monolith\docs\23-arquitectura-multi-proveedor-de-pago.md)
+24. [24 Pagos: Visión General](D:\Programacion\Sazono\sazono-backend-monolith\docs\24-pagos-vision-general.md)
+
+Nota: dentro del bloque de pagos (12, 13, 21, 22, 23), lee primero el doc 24
+aunque quede numerado al final — es el mapa completo (flujos de dinero, por
+que hay dos pasarelas, que esta activo por configuracion, matriz de
+capacidad) antes de entrar al detalle de cada uno. Quedo con el numero 24
+porque se agrego despues, no por orden de lectura.
 
 ## Objetivo
 

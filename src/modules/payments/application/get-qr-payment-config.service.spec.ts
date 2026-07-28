@@ -1,12 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
-import {
-  PaymentAccountStatus,
-  PaymentGatewayProvider,
-  TableStatus,
-} from '@prisma/client';
+import { PaymentGatewayProvider, TableStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { GetQrPaymentConfigService } from './get-qr-payment-config.service';
+import type { PaymentGatewayRegistry } from '../infrastructure/payment-gateway-registry.service';
 import type { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
+import type { PaymentGatewayPort } from './ports/payment-gateway.port';
 
 describe('GetQrPaymentConfigService', () => {
   const tableFindUniqueMock = jest.fn();
@@ -16,18 +14,32 @@ describe('GetQrPaymentConfigService', () => {
     },
   } as unknown as PrismaService;
 
-  const findByRestaurantMock = jest.fn();
+  const findConnectedByRestaurantMock = jest.fn();
   const restaurantPaymentAccountRepository = {
-    findByRestaurant: findByRestaurantMock,
+    findConnectedByRestaurant: findConnectedByRestaurantMock,
   } as unknown as RestaurantPaymentAccountRepository;
+
+  const registryGetMock = jest.fn();
+  const paymentGatewayRegistry = {
+    get: registryGetMock,
+  } as unknown as PaymentGatewayRegistry;
+
+  const embeddedGateway: PaymentGatewayPort = {
+    providerName: 'MERCADO_PAGO',
+    checkoutMode: 'embedded',
+    charge: jest.fn(),
+    getPayment: jest.fn(),
+  };
 
   let service: GetQrPaymentConfigService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    registryGetMock.mockReturnValue(embeddedGateway);
     service = new GetQrPaymentConfigService(
       prisma,
       restaurantPaymentAccountRepository,
+      paymentGatewayRegistry,
     );
   });
 
@@ -56,54 +68,67 @@ describe('GetQrPaymentConfigService', () => {
     );
   });
 
-  it('returns gatewayConnected false when there is no connected account', async () => {
+  it('returns an empty options array when there is no connected account', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
-    findByRestaurantMock.mockResolvedValue(null);
+    findConnectedByRestaurantMock.mockResolvedValue([]);
 
     await expect(service.execute('qr-token-1')).resolves.toEqual({
-      gatewayConnected: false,
+      options: [],
     });
   });
 
-  it('returns gatewayConnected false when the account is not CONNECTED', async () => {
+  it('skips a connected account when no adapter is registered for its provider', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
-    findByRestaurantMock.mockResolvedValue({
-      status: PaymentAccountStatus.PENDING,
-      publicKey: 'public-key-1',
-      environment: 'sandbox',
-    });
+    findConnectedByRestaurantMock.mockResolvedValue([
+      {
+        provider: PaymentGatewayProvider.MERCADO_PAGO,
+        publicKey: 'public-key-1',
+        environment: 'sandbox',
+      },
+    ]);
+    registryGetMock.mockReturnValue(undefined);
 
     await expect(service.execute('qr-token-1')).resolves.toEqual({
-      gatewayConnected: false,
+      options: [],
     });
   });
 
-  it('returns gatewayConnected false when a connected account has no publicKey', async () => {
+  it('skips an embedded-checkout account that has no publicKey', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
-    findByRestaurantMock.mockResolvedValue({
-      status: PaymentAccountStatus.CONNECTED,
-      publicKey: null,
-      environment: 'sandbox',
-    });
+    findConnectedByRestaurantMock.mockResolvedValue([
+      {
+        provider: PaymentGatewayProvider.MERCADO_PAGO,
+        publicKey: null,
+        environment: 'sandbox',
+      },
+    ]);
 
     await expect(service.execute('qr-token-1')).resolves.toEqual({
-      gatewayConnected: false,
+      options: [],
     });
   });
 
-  it('returns the public gateway config when the account is CONNECTED', async () => {
+  it('returns the connected gateway as the preferred option, ordered as returned by the repository', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
-    findByRestaurantMock.mockResolvedValue({
-      status: PaymentAccountStatus.CONNECTED,
-      publicKey: 'public-key-1',
-      environment: 'sandbox',
-    });
+    findConnectedByRestaurantMock.mockResolvedValue([
+      {
+        provider: PaymentGatewayProvider.MERCADO_PAGO,
+        publicKey: 'public-key-1',
+        environment: 'sandbox',
+      },
+    ]);
 
     await expect(service.execute('qr-token-1')).resolves.toEqual({
-      gatewayConnected: true,
-      provider: PaymentGatewayProvider.MERCADO_PAGO,
-      publicKey: 'public-key-1',
-      environment: 'sandbox',
+      options: [
+        {
+          provider: PaymentGatewayProvider.MERCADO_PAGO,
+          checkoutMode: 'embedded',
+          publicKey: 'public-key-1',
+          environment: 'sandbox',
+          isPreferred: true,
+        },
+      ],
     });
+    expect(findConnectedByRestaurantMock).toHaveBeenCalledWith('restaurant-1');
   });
 });

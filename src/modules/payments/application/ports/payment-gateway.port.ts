@@ -1,5 +1,10 @@
 import type { Prisma } from '@prisma/client';
 
+export type GatewayCredentials = {
+  accessToken?: string;
+  childCommerceCode?: string;
+};
+
 export type GatewayChargeContext = {
   restaurantId: string;
   attemptId: string;
@@ -7,26 +12,33 @@ export type GatewayChargeContext = {
   currency: string;
   description: string;
   externalReference: string;
-  cardToken: string;
-  paymentMethodId: string;
-  installments: number;
-  issuerId?: string;
-  payerEmail?: string;
+  credentials: GatewayCredentials;
   notificationUrl?: string;
   applicationFeeAmount?: number;
+  checkoutPayload?: unknown;
 };
 
-export type GatewayOutcomeStatus = 'APPROVED' | 'REJECTED';
+export type GatewaySettledResult = 'APPROVED' | 'REJECTED';
 
-export type GatewayChargeOutcome = {
-  outcome: GatewayOutcomeStatus;
-  providerReference?: string;
-  failureReason?: string;
-  rawStatus?: string;
-  rawStatusDetail?: string;
-};
+export type GatewayChargeOutcome =
+  | {
+      kind: 'SETTLED';
+      result: GatewaySettledResult;
+      providerReference?: string;
+      failureReason?: string;
+      rawStatus?: string;
+      rawStatusDetail?: string;
+    }
+  | {
+      kind: 'REDIRECT';
+      providerReference: string;
+      redirectUrl: string;
+      method: 'POST';
+      fields: Record<string, string>;
+      expiresAt: Date;
+    };
 
-export type GatewayPaymentSnapshotStatus = GatewayOutcomeStatus | 'PENDING';
+export type GatewayPaymentSnapshotStatus = GatewaySettledResult | 'PENDING';
 
 export type GatewayPaymentSnapshot = {
   providerReference: string;
@@ -40,8 +52,17 @@ export type GatewayPaymentSnapshot = {
 
 export interface PaymentGatewayPort {
   readonly providerName: string;
+  readonly checkoutMode: 'embedded' | 'redirect';
 
   charge(context: GatewayChargeContext): Promise<GatewayChargeOutcome>;
 
-  getPayment(providerReference: string): Promise<GatewayPaymentSnapshot | null>;
+  confirmRedirect?(
+    providerReference: string,
+    credentials: GatewayCredentials,
+  ): Promise<GatewayChargeOutcome>;
+
+  getPayment(
+    providerReference: string,
+    credentials: GatewayCredentials,
+  ): Promise<GatewayPaymentSnapshot | null>;
 }

@@ -33,9 +33,9 @@ describe('SettleBillPaymentService', () => {
     providerName: 'MANUAL',
     record: recordMock,
   };
-  const resolveMock = jest.fn().mockResolvedValue(null);
+  const resolveAvailableMock = jest.fn().mockResolvedValue([]);
   const paymentGatewayResolver: PaymentGatewayResolverPort = {
-    resolve: resolveMock,
+    resolveAvailable: resolveAvailableMock,
   };
   const mercadoPagoConfig = {
     qrGatewayRequired: false,
@@ -52,7 +52,7 @@ describe('SettleBillPaymentService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    resolveMock.mockResolvedValue(null);
+    resolveAvailableMock.mockResolvedValue([]);
     service = new SettleBillPaymentService(
       prisma,
       offlinePaymentRecorder,
@@ -122,7 +122,7 @@ describe('SettleBillPaymentService', () => {
     expect(result.bill.totalAmount).toBe('24600');
     expect(result.bill.remainingAmount).toBe('13600');
     expect(txSessionUpdateManyMock).not.toHaveBeenCalled();
-    expect(resolveMock).not.toHaveBeenCalled();
+    expect(resolveAvailableMock).not.toHaveBeenCalled();
   });
 
   it('marks the session PAYMENT_COMPLETED when the payment settles the full balance', async () => {
@@ -178,7 +178,7 @@ describe('SettleBillPaymentService', () => {
 
     expect(result.bill.status).toBe(BillStatus.PAID);
     expect(result.bill.remainingAmount).toBe('0');
-    expect(resolveMock).toHaveBeenCalledWith('restaurant-1');
+    expect(resolveAvailableMock).toHaveBeenCalledWith('restaurant-1');
 
     const sessionUpdateArgs = txSessionUpdateManyMock.mock.calls[0][0] as {
       where: Record<string, unknown>;
@@ -219,6 +219,7 @@ describe('SettleBillPaymentService', () => {
     attemptUpdateManyMock.mockResolvedValue({ count: 1 });
 
     const chargeExecuteMock = jest.fn().mockResolvedValue({
+      kind: 'SETTLED',
       approved: false,
       providerName: 'MANUAL',
       failureReason: 'Fondos insuficientes.',
@@ -260,6 +261,7 @@ describe('SettleBillPaymentService', () => {
     attemptUpdateManyMock.mockResolvedValue({ count: 1 });
 
     const chargeExecuteMock = jest.fn().mockResolvedValue({
+      kind: 'SETTLED',
       approved: false,
       providerName: 'MERCADO_PAGO',
       failureReason: 'La tarjeta no tiene saldo suficiente.',

@@ -55,11 +55,13 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 - la politica de impuestos esta aislada en `billing/domain/tax-policy.ts`: los precios ya incluyen IVA
 - `payments` ya cubre prepago QR con reintento, pago de cuenta abierta (QR y caja), propina y pagos parciales
 - el cobro vive tras `ChargePaymentService`, que enruta por canal
-  (`STAFF_OFFLINE` via `OFFLINE_PAYMENT_RECORDER`, `QR_ONLINE` via
-  `PAYMENT_GATEWAY_RESOLVER`); la pasarela real (Mercado Pago Chile,
-  Checkout API + OAuth marketplace por restaurante) ya esta implementada
-  pero queda inactiva hasta configurar credenciales
-  (`MERCADOPAGO_ENABLED=false` por default no rompe el arranque, ver doc 21)
+  (`STAFF_OFFLINE` via `OFFLINE_PAYMENT_RECORDER`, siempre offline, jamas
+  invoca ninguna pasarela real; `QR_ONLINE` via `PAYMENT_GATEWAY_RESOLVER`,
+  que puede resolver Mercado Pago y/o Transbank); ambas pasarelas ya estan
+  implementadas pero quedan inactivas hasta configurar credenciales
+  (`MERCADOPAGO_ENABLED=false`/`TRANSBANK_ENABLED=false` por default no
+  rompen el arranque, ver doc 23 para la arquitectura multi-proveedor y doc
+  21/22 por proveedor)
 - split bill, entrega, cancelacion de ordenes y abandono de mesa ya estan implementados
 - `platform_admin` ya puede listar, ver el detalle (con `branches` y `staff` con email resuelto) y editar cualquier restaurante, ademas de ver metricas agregadas de plataforma (ver doc 14)
 - `staff` ya puede listar y editar sucursales (`GET`/`PATCH /branches`), y editar staff existente (`PATCH /staff/:id`) con reglas de proteccion contra auto-desactivarse o dejar el restaurante sin `ADMIN`
@@ -94,12 +96,18 @@ Evaluado y diferido a proposito (ver doc 15):
 
 - aislamiento granular por estacion de cocina (hoy cualquier staff `KITCHEN`/`BAR` de la sucursal ve todas las estaciones, no solo la suya) — no es fuga entre tenants, se resuelve primero a nivel de UI si hace falta antes de invertir en una migracion de schema nueva
 
-Ya resuelto (ver doc 21):
+Ya resuelto (ver doc 23 para la arquitectura, doc 21 y doc 22 por proveedor):
 
-- adapter de pasarela de pago real (Mercado Pago Chile, Checkout API +
-  OAuth marketplace por restaurante); queda inactiva hasta que cada
+- dos adapters de pasarela de pago real: Mercado Pago Chile (Checkout API +
+  OAuth marketplace por restaurante, `checkoutMode: 'embedded'`) y Transbank
+  Webpay Plus Mall (conexion manual sin OAuth, `checkoutMode: 'redirect'`,
+  conciliacion por polling porque no tiene webhooks); ambos via el mismo
+  `PaymentGatewayPort`, descubiertos por `PaymentGatewayRegistry`
+  (`DiscoveryService` + decorador). Cada uno queda inactivo hasta que el
   restaurante conecte su cuenta y se configuren las credenciales del
-  ambiente
+  ambiente; un restaurante puede tener ambos conectados a la vez
+  (`GET .../payment-config` devuelve `options[]`, ordenado por
+  `displayPriority`)
 
 Ya resuelto (ver doc frontend 09):
 

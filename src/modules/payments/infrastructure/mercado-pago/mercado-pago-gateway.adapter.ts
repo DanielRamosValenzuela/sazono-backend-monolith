@@ -1,64 +1,93 @@
-import { Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { PaymentGatewayProvider } from '@prisma/client';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
+import { PaymentGatewayAdapter } from '../../domain/payment-gateway-adapter.decorator';
 import {
   MERCADOPAGO_PROVIDER_NAME,
   mapMercadoPagoStatus,
 } from '../../domain/mercado-pago-status';
 import { toGatewayAmount } from './mercado-pago-amount';
+import { MercadoPagoConfigService } from './mercado-pago-config.service';
 import type {
   GatewayChargeContext,
   GatewayChargeOutcome,
+  GatewayCredentials,
   GatewayPaymentSnapshot,
   PaymentGatewayPort,
 } from '../../application/ports/payment-gateway.port';
 
-const MERCADOPAGO_DEFAULT_TIMEOUT_MS = 15000;
 const NETWORK_ERROR_FAILURE_REASON =
   'No pudimos comunicarnos con la pasarela de pago. Intenta nuevamente.';
 const PENDING_FALLBACK_FAILURE_REASON =
   'El pago quedo en revision y fue cancelado por seguridad. Intenta con otro medio de pago.';
+const MISSING_CHECKOUT_PAYLOAD_FAILURE_REASON =
+  'Falta el token de la tarjeta para completar el pago con Mercado Pago.';
 
 type MercadoPagoPaymentResponse = Awaited<ReturnType<Payment['create']>>;
 
-export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
-  readonly providerName = MERCADOPAGO_PROVIDER_NAME;
-  private readonly logger = new Logger(MercadoPagoGatewayAdapter.name);
-  private readonly paymentClient: Payment;
+type MercadoPagoCheckoutPayload = {
+  cardToken: string;
+  paymentMethodId: string;
+  installments: number;
+  issuerId?: string;
+  payerEmail?: string;
+};
 
-  constructor(
-    accessToken: string,
-    timeoutMs: number = MERCADOPAGO_DEFAULT_TIMEOUT_MS,
-  ) {
-    const config = new MercadoPagoConfig({
-      accessToken,
-      options: {
-        timeout: timeoutMs,
-      },
-    });
-
-    this.paymentClient = new Payment(config);
+function isMercadoPagoCheckoutPayload(
+  payload: unknown,
+): payload is MercadoPagoCheckoutPayload {
+  if (!payload || typeof payload !== 'object') {
+    return false;
   }
 
+  const candidate = payload as Record<string, unknown>;
+
+  return (
+    typeof candidate.cardToken === 'string' &&
+    typeof candidate.paymentMethodId === 'string' &&
+    typeof candidate.installments === 'number'
+  );
+}
+
+@Injectable()
+@PaymentGatewayAdapter(PaymentGatewayProvider.MERCADO_PAGO)
+export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
+  readonly providerName = MERCADOPAGO_PROVIDER_NAME;
+  readonly checkoutMode = 'embedded' as const;
+  private readonly logger = new Logger(MercadoPagoGatewayAdapter.name);
+
+  constructor(private readonly mercadoPagoConfig: MercadoPagoConfigService) {}
+
   async charge(context: GatewayChargeContext): Promise<GatewayChargeOutcome> {
+    if (!isMercadoPagoCheckoutPayload(context.checkoutPayload)) {
+      return {
+        kind: 'SETTLED',
+        result: 'REJECTED',
+        failureReason: MISSING_CHECKOUT_PAYLOAD_FAILURE_REASON,
+      };
+    }
+
+    const checkout = context.checkoutPayload;
+    const paymentClient = this.buildPaymentClient(context.credentials);
     const transactionAmount = toGatewayAmount(context.amount, context.currency);
 
     try {
-      const response = await this.paymentClient.create({
+      const response = await paymentClient.create({
         body: {
           transaction_amount: transactionAmount,
-          token: context.cardToken,
-          payment_method_id: context.paymentMethodId,
-          installments: context.installments,
+          token: checkout.cardToken,
+          payment_method_id: checkout.paymentMethodId,
+          installments: checkout.installments,
           issuer_id:
-            context.issuerId !== undefined
-              ? Number(context.issuerId)
+            checkout.issuerId !== undefined
+              ? Number(checkout.issuerId)
               : undefined,
           description: context.description,
           external_reference: context.externalReference,
           binary_mode: true,
           payer:
-            context.payerEmail !== undefined
-              ? { email: context.payerEmail }
+            checkout.payerEmail !== undefined
+              ? { email: checkout.payerEmail }
               : undefined,
           notification_url: context.notificationUrl,
         },
@@ -67,12 +96,13 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
         },
       });
 
-      return this.buildOutcomeFromResponse(response);
+      return this.buildOutcomeFromResponse(paymentClient, response);
     } catch (error) {
       this.logger.error(this.describeError(error, 'charge'));
 
       return {
-        outcome: 'REJECTED',
+        kind: 'SETTLED',
+        result: 'REJECTED',
         failureReason: NETWORK_ERROR_FAILURE_REASON,
       };
     }
@@ -80,9 +110,12 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
 
   async getPayment(
     providerReference: string,
+    credentials: GatewayCredentials,
   ): Promise<GatewayPaymentSnapshot | null> {
+    const paymentClient = this.buildPaymentClient(credentials);
+
     try {
-      const response = await this.paymentClient.get({ id: providerReference });
+      const response = await paymentClient.get({ id: providerReference });
 
       if (response.id === undefined || response.status === undefined) {
         return null;
@@ -109,7 +142,25 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
     }
   }
 
+  private buildPaymentClient(credentials: GatewayCredentials): Payment {
+    if (!credentials.accessToken) {
+      throw new Error(
+        'Mercado Pago requiere un accessToken en las credenciales resueltas.',
+      );
+    }
+
+    const config = new MercadoPagoConfig({
+      accessToken: credentials.accessToken,
+      options: {
+        timeout: this.mercadoPagoConfig.timeoutMs,
+      },
+    });
+
+    return new Payment(config);
+  }
+
   private async buildOutcomeFromResponse(
+    paymentClient: Payment,
     response: MercadoPagoPaymentResponse,
   ): Promise<GatewayChargeOutcome> {
     const status = response.status ?? 'unknown';
@@ -120,6 +171,7 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
 
     if (mapped.outcome === 'PENDING') {
       return this.cancelPendingPayment(
+        paymentClient,
         response.id,
         providerReference,
         status,
@@ -128,7 +180,8 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
     }
 
     return {
-      outcome: mapped.outcome,
+      kind: 'SETTLED',
+      result: mapped.outcome,
       providerReference,
       failureReason: mapped.failureReason,
       rawStatus: status,
@@ -137,6 +190,7 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
   }
 
   private async cancelPendingPayment(
+    paymentClient: Payment,
     id: number | undefined,
     providerReference: string | undefined,
     status: string,
@@ -144,7 +198,7 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
   ): Promise<GatewayChargeOutcome> {
     if (id !== undefined) {
       try {
-        await this.paymentClient.cancel({ id });
+        await paymentClient.cancel({ id });
       } catch (error) {
         this.logger.warn(this.describeError(error, 'cancel-pending-fallback'));
       }
@@ -155,7 +209,8 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
     );
 
     return {
-      outcome: 'REJECTED',
+      kind: 'SETTLED',
+      result: 'REJECTED',
       providerReference,
       failureReason: PENDING_FALLBACK_FAILURE_REASON,
       rawStatus: status,

@@ -39,9 +39,9 @@ describe('PayQrOrderService', () => {
     providerName: 'MANUAL',
     record: recordMock,
   };
-  const resolveMock = jest.fn().mockResolvedValue(null);
+  const resolveAvailableMock = jest.fn().mockResolvedValue([]);
   const paymentGatewayResolver: PaymentGatewayResolverPort = {
-    resolve: resolveMock,
+    resolveAvailable: resolveAvailableMock,
   };
   const mercadoPagoConfig = {
     qrGatewayRequired: false,
@@ -58,7 +58,7 @@ describe('PayQrOrderService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    resolveMock.mockResolvedValue(null);
+    resolveAvailableMock.mockResolvedValue([]);
     service = new PayQrOrderService(
       prisma,
       offlinePaymentRecorder,
@@ -180,7 +180,7 @@ describe('PayQrOrderService', () => {
     expect(txBillItemCreateManyMock).toHaveBeenCalled();
     expect(txStationTicketCreateMock).toHaveBeenCalledTimes(1);
     expect(txSessionUpdateManyMock).toHaveBeenCalled();
-    expect(resolveMock).toHaveBeenCalledWith('restaurant-1');
+    expect(resolveAvailableMock).toHaveBeenCalledWith('restaurant-1');
   });
 
   it('marks the order as PAYMENT_FAILED when the provider rejects the charge', async () => {
@@ -189,6 +189,7 @@ describe('PayQrOrderService', () => {
     attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
 
     const chargeExecuteMock = jest.fn().mockResolvedValue({
+      kind: 'SETTLED',
       approved: false,
       providerName: 'MANUAL',
       failureReason: 'Fondos insuficientes.',

@@ -15,6 +15,18 @@ Este doc reemplaza el diseño original de un solo adapter manual descrito
 como "historico" en doc 12 (`PAYMENT_PROVIDER` / `ManualPaymentProviderAdapter`
 ya no existen en el codigo).
 
+**Nota (Fase 2):** desde que se agrego Transbank como segundo proveedor, la
+arquitectura general de canales/puertos/registro-por-decorador que describe
+la seccion "Arquitectura" de abajo dejo de ser exclusiva de Mercado Pago.
+Esta doc se mantiene como referencia especifica de Mercado Pago (OAuth,
+`binary_mode`, webhook con firma HMAC); el diseño multi-proveedor completo
+-- por que los adapters son singletons con credenciales por-llamada, como
+funciona `PaymentGatewayRegistry` con `DiscoveryService`, y como agregar un
+proveedor nuevo paso a paso -- vive en
+`docs/23-arquitectura-multi-proveedor-de-pago.md`. El flujo especifico de
+Transbank (redireccion, conexion manual, conciliacion por polling) vive en
+`docs/22-transbank-webpay-integracion.md`.
+
 ## Arquitectura: canal, no proveedor
 
 Todo cobro pasa por `ChargePaymentService.execute()`, que decide la ruta
@@ -37,19 +49,26 @@ no segun "que proveedor esta activo":
 ### Los puertos y por que son tres, no uno
 
 - **`PaymentGatewayPort`** (`application/ports/payment-gateway.port.ts`):
-  contrato de una pasarela real — `charge(context)` y
-  `getPayment(providerReference)`. Hoy solo lo implementa
-  `MercadoPagoGatewayAdapter`.
+  contrato de una pasarela real — `charge(context)`, `getPayment(...)` y,
+  opcionalmente, `confirmRedirect(...)`. Lo implementan
+  `MercadoPagoGatewayAdapter` y `WebpayMallGatewayAdapter` (Transbank, ver doc
+  22); ambos son **providers normales de Nest, singletons, sin credenciales
+  en el constructor** — el `accessToken`/`childCommerceCode` de cada
+  restaurante viaja en `GatewayChargeContext.credentials` en cada llamada, no
+  en el objeto. Se descubren automaticamente via `PaymentGatewayRegistry`
+  (`DiscoveryService` de `@nestjs/core` + el decorador
+  `@PaymentGatewayAdapter(provider)`), sin que el resolver ni la registry
+  necesiten conocer sus clases concretas. Detalle completo del patron en doc
+  23.
 - **`PaymentGatewayResolverPort`** (`payment-gateway-resolver.port.ts`):
-  dado un `restaurantId`, resuelve *cual* gateway conectado usar (o `null` si
-  ninguno). Implementado por `PaymentGatewayResolverService`, que busca la
-  `RestaurantPaymentAccount` `CONNECTED` del restaurante, descifra su access
-  token y construye un `MercadoPagoGatewayAdapter` **nuevo, por request**, con
-  las credenciales de ESE restaurante — nunca una cuenta global de Sazono.
-  Esta es la razon por la que `MercadoPagoGatewayAdapter` no esta registrado
-  como provider de Nest en `payments.module.ts`: es un objeto por-tenant
-  construido a mano con un secreto que cambia por restaurante, no un
-  singleton compartido.
+  dado un `restaurantId`, resuelve *todas* las pasarelas conectadas
+  (`resolveAvailable`, no una sola). Implementado por
+  `PaymentGatewayResolverService`, que busca las `RestaurantPaymentAccount`
+  `CONNECTED` del restaurante (ordenadas por `displayPriority` DESC,
+  `connectedAt` ASC), descifra el access token de Mercado Pago (o lee el
+  `childCommerceCode` de Transbank) y arma el `ResolvedPaymentGateway`
+  correspondiente apuntando al singleton de `PaymentGatewayRegistry` — nunca
+  una cuenta global de Sazono.
 - **`OfflinePaymentRecorderPort`** (`offline-payment-recorder.port.ts`):
   puerto separado, no un adapter no-op de `PaymentGatewayPort`. Existe aparte
   porque el registro offline no tiene semantica de cobro real (sin
@@ -57,14 +76,15 @@ no segun "que proveedor esta activo":
   aprueba de forma sincrona. Forzarlo a implementar `PaymentGatewayPort`
   obligaria a fingir soporte para campos que nunca aplican.
 
-### El modelo de datos ya esta listo para mas de un proveedor
+### El modelo de datos ya soporta mas de un proveedor
 
-`PaymentGatewayProvider` (enum Prisma) hoy solo tiene `MERCADO_PAGO`, pero
-`RestaurantPaymentAccount` es unica por `(restaurantId, provider)` y
-`PaymentWebhookEvent` por `(provider, eventId)`. Agregar una segunda pasarela
-en el futuro no requiere migrar estas tablas: alcanza con sumar un valor al
-enum, un nuevo `PaymentGatewayPort` adapter y su wiring en
-`PaymentGatewayResolverService`.
+`PaymentGatewayProvider` (enum Prisma) tiene `MERCADO_PAGO` y `TRANSBANK`.
+`RestaurantPaymentAccount` es unica por `(restaurantId, provider)` (un
+restaurante puede tener una cuenta de cada proveedor conectada a la vez) y
+`PaymentWebhookEvent` por `(provider, eventId)`. Agregar un tercer proveedor
+no requiere migrar estas tablas: alcanza con sumar un valor al enum, un nuevo
+`PaymentGatewayPort` adapter decorado y su registro como provider en
+`payments.module.ts` (ver doc 23, seccion "Agregar un proveedor #3").
 
 ## Conexion OAuth por restaurante
 
@@ -284,10 +304,6 @@ fuente de verdad, no se listan de nuevo aqui para evitar que se desincronicen.
   (`pay-bill-split-participant`) — **no** se re-ejecutan automaticamente;
   queda para revision manual (`PaymentWebhookEvent.processError` + el log
   `WARN` que deja el servicio).
-- **Un solo proveedor activo hoy**: `PaymentGatewayProvider` solo tiene
-  `MERCADO_PAGO`. El modelo de datos ya esta preparado para agregar otro
-  (ver "Arquitectura" arriba), pero no hay un segundo `PaymentGatewayPort`
-  implementado todavia.
 - **`application_fee` reservado, no activo**: el campo y la variable
   `PAYMENTS_APPLICATION_FEE_BPS` existen pero no se envian a Mercado Pago;
   Sazono todavia no cobra comision de plataforma.
@@ -296,12 +312,21 @@ fuente de verdad, no se listan de nuevo aqui para evitar que se desincronicen.
 
 ## Referencias
 
+- doc 24 (`24-pagos-vision-general.md`) — mapa de flujos de dinero, por que
+  existen dos pasarelas y que esta activo por configuracion
 - `src/modules/payments/README.md` — detalle linea a linea de endpoints y
   del modulo, se actualiza mas seguido que este doc
+- doc 22 (`22-transbank-webpay-integracion.md`) — segundo proveedor,
+  especifico de Transbank
+- doc 23 (`23-arquitectura-multi-proveedor-de-pago.md`) — arquitectura
+  general de canales/puertos/registro por decorador, y como agregar un
+  proveedor nuevo
 - doc 12 (`12-payments.md`) — reglas de negocio de prepago QR, pago de
   cuenta y split; seccion "Proveedor de pago" apunta aqui
 - doc 13 (`13-payments-split-and-resolution.md`) — split bill, entrega,
   cancelacion, abandono
+- `sazono-ui/docs/18-mercado-pago-checkout.md` — lado frontend: Checkout
+  Bricks, `cardToken`, panel `admin/payments`
 - `.env.example` — variables de entorno
 - `scripts/mp-webhook-curl.mjs` — generador de curl firmado para probar el
   webhook en local

@@ -1,8 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentAccountStatus } from '@prisma/client';
-import { MercadoPagoConfigService } from './mercado-pago/mercado-pago-config.service';
-import { MercadoPagoGatewayAdapter } from './mercado-pago/mercado-pago-gateway.adapter';
+import { PaymentGatewayProvider } from '@prisma/client';
+import type { RestaurantPaymentAccount } from '@prisma/client';
+import { assertNever } from '../domain/assert-never';
 import { RestaurantPaymentAccountRepository } from './mercado-pago/restaurant-payment-account.repository';
+import { PaymentGatewayRegistry } from './payment-gateway-registry.service';
+import type {
+  GatewayCredentials,
+  PaymentGatewayPort,
+} from '../application/ports/payment-gateway.port';
 import type {
   PaymentGatewayResolverPort,
   ResolvedPaymentGateway,
@@ -12,36 +17,76 @@ import type {
 export class PaymentGatewayResolverService implements PaymentGatewayResolverPort {
   constructor(
     private readonly restaurantPaymentAccountRepository: RestaurantPaymentAccountRepository,
-    private readonly mercadoPagoConfig: MercadoPagoConfigService,
+    private readonly paymentGatewayRegistry: PaymentGatewayRegistry,
   ) {}
 
-  async resolve(restaurantId: string): Promise<ResolvedPaymentGateway | null> {
-    const account =
-      await this.restaurantPaymentAccountRepository.findByRestaurant(
+  async resolveAvailable(
+    restaurantId: string,
+  ): Promise<ResolvedPaymentGateway[]> {
+    const accounts =
+      await this.restaurantPaymentAccountRepository.findConnectedByRestaurant(
         restaurantId,
       );
 
-    if (!account || account.status !== PaymentAccountStatus.CONNECTED) {
-      return null;
-    }
+    const resolved: ResolvedPaymentGateway[] = [];
 
-    const accessToken =
-      await this.restaurantPaymentAccountRepository.getValidAccessToken(
-        restaurantId,
+    for (const account of accounts) {
+      const gateway = this.paymentGatewayRegistry.get(account.provider);
+
+      if (!gateway) {
+        continue;
+      }
+
+      const credentials = await this.resolveCredentials(account);
+
+      if (!credentials) {
+        continue;
+      }
+
+      resolved.push(
+        this.toResolvedPaymentGateway(account, gateway, credentials),
       );
-
-    if (!accessToken) {
-      return null;
     }
 
+    return resolved;
+  }
+
+  private toResolvedPaymentGateway(
+    account: RestaurantPaymentAccount,
+    gateway: PaymentGatewayPort,
+    credentials: GatewayCredentials,
+  ): ResolvedPaymentGateway {
     return {
-      gateway: new MercadoPagoGatewayAdapter(
-        accessToken,
-        this.mercadoPagoConfig.timeoutMs,
-      ),
+      provider: account.provider,
+      gateway,
       accountId: account.id,
       publicKey: account.publicKey,
       environment: account.environment,
+      checkoutMode: gateway.checkoutMode,
+      displayPriority: account.displayPriority,
+      credentials,
     };
+  }
+
+  private async resolveCredentials(
+    account: RestaurantPaymentAccount,
+  ): Promise<GatewayCredentials | null> {
+    switch (account.provider) {
+      case PaymentGatewayProvider.MERCADO_PAGO: {
+        const accessToken =
+          await this.restaurantPaymentAccountRepository.getValidAccessTokenForAccount(
+            account,
+          );
+
+        return accessToken ? { accessToken } : null;
+      }
+      case PaymentGatewayProvider.TRANSBANK: {
+        return account.childCommerceCode
+          ? { childCommerceCode: account.childCommerceCode }
+          : null;
+      }
+      default:
+        return assertNever(account.provider);
+    }
   }
 }

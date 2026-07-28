@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { GatewayChargeContext } from '../../application/ports/payment-gateway.port';
+import type { MercadoPagoConfigService } from './mercado-pago-config.service';
 
 const createMock = jest.fn();
 const getMock = jest.fn();
@@ -15,6 +16,8 @@ jest.mock('mercadopago', () => ({
 import { MercadoPagoGatewayAdapter } from './mercado-pago-gateway.adapter';
 
 describe('MercadoPagoGatewayAdapter', () => {
+  const credentials = { accessToken: 'APP_USR-restaurant-token' };
+
   const baseContext: GatewayChargeContext = {
     restaurantId: 'restaurant-1',
     attemptId: 'attempt-1',
@@ -22,12 +25,16 @@ describe('MercadoPagoGatewayAdapter', () => {
     currency: 'CLP',
     description: 'Pago de prueba',
     externalReference: 'attempt-1',
-    cardToken: 'card-token-1',
-    paymentMethodId: 'visa',
-    installments: 1,
+    credentials,
+    checkoutPayload: {
+      cardToken: 'card-token-1',
+      paymentMethodId: 'visa',
+      installments: 1,
+    },
   };
 
   let adapter: MercadoPagoGatewayAdapter;
+  let mercadoPagoConfig: MercadoPagoConfigService;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -37,10 +44,22 @@ describe('MercadoPagoGatewayAdapter', () => {
       get: getMock,
       cancel: cancelMock,
     }));
-    adapter = new MercadoPagoGatewayAdapter('APP_USR-restaurant-token');
+    mercadoPagoConfig = {
+      timeoutMs: 15000,
+    } as unknown as MercadoPagoConfigService;
+    adapter = new MercadoPagoGatewayAdapter(mercadoPagoConfig);
   });
 
-  it('builds the MercadoPago client with the restaurant-specific access token', () => {
+  it('is a stateless singleton: it never receives credentials in its constructor', () => {
+    expect(adapter).toBeInstanceOf(MercadoPagoGatewayAdapter);
+    expect(mercadoPagoConfigMock).not.toHaveBeenCalled();
+  });
+
+  it('builds the MercadoPago client per call with the restaurant-specific access token from the context', async () => {
+    createMock.mockResolvedValue({ id: 123, status: 'approved' });
+
+    await adapter.charge(baseContext);
+
     expect(mercadoPagoConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
         accessToken: 'APP_USR-restaurant-token',
@@ -48,13 +67,14 @@ describe('MercadoPagoGatewayAdapter', () => {
     );
   });
 
-  it('approves a payment and returns the providerReference', async () => {
+  it('approves a payment and returns a SETTLED outcome with the providerReference', async () => {
     createMock.mockResolvedValue({ id: 123, status: 'approved' });
 
     const result = await adapter.charge(baseContext);
 
     expect(result).toEqual({
-      outcome: 'APPROVED',
+      kind: 'SETTLED',
+      result: 'APPROVED',
       providerReference: '123',
       failureReason: undefined,
       rawStatus: 'approved',
@@ -72,7 +92,8 @@ describe('MercadoPagoGatewayAdapter', () => {
     const result = await adapter.charge(baseContext);
 
     expect(result).toEqual({
-      outcome: 'REJECTED',
+      kind: 'SETTLED',
+      result: 'REJECTED',
       providerReference: '124',
       failureReason: 'La tarjeta no tiene saldo suficiente.',
       rawStatus: 'rejected',
@@ -85,11 +106,15 @@ describe('MercadoPagoGatewayAdapter', () => {
 
     const result = await adapter.charge(baseContext);
 
-    expect(result.outcome).toBe('REJECTED');
-    expect(result.providerReference).toBeUndefined();
-    expect(result.failureReason).toBe(
-      'No pudimos comunicarnos con la pasarela de pago. Intenta nuevamente.',
-    );
+    expect(result.kind).toBe('SETTLED');
+    expect(result).toMatchObject({ result: 'REJECTED' });
+    expect(
+      result.kind === 'SETTLED' ? result.providerReference : undefined,
+    ).toBeUndefined();
+    expect(result).toMatchObject({
+      failureReason:
+        'No pudimos comunicarnos con la pasarela de pago. Intenta nuevamente.',
+    });
   });
 
   it('cancels and rejects a pending payment even though binary_mode was requested', async () => {
@@ -99,8 +124,11 @@ describe('MercadoPagoGatewayAdapter', () => {
     const result = await adapter.charge(baseContext);
 
     expect(cancelMock).toHaveBeenCalledWith({ id: 125 });
-    expect(result.outcome).toBe('REJECTED');
-    expect(result.providerReference).toBe('125');
+    expect(result.kind).toBe('SETTLED');
+    expect(result).toMatchObject({
+      result: 'REJECTED',
+      providerReference: '125',
+    });
   });
 
   it('sends the amount as an integer for CLP and requests binary_mode with the attemptId as the idempotency key', async () => {
@@ -145,7 +173,22 @@ describe('MercadoPagoGatewayAdapter', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
-  it('getPayment maps a stored payment back into a snapshot', async () => {
+  it('rejects with a SETTLED outcome when the checkout payload is missing or malformed', async () => {
+    const result = await adapter.charge({
+      ...baseContext,
+      checkoutPayload: undefined,
+    });
+
+    expect(result).toEqual({
+      kind: 'SETTLED',
+      result: 'REJECTED',
+      failureReason:
+        'Falta el token de la tarjeta para completar el pago con Mercado Pago.',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('getPayment builds the client with the credentials passed as an argument and maps a stored payment back into a snapshot', async () => {
     getMock.mockResolvedValue({
       id: 128,
       status: 'approved',
@@ -153,8 +196,11 @@ describe('MercadoPagoGatewayAdapter', () => {
       currency_id: 'CLP',
     });
 
-    const snapshot = await adapter.getPayment('128');
+    const snapshot = await adapter.getPayment('128', credentials);
 
+    expect(mercadoPagoConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: 'APP_USR-restaurant-token' }),
+    );
     expect(snapshot).toEqual({
       providerReference: '128',
       outcome: 'APPROVED',
@@ -174,7 +220,7 @@ describe('MercadoPagoGatewayAdapter', () => {
       external_reference: 'attempt-42',
     });
 
-    const snapshot = await adapter.getPayment('130');
+    const snapshot = await adapter.getPayment('130', credentials);
 
     expect(snapshot?.externalReference).toBe('attempt-42');
   });
@@ -182,7 +228,7 @@ describe('MercadoPagoGatewayAdapter', () => {
   it('getPayment returns null when the gateway call fails', async () => {
     getMock.mockRejectedValue(new Error('not found'));
 
-    const snapshot = await adapter.getPayment('129');
+    const snapshot = await adapter.getPayment('129', credentials);
 
     expect(snapshot).toBeNull();
   });

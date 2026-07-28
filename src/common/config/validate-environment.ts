@@ -204,6 +204,41 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   MERCADOPAGO_TIMEOUT_MS = 15000;
+
+  @Transform(({ value }) => toBoolean(value, false))
+  @IsBoolean()
+  TRANSBANK_ENABLED = false;
+
+  @IsOptional()
+  @IsString()
+  TRANSBANK_MALL_COMMERCE_CODE?: string;
+
+  @IsOptional()
+  @IsString()
+  TRANSBANK_API_KEY?: string;
+
+  @IsOptional()
+  @IsIn(['integration', 'production'])
+  TRANSBANK_ENVIRONMENT?: 'integration' | 'production';
+
+  @IsOptional()
+  @IsString()
+  TRANSBANK_RETURN_URL?: string;
+
+  @Transform(({ value }) => toNumber(value, 15000))
+  @IsInt()
+  @Min(1)
+  TRANSBANK_TIMEOUT_MS = 15000;
+
+  @Transform(({ value }) => toNumber(value, 5 * 60 * 1000))
+  @IsInt()
+  @Min(1)
+  TRANSBANK_RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  TRANSBANK_RECONCILIATION_MIN_AGE_MINUTES = 10;
 }
 
 const MERCADOPAGO_REQUIRED_VARIABLE_NAMES: Array<keyof EnvironmentVariables> = [
@@ -214,6 +249,12 @@ const MERCADOPAGO_REQUIRED_VARIABLE_NAMES: Array<keyof EnvironmentVariables> = [
   'MERCADOPAGO_WEBHOOK_SECRET',
   'PAYMENTS_OAUTH_UI_RETURN_URL',
   'PAYMENTS_ENCRYPTION_KEY',
+];
+
+const TRANSBANK_REQUIRED_VARIABLE_NAMES: Array<keyof EnvironmentVariables> = [
+  'TRANSBANK_MALL_COMMERCE_CODE',
+  'TRANSBANK_API_KEY',
+  'TRANSBANK_RETURN_URL',
 ];
 
 const PAYMENTS_ENCRYPTION_KEY_LENGTH_BYTES = 32;
@@ -247,6 +288,24 @@ function validateMercadoPagoCrossFields(
   }
 }
 
+function validateTransbankCrossFields(
+  validatedConfig: EnvironmentVariables,
+): void {
+  if (!validatedConfig.TRANSBANK_ENABLED) {
+    return;
+  }
+
+  const missingVariableNames = TRANSBANK_REQUIRED_VARIABLE_NAMES.filter(
+    (variableName) => !validatedConfig[variableName],
+  );
+
+  if (missingVariableNames.length > 0) {
+    throw new Error(
+      `TRANSBANK_ENABLED=true requiere las siguientes variables: ${missingVariableNames.join(', ')}`,
+    );
+  }
+}
+
 export function validateEnvironment(config: Record<string, unknown>) {
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: false,
@@ -261,6 +320,7 @@ export function validateEnvironment(config: Record<string, unknown>) {
   }
 
   validateMercadoPagoCrossFields(validatedConfig);
+  validateTransbankCrossFields(validatedConfig);
 
   return validatedConfig;
 }

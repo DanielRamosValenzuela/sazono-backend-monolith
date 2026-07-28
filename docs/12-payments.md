@@ -34,15 +34,16 @@ Este slice cierra el ciclo comercial de la mesa:
 
 Nota (2026-07-27): esta seccion describe el MVP original de un solo
 adapter manual. Desde la integracion de Mercado Pago Chile (Checkout API,
-marketplace no custodial via OAuth por restaurante), el cobro real pasa por
+marketplace no custodial via OAuth por restaurante) y despues Transbank
+Webpay (conexion manual, redireccion), el cobro real pasa por
 `ChargePaymentService`, que decide entre el registro manual
-(`OFFLINE_PAYMENT_RECORDER`, canal `STAFF_OFFLINE`) y la pasarela conectada
-del restaurante (`PAYMENT_GATEWAY_RESOLVER`, canal `QR_ONLINE`). El detalle
-completo (arquitectura, OAuth, webhook de confirmacion, `binary_mode`,
-pruebas locales, limitaciones) vive en doc 21
-(`21-mercado-pago-integracion.md`); `src/modules/payments/README.md` sigue
-siendo la referencia linea a linea de cada endpoint. El resto de esta pagina
-(reglas de negocio de prepago QR, split, invariantes) sigue vigente.
+(`OFFLINE_PAYMENT_RECORDER`, canal `STAFF_OFFLINE`) y las pasarelas
+conectadas del restaurante (`PAYMENT_GATEWAY_RESOLVER`, canal `QR_ONLINE`,
+puede resolver mas de una a la vez). El detalle completo vive en doc 23
+(`23-arquitectura-multi-proveedor-de-pago.md`, arquitectura general) y doc
+21/doc 22 (especifico de cada proveedor); `src/modules/payments/README.md`
+sigue siendo la referencia linea a linea de cada endpoint. El resto de esta
+pagina (reglas de negocio de prepago QR, split, invariantes) sigue vigente.
 
 ## Proveedor de pago (MVP original, historico)
 
@@ -97,3 +98,11 @@ HTTP no cambiaron con la migracion.
   que quedo `PENDING` de una orden QR o un split participant (hoy el webhook
   finaliza el pago y el saldo de la cuenta, pero no re-ejecuta el ruteo a
   cocina ni la actualizacion del split; ver `src/modules/payments/README.md`)
+- **split bill no ofrece Transbank de punta a punta**: `GET
+  /qr/split-participants/:token` solo descubre una pasarela Mercado Pago
+  conectada (bug de `GetBillSplitParticipantService`, hardcodea el
+  proveedor), y el frontend (`split-payment.tsx`) tampoco tiene UI para
+  redireccion. El endpoint de cobro (`.../pay/redirect`) si existe y
+  funciona en el backend. Detalle completo, matriz de capacidad y el
+  archivo/linea exacto en `src/modules/payments/README.md` (seccion
+  "Transbank Webpay Plus Mall") y en `docs/24-pagos-vision-general.md`

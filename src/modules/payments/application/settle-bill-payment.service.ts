@@ -18,6 +18,7 @@ import {
   OFFLINE_PAYMENT_RECORDER,
   type OfflinePaymentRecorderPort,
 } from './ports/offline-payment-recorder.port';
+import { requireSettledCharge } from './require-settled-charge';
 import type { PaymentChannel } from '../domain/payment-channel';
 import type { PaymentResultResponseDto } from '../presentation/http/dto/payments.dto';
 
@@ -82,15 +83,17 @@ export class SettleBillPaymentService {
       },
     });
 
-    const chargeResult = await this.chargePaymentService.execute({
-      channel,
-      restaurantId: bill.restaurantId,
-      attemptId: attempt.id,
-      amount: paidAmount,
-      currency: bill.currency,
-      description: `Pago de cuenta ${bill.id}`,
-      checkout,
-    });
+    const chargeResult = requireSettledCharge(
+      await this.chargePaymentService.execute({
+        channel,
+        restaurantId: bill.restaurantId,
+        attemptId: attempt.id,
+        amount: paidAmount,
+        currency: bill.currency,
+        description: `Pago de cuenta ${bill.id}`,
+        checkout,
+      }),
+    );
 
     if (!chargeResult.approved) {
       await this.failPaymentService.execute(this.prisma, {

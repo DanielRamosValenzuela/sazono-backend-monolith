@@ -25,6 +25,7 @@ import {
   OFFLINE_PAYMENT_RECORDER,
   type OfflinePaymentRecorderPort,
 } from './ports/offline-payment-recorder.port';
+import { requireSettledCharge } from './require-settled-charge';
 import type {
   PayQrOrderDto,
   PaymentResultResponseDto,
@@ -112,15 +113,17 @@ export class PayQrOrderService {
       },
     });
 
-    const chargeResult = await this.chargePaymentService.execute({
-      channel: PaymentChannel.QR_ONLINE,
-      restaurantId: order.branch.restaurantId,
-      attemptId: attempt.id,
-      amount: paidAmount,
-      currency,
-      description: `Orden QR ${order.id}`,
-      checkout,
-    });
+    const chargeResult = requireSettledCharge(
+      await this.chargePaymentService.execute({
+        channel: PaymentChannel.QR_ONLINE,
+        restaurantId: order.branch.restaurantId,
+        attemptId: attempt.id,
+        amount: paidAmount,
+        currency,
+        description: `Orden QR ${order.id}`,
+        checkout,
+      }),
+    );
 
     if (!chargeResult.approved) {
       await this.prisma.$transaction(async (tx) => {

@@ -1,18 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-  PaymentAccountStatus,
-  PaymentGatewayProvider,
-  TableStatus,
-} from '@prisma/client';
+import { TableStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
-import type { QrPaymentConfigResponseDto } from '../presentation/http/dto/payments.dto';
+import { PaymentGatewayRegistry } from '../infrastructure/payment-gateway-registry.service';
+import type {
+  QrPaymentConfigOptionResponseDto,
+  QrPaymentConfigResponseDto,
+} from '../presentation/http/dto/payments.dto';
 
 @Injectable()
 export class GetQrPaymentConfigService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly restaurantPaymentAccountRepository: RestaurantPaymentAccountRepository,
+    private readonly paymentGatewayRegistry: PaymentGatewayRegistry,
   ) {}
 
   async execute(qrToken: string): Promise<QrPaymentConfigResponseDto> {
@@ -29,24 +30,33 @@ export class GetQrPaymentConfigService {
       throw new NotFoundException('El QR indicado no esta disponible.');
     }
 
-    const account =
-      await this.restaurantPaymentAccountRepository.findByRestaurant(
+    const connectedAccounts =
+      await this.restaurantPaymentAccountRepository.findConnectedByRestaurant(
         table.branch.restaurantId,
       );
 
-    if (
-      !account ||
-      account.status !== PaymentAccountStatus.CONNECTED ||
-      !account.publicKey
-    ) {
-      return { gatewayConnected: false };
+    const options: QrPaymentConfigOptionResponseDto[] = [];
+
+    for (const account of connectedAccounts) {
+      const gateway = this.paymentGatewayRegistry.get(account.provider);
+
+      if (!gateway) {
+        continue;
+      }
+
+      if (gateway.checkoutMode === 'embedded' && !account.publicKey) {
+        continue;
+      }
+
+      options.push({
+        provider: account.provider,
+        checkoutMode: gateway.checkoutMode,
+        publicKey: account.publicKey ?? undefined,
+        environment: account.environment,
+        isPreferred: options.length === 0,
+      });
     }
 
-    return {
-      gatewayConnected: true,
-      provider: PaymentGatewayProvider.MERCADO_PAGO,
-      publicKey: account.publicKey,
-      environment: account.environment,
-    };
+    return { options };
   }
 }

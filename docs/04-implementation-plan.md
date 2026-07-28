@@ -111,7 +111,7 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - [x] Definir SQL para `preparation_stations`
 - [ ] Definir SQL para `bills`, `bill_items`, `bill_splits`, `bill_split_participants`
 - [ ] Definir SQL para `orders`, `order_items`, `station_tickets`, `station_ticket_items`
-- [ ] Definir SQL para `payments` y `payment_attempts`
+- [x] Definir SQL para `payments` y `payment_attempts` (incluye Fase 2 multi-proveedor: `restaurant_payment_accounts`, `payment_webhook_events`; ver doc 21/22/23)
 - [x] Crear modulo de auth interna
 - [x] Implementar caso de uso para crear `Restaurant` y primer `Admin`
 - [x] Crear modulo `staff` con roles por sucursal
@@ -161,11 +161,11 @@ No es solo un CRUD. Debe proteger estados, permisos y consistencia operativa.
 - `kitchen` ya lista tickets por estacion y avanza sus estados sincronizando items y orden
 - la politica de impuestos vive aislada en `billing/domain/tax-policy.ts` (precios con IVA incluido)
 - `payments` ya aprueba el prepago QR (cargo + ruteo en la misma transaccion), paga cuenta abierta desde QR y desde caja, con propina, pagos parciales y reintento ante fallo
-- el cobro esta aislado tras `ChargePaymentService`, que enruta por canal (`STAFF_OFFLINE` via `OFFLINE_PAYMENT_RECORDER`, `QR_ONLINE` via `PAYMENT_GATEWAY_RESOLVER`); la pasarela real (Mercado Pago Chile, OAuth por restaurante) ya esta implementada, ver doc 21
+- el cobro esta aislado tras `ChargePaymentService`, que enruta por canal (`STAFF_OFFLINE` via `OFFLINE_PAYMENT_RECORDER`, `QR_ONLINE` via `PAYMENT_GATEWAY_RESOLVER`); dos pasarelas reales ya estan implementadas -- Mercado Pago Chile (OAuth por restaurante, checkout embebido, ver doc 21) y Transbank Webpay Plus Mall (conexion manual, redireccion, conciliacion por polling, ver doc 22) -- via la arquitectura multi-proveedor de doc 23; ambas quedan inactivas hasta configurar credenciales (`MERCADOPAGO_ENABLED=false`/`TRANSBANK_ENABLED=false` por default)
 - al saldar la cuenta la sesion pasa a `PAYMENT_COMPLETED`; el cierre de mesa sigue siendo manual
 - split bill simple (`BY_AMOUNT`) dentro de la misma cuenta, con pago por participante via token QR
 - entrega de ordenes (`DELIVERED`), cancelacion antes/durante produccion y abandono de mesa por caja/supervisor
-- el backend MVP operacional esta completo; la pasarela de pago real (Mercado Pago) ya esta implementada (ver doc 21), igual que multimedia de carta y multi idioma (ver doc 10)
+- el backend MVP operacional esta completo; las pasarelas de pago reales (Mercado Pago y Transbank Webpay, ver doc 21/22/23) ya estan implementadas, igual que multimedia de carta y multi idioma (ver doc 10)
 - `restaurants` ahora expone CRUD de lectura/edicion para `platform_admin` (listar, detalle con equipo, editar, activar/desactivar) y metricas agregadas de plataforma
 - `branches` ahora expone listado y edicion (`PATCH`) para `staff`, incluyendo merge parcial de `branch_settings`
 - `staff` ahora expone edicion (`PATCH /staff/:id`) con reglas de proteccion: no auto-desactivarse, no dejar el restaurante sin `ADMIN`

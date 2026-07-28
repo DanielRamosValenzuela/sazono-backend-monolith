@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, PaymentGatewayProvider } from '@prisma/client';
 import { ChargePaymentService } from './charge-payment.service';
 import { PaymentChannel } from '../domain/payment-channel';
 import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
@@ -15,21 +15,26 @@ describe('ChargePaymentService', () => {
     record: recordMock,
   };
 
-  const resolveMock = jest.fn();
+  const resolveAvailableMock = jest.fn();
   const paymentGatewayResolver: PaymentGatewayResolverPort = {
-    resolve: resolveMock,
+    resolveAvailable: resolveAvailableMock,
   };
 
   const chargeMock = jest.fn();
   const resolvedGateway: ResolvedPaymentGateway = {
+    provider: PaymentGatewayProvider.MERCADO_PAGO,
     gateway: {
       providerName: 'MERCADO_PAGO',
+      checkoutMode: 'embedded',
       charge: chargeMock,
       getPayment: jest.fn(),
     },
     accountId: 'account-1',
     publicKey: 'public-key-1',
     environment: 'sandbox',
+    checkoutMode: 'embedded',
+    displayPriority: 0,
+    credentials: { accessToken: 'APP_USR-restaurant-token' },
   };
 
   let mercadoPagoConfig: MercadoPagoConfigService;
@@ -71,11 +76,12 @@ describe('ChargePaymentService', () => {
     });
 
     expect(result).toEqual({
+      kind: 'SETTLED',
       approved: true,
       providerName: 'MANUAL',
       providerReference: 'manual-ref-1',
     });
-    expect(resolveMock).not.toHaveBeenCalled();
+    expect(resolveAvailableMock).not.toHaveBeenCalled();
     expect(chargeMock).not.toHaveBeenCalled();
     expect(recordMock).toHaveBeenCalledWith({
       amount: baseRequest.amount,
@@ -85,7 +91,7 @@ describe('ChargePaymentService', () => {
   });
 
   it('resolves the gateway for QR_ONLINE and falls back to the offline recorder when no gateway is connected', async () => {
-    resolveMock.mockResolvedValue(null);
+    resolveAvailableMock.mockResolvedValue([]);
     recordMock.mockResolvedValue({ providerReference: 'manual-ref-2' });
 
     const result = await service.execute({
@@ -94,17 +100,18 @@ describe('ChargePaymentService', () => {
     });
 
     expect(result).toEqual({
+      kind: 'SETTLED',
       approved: true,
       providerName: 'MANUAL',
       providerReference: 'manual-ref-2',
     });
-    expect(resolveMock).toHaveBeenCalledWith('restaurant-1');
+    expect(resolveAvailableMock).toHaveBeenCalledWith('restaurant-1');
     expect(chargeMock).not.toHaveBeenCalled();
     expect(recordMock).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to the offline recorder for QR_ONLINE when the gateway is connected but no checkout was submitted', async () => {
-    resolveMock.mockResolvedValue(resolvedGateway);
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
     recordMock.mockResolvedValue({ providerReference: 'manual-ref-3' });
 
     const result = await service.execute({
@@ -113,6 +120,7 @@ describe('ChargePaymentService', () => {
     });
 
     expect(result).toEqual({
+      kind: 'SETTLED',
       approved: true,
       providerName: 'MANUAL',
       providerReference: 'manual-ref-3',
@@ -120,10 +128,11 @@ describe('ChargePaymentService', () => {
     expect(chargeMock).not.toHaveBeenCalled();
   });
 
-  it('charges through the resolved gateway for QR_ONLINE when a checkout is submitted', async () => {
-    resolveMock.mockResolvedValue(resolvedGateway);
+  it('charges through the highest-priority resolved gateway for QR_ONLINE when a checkout is submitted', async () => {
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
     chargeMock.mockResolvedValue({
-      outcome: 'APPROVED',
+      kind: 'SETTLED',
+      result: 'APPROVED',
       providerReference: 'mp-1',
     });
 
@@ -134,6 +143,7 @@ describe('ChargePaymentService', () => {
     });
 
     expect(result).toEqual({
+      kind: 'SETTLED',
       approved: true,
       providerName: 'MERCADO_PAGO',
       providerReference: 'mp-1',
@@ -147,12 +157,9 @@ describe('ChargePaymentService', () => {
       currency: 'CLP',
       description: 'Pago de prueba',
       externalReference: 'attempt-1',
-      cardToken: 'card-token-1',
-      paymentMethodId: 'visa',
-      installments: 1,
-      issuerId: undefined,
-      payerEmail: undefined,
+      credentials: { accessToken: 'APP_USR-restaurant-token' },
       notificationUrl: undefined,
+      checkoutPayload: checkout,
     });
   });
 
@@ -166,9 +173,10 @@ describe('ChargePaymentService', () => {
       paymentGatewayResolver,
       mercadoPagoConfig,
     );
-    resolveMock.mockResolvedValue(resolvedGateway);
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
     chargeMock.mockResolvedValue({
-      outcome: 'APPROVED',
+      kind: 'SETTLED',
+      result: 'APPROVED',
       providerReference: 'mp-1',
     });
 
@@ -198,9 +206,10 @@ describe('ChargePaymentService', () => {
       paymentGatewayResolver,
       mercadoPagoConfig,
     );
-    resolveMock.mockResolvedValue(resolvedGateway);
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
     chargeMock.mockResolvedValue({
-      outcome: 'APPROVED',
+      kind: 'SETTLED',
+      result: 'APPROVED',
       providerReference: 'mp-1',
     });
 
@@ -216,9 +225,10 @@ describe('ChargePaymentService', () => {
   });
 
   it('reports the rejection returned by the gateway without touching the offline recorder', async () => {
-    resolveMock.mockResolvedValue(resolvedGateway);
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
     chargeMock.mockResolvedValue({
-      outcome: 'REJECTED',
+      kind: 'SETTLED',
+      result: 'REJECTED',
       providerReference: 'mp-2',
       failureReason: 'La tarjeta no tiene saldo suficiente.',
     });
@@ -230,10 +240,41 @@ describe('ChargePaymentService', () => {
     });
 
     expect(result).toEqual({
+      kind: 'SETTLED',
       approved: false,
       providerName: 'MERCADO_PAGO',
       providerReference: 'mp-2',
       failureReason: 'La tarjeta no tiene saldo suficiente.',
+    });
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it('propagates a REDIRECT outcome from the gateway without treating it as approved or rejected', async () => {
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
+    const expiresAt = new Date('2026-07-27T12:00:00.000Z');
+    chargeMock.mockResolvedValue({
+      kind: 'REDIRECT',
+      providerReference: 'tbk-1',
+      redirectUrl: 'https://webpay.example/init',
+      method: 'POST',
+      fields: { token_ws: 'abc' },
+      expiresAt,
+    });
+
+    const result = await service.execute({
+      ...baseRequest,
+      channel: PaymentChannel.QR_ONLINE,
+      checkout,
+    });
+
+    expect(result).toEqual({
+      kind: 'REDIRECT',
+      providerName: 'MERCADO_PAGO',
+      providerReference: 'tbk-1',
+      redirectUrl: 'https://webpay.example/init',
+      method: 'POST',
+      fields: { token_ws: 'abc' },
+      expiresAt,
     });
     expect(recordMock).not.toHaveBeenCalled();
   });
@@ -247,14 +288,15 @@ describe('ChargePaymentService', () => {
       paymentGatewayResolver,
       mercadoPagoConfig,
     );
-    resolveMock.mockResolvedValue(null);
+    resolveAvailableMock.mockResolvedValue([]);
 
     const result = await service.execute({
       ...baseRequest,
       channel: PaymentChannel.QR_ONLINE,
     });
 
-    expect(result.approved).toBe(false);
+    expect(result.kind).toBe('SETTLED');
+    expect(result).toMatchObject({ approved: false });
     expect(recordMock).not.toHaveBeenCalled();
     expect(chargeMock).not.toHaveBeenCalled();
   });
@@ -268,15 +310,18 @@ describe('ChargePaymentService', () => {
       paymentGatewayResolver,
       mercadoPagoConfig,
     );
-    resolveMock.mockResolvedValue(resolvedGateway);
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
 
     const result = await service.execute({
       ...baseRequest,
       channel: PaymentChannel.QR_ONLINE,
     });
 
-    expect(result.approved).toBe(false);
-    expect(result.providerName).toBe('MERCADO_PAGO');
+    expect(result.kind).toBe('SETTLED');
+    expect(result).toMatchObject({
+      approved: false,
+      providerName: 'MERCADO_PAGO',
+    });
     expect(recordMock).not.toHaveBeenCalled();
     expect(chargeMock).not.toHaveBeenCalled();
   });

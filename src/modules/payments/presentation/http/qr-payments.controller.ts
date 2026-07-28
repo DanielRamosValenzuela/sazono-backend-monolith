@@ -10,6 +10,7 @@ import { GetQrPaymentConfigService } from '../../application/get-qr-payment-conf
 import { PayBillSplitParticipantService } from '../../application/pay-bill-split-participant.service';
 import { PayQrBillService } from '../../application/pay-qr-bill.service';
 import { PayQrOrderService } from '../../application/pay-qr-order.service';
+import { StartRedirectPaymentService } from '../../application/start-redirect-payment.service';
 import {
   BillSplitParticipantDetailResponseDto,
   BillSplitResponseDto,
@@ -21,6 +22,10 @@ import {
   PaymentResultResponseDto,
   QrOrderPaymentStatusResponseDto,
   QrPaymentConfigResponseDto,
+  RedirectPaymentResponseDto,
+  StartRedirectBillPaymentDto,
+  StartRedirectOrderPaymentDto,
+  StartRedirectSplitParticipantPaymentDto,
 } from './dto/payments.dto';
 
 @ApiTags('qr')
@@ -36,6 +41,7 @@ export class QrPaymentsController {
     private readonly getCurrentBillSplitService: GetCurrentBillSplitService,
     private readonly payBillSplitParticipantService: PayBillSplitParticipantService,
     private readonly getBillSplitParticipantService: GetBillSplitParticipantService,
+    private readonly startRedirectPaymentService: StartRedirectPaymentService,
   ) {}
 
   @Get('tables/:qrToken/bill')
@@ -85,6 +91,23 @@ export class QrPaymentsController {
     return this.payQrOrderService.execute(qrToken, orderId, dto);
   }
 
+  @Post('tables/:qrToken/orders/:orderId/pay/redirect')
+  @ApiOperation({
+    summary:
+      'Inicia el prepago de una orden QR con una pasarela de redireccion (ej. Transbank Webpay). Devuelve los datos para el form-POST hacia la pasarela. Endpoint publico.',
+  })
+  startQrOrderRedirectPayment(
+    @Param('qrToken') qrToken: string,
+    @Param('orderId') orderId: string,
+    @Body() dto: StartRedirectOrderPaymentDto,
+  ): Promise<RedirectPaymentResponseDto> {
+    return this.startRedirectPaymentService.startForQrOrder(
+      qrToken,
+      orderId,
+      dto,
+    );
+  }
+
   @Post('tables/:qrToken/bill/payments')
   @ApiOperation({
     summary:
@@ -95,6 +118,18 @@ export class QrPaymentsController {
     @Body() dto: PayQrBillDto,
   ): Promise<PaymentResultResponseDto> {
     return this.payQrBillService.execute(qrToken, dto);
+  }
+
+  @Post('tables/:qrToken/bill/payments/redirect')
+  @ApiOperation({
+    summary:
+      'Inicia el pago de la cuenta abierta de la mesa con una pasarela de redireccion (ej. Transbank Webpay). Devuelve los datos para el form-POST hacia la pasarela. Endpoint publico.',
+  })
+  startQrBillRedirectPayment(
+    @Param('qrToken') qrToken: string,
+    @Body() dto: StartRedirectBillPaymentDto,
+  ): Promise<RedirectPaymentResponseDto> {
+    return this.startRedirectPaymentService.startForQrBill(qrToken, dto);
   }
 
   @Post('tables/:qrToken/bill/splits')
@@ -140,5 +175,20 @@ export class QrPaymentsController {
     @Body() dto: PayBillSplitParticipantDto,
   ): Promise<PaymentResultResponseDto> {
     return this.payBillSplitParticipantService.execute(participantToken, dto);
+  }
+
+  @Post('split-participants/:participantToken/pay/redirect')
+  @ApiOperation({
+    summary:
+      'Inicia el pago de la parte pendiente de un participante del split con una pasarela de redireccion (ej. Transbank Webpay). Devuelve los datos para el form-POST hacia la pasarela. Endpoint publico.',
+  })
+  startSplitParticipantRedirectPayment(
+    @Param('participantToken') participantToken: string,
+    @Body() dto: StartRedirectSplitParticipantPaymentDto,
+  ): Promise<RedirectPaymentResponseDto> {
+    return this.startRedirectPaymentService.startForSplitParticipant(
+      participantToken,
+      dto,
+    );
   }
 }
