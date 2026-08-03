@@ -160,6 +160,29 @@ export class PayBillSplitParticipantService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const newPaidAmount = participant.paidAmount.add(allocationRemaining);
+      const participantStatus = newPaidAmount.gte(participant.allocatedAmount)
+        ? BillSplitParticipantStatus.PAID
+        : BillSplitParticipantStatus.PARTIALLY_PAID;
+
+      const claim = await tx.billSplitParticipant.updateMany({
+        where: {
+          id: participant.id,
+          status: { in: PAYABLE_PARTICIPANT_STATUSES },
+          paidAmount: participant.paidAmount,
+        },
+        data: {
+          paidAmount: newPaidAmount,
+          status: participantStatus,
+        },
+      });
+
+      if (claim.count === 0) {
+        throw new ConflictException(
+          'Este participante ya completo su pago o fue cancelado.',
+        );
+      }
+
       const payment = await this.finalizePaymentService.execute(tx, {
         attemptId: attempt.id,
         billId: bill.id,
@@ -176,21 +199,6 @@ export class PayBillSplitParticipantService {
         paidAmount,
         tipDelta,
       );
-
-      const newPaidAmount = participant.paidAmount.add(allocationRemaining);
-      const participantStatus = newPaidAmount.gte(participant.allocatedAmount)
-        ? BillSplitParticipantStatus.PAID
-        : BillSplitParticipantStatus.PARTIALLY_PAID;
-
-      await tx.billSplitParticipant.update({
-        where: {
-          id: participant.id,
-        },
-        data: {
-          paidAmount: newPaidAmount,
-          status: participantStatus,
-        },
-      });
 
       await updateBillSplitStatus(tx, participant.billSplitId);
 

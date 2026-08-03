@@ -150,13 +150,17 @@ export class PayQrOrderService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const currentOrder = await tx.order.findUniqueOrThrow({
+      const claim = await tx.order.updateMany({
         where: {
           id: order.id,
+          status: { in: PAYABLE_ORDER_STATUSES },
+        },
+        data: {
+          status: OrderStatus.ROUTED,
         },
       });
 
-      if (!PAYABLE_ORDER_STATUSES.includes(currentOrder.status)) {
+      if (claim.count === 0) {
         throw new ConflictException('La orden ya fue pagada o cancelada.');
       }
 
@@ -198,12 +202,9 @@ export class PayQrOrderService {
         chargeItems,
       );
 
-      const updatedOrder = await tx.order.update({
+      const updatedOrder = await tx.order.findUniqueOrThrow({
         where: {
           id: order.id,
-        },
-        data: {
-          status: OrderStatus.ROUTED,
         },
       });
 
