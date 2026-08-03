@@ -53,6 +53,9 @@ class StationTicketItemResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   notes!: string | null;
+
+  @ApiProperty({ type: [String], example: ['Huevo frito', 'Palta'] })
+  modifiers!: string[];
 }
 
 export class StationTicketResponseDto {

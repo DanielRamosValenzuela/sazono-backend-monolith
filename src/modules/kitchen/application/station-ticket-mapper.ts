@@ -37,6 +37,9 @@ export type StationTicketWithRelations = {
     orderItem: {
       nameSnapshot: string;
       notes: string | null;
+      modifiers: Array<{
+        nameSnapshot: string;
+      }>;
     };
   }>;
 };
@@ -55,7 +58,11 @@ export const STATION_TICKET_INCLUDE = {
   stationTicketItems: {
     orderBy: [{ createdAt: 'asc' as const }],
     include: {
-      orderItem: true,
+      orderItem: {
+        include: {
+          modifiers: true,
+        },
+      },
     },
   },
 } satisfies Prisma.StationTicketInclude;
@@ -83,5 +90,6 @@ export const mapStationTicket = (
     quantity: item.quantity,
     status: item.status,
     notes: item.orderItem.notes,
+    modifiers: item.orderItem.modifiers.map((modifier) => modifier.nameSnapshot),
   })),
 });

@@ -180,6 +180,19 @@ export class MenusController {
     return this.listMenusService.execute(authUser, query);
   }
 
+  @Get('modifier-groups')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Lista los grupos de modificadores disponibles en una sucursal.',
+  })
+  listModifierGroups(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Query() query: ListModifierGroupsQueryDto,
+  ): Promise<ModifierGroupResponseDto[]> {
+    return this.listModifierGroupsService.execute(authUser, query);
+  }
+
   @Get(':menuId')
   @UseGuards(JwtAuthGuard, ProfileTypeGuard)
   @RequireProfileType(LoginProfileType.STAFF)
@@ -303,19 +316,6 @@ export class MenusController {
     @Body() dto: CreateModifierGroupDto,
   ): Promise<ModifierGroupResponseDto> {
     return this.createModifierGroupService.execute(authUser, dto);
-  }
-
-  @Get('modifier-groups')
-  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
-  @RequireProfileType(LoginProfileType.STAFF)
-  @ApiOperation({
-    summary: 'Lista los grupos de modificadores disponibles en una sucursal.',
-  })
-  listModifierGroups(
-    @CurrentAuthUser() authUser: JwtPayload,
-    @Query() query: ListModifierGroupsQueryDto,
-  ): Promise<ModifierGroupResponseDto[]> {
-    return this.listModifierGroupsService.execute(authUser, query);
   }
 
   @Patch('modifier-groups/:modifierGroupId')
