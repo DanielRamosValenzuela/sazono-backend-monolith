@@ -98,11 +98,4 @@ HTTP no cambiaron con la migracion.
   que quedo `PENDING` de una orden QR o un split participant (hoy el webhook
   finaliza el pago y el saldo de la cuenta, pero no re-ejecuta el ruteo a
   cocina ni la actualizacion del split; ver `src/modules/payments/README.md`)
-- **split bill no ofrece Transbank de punta a punta**: `GET
-  /qr/split-participants/:token` solo descubre una pasarela Mercado Pago
-  conectada (bug de `GetBillSplitParticipantService`, hardcodea el
-  proveedor), y el frontend (`split-payment.tsx`) tampoco tiene UI para
-  redireccion. El endpoint de cobro (`.../pay/redirect`) si existe y
-  funciona en el backend. Detalle completo, matriz de capacidad y el
-  archivo/linea exacto en `src/modules/payments/README.md` (seccion
-  "Transbank Webpay Plus Mall") y en `docs/24-pagos-vision-general.md`
+- ~~split bill no ofrece Transbank~~: resuelto 2026-10-06, el detalle del participante devuelve `options[]` (ver `docs/24-pagos-vision-general.md`).

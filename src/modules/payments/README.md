@@ -91,41 +91,13 @@ elige el de mayor `displayPriority` para cobrar.
   implementado, probado y en produccion de punta a punta -- backend y
   frontend -- desde la Fase 2 (ver doc `docs/22-transbank-webpay-integracion.md`
   para el detalle completo). El endpoint `.../pay/redirect` de split bill
-  esta implementado igual en el backend, pero **no** tiene contraparte
-  frontend todavia -- ver el gap siguiente.
-- **Gap real: split bill no ofrece Transbank como opcion descubrible**.
-  `GetBillSplitParticipantService.execute()`
-  (`application/get-bill-split-participant.service.ts`) resuelve la pasarela
-  del participante llamando
-  `RestaurantPaymentAccountRepository.findByRestaurant()`
-  (`infrastructure/mercado-pago/restaurant-payment-account.repository.ts`),
-  que filtra **siempre** por `provider: MERCADO_PAGO` sin importar que
-  cuentas esten realmente conectadas, y ademas hardcodea
-  `provider: PaymentGatewayProvider.MERCADO_PAGO` en la respuesta cuando hay
-  match. Efecto real: un restaurante que solo tenga Transbank conectado (sin
-  Mercado Pago) hace que `GET /qr/split-participants/:token` devuelva
-  `gatewayConnected: false` para ese participante, **aunque el endpoint de
-  cobro para ese mismo participante
-  (`POST split-participants/:token/pay/redirect`,
-  `StartRedirectPaymentService.startForSplitParticipant`) si funciona** si el
-  cliente lo llama directo. El bug esta solo en el descubrimiento
-  (`GET .../split-participants/:token`), no en el cobro. El patron correcto
-  ya existe en el mismo modulo:
-  `GetQrPaymentConfigService.execute()`
-  (`application/get-qr-payment-config.service.ts`) usa
-  `RestaurantPaymentAccountRepository.findConnectedByRestaurant()` (todas las
-  cuentas `CONNECTED`, cualquier proveedor) + `PaymentGatewayRegistry` para
-  construir `options[]`; `GetBillSplitParticipantService` deberia hacer lo
-  mismo en vez de su propio camino de un solo proveedor. Confirmado tambien
-  por `get-bill-split-participant.service.spec.ts`, que solo cubre el camino
-  Mercado Pago. Este gap tiene ademas una contraparte frontend: `split-payment.tsx`
-  en `sazono-ui` no tiene ningun camino de codigo (ni UI ni llamada API)
-  hacia el endpoint `.../pay/redirect` que si funciona en este backend --
-  arreglar solo el backend no cierra el flujo, ver
-  `sazono-ui/docs/03-frontend-ai-context.md` y
-  `sazono-ui/docs/19-transbank-y-checkout-multi-proveedor.md` para el estado
-  real del lado frontend. Ver tambien
-  `docs/24-pagos-vision-general.md` (matriz de capacidad flujo x proveedor).
+  esta implementado igual en el backend y, desde 2026-10-06, tambien en el
+  frontend (`split-payment.tsx`).
+- **Split bill + Transbank (resuelto 2026-10-06)**: `GetBillSplitParticipantService`
+  usa `findConnectedByRestaurant()` + `PaymentGatewayRegistry` mediante
+  `buildPaymentOptions()` y devuelve `options[]`, igual que
+  `GetQrPaymentConfigService`. El frontend (`split-payment.tsx`) ya usa el
+  selector de pasarela y el redirect de Transbank.
 
 El cobro pasa siempre por `ChargePaymentService`, que decide la ruta segun el
 `PaymentChannel` (`STAFF_OFFLINE` o `QR_ONLINE`) de cada caso de uso:

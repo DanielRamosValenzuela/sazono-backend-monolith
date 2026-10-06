@@ -111,11 +111,18 @@ descubrimiento, no de cobro); lee `SIN FRONTEND` como "no hay codigo en
 |---|---|---|---|
 | Prepago de pedido QR | CONECTADO | CONECTADO | CONECTADO (siempre disponible como fallback) |
 | Pago de cuenta abierta (QR) | CONECTADO | CONECTADO | CONECTADO (siempre disponible como fallback) |
-| Pago de participante de split | CONECTADO | **Backend: CONECTADO. Descubrimiento (`GET .../split-participants/:token`): NO DESCUBRIBLE (hardcodea Mercado Pago). Frontend (`split-payment.tsx`): SIN FRONTEND** | CONECTADO (siempre disponible como fallback) |
+| Pago de participante de split | CONECTADO | CONECTADO (descubrimiento por `options[]` + redirect en `split-payment.tsx`) | CONECTADO (siempre disponible como fallback) |
 | Registro POS (caja/supervisor/admin) | N/A (no aplica, es `STAFF_OFFLINE`) | N/A | CONECTADO |
 
-**El unico hueco real de la matriz es split bill + Transbank**, y tiene tres
-partes independientes, las tres verificadas contra el codigo:
+**Split bill + Transbank: resuelto el 2026-10-06.** Antes era el unico hueco de la matriz.
+`GetBillSplitParticipantService` ya no resuelve un solo proveedor: usa
+`findConnectedByRestaurant()` + `PaymentGatewayRegistry` (via
+`buildPaymentOptions()`, compartido con `GetQrPaymentConfigService`) y
+`GET /qr/split-participants/:token` devuelve `options[]` con el mismo shape
+que `payment-config`. En el frontend, `split-payment.tsx` usa
+`PaymentMethodOptions`, el `CardPaymentBrick` para pasarelas embedded y
+`qrApi.startSplitParticipantRedirectPayment` (`.../pay/redirect`) para
+Transbank.
 
 1. **Backend, cobro**: `POST split-participants/:token/pay/redirect`
    (`StartRedirectPaymentService.startForSplitParticipant`) funciona igual

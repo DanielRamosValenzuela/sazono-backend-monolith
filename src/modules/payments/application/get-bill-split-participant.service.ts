@@ -1,14 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PaymentAccountStatus, PaymentGatewayProvider } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
+import { PaymentGatewayRegistry } from '../infrastructure/payment-gateway-registry.service';
 import type { BillSplitParticipantDetailResponseDto } from '../presentation/http/dto/payments.dto';
+import { buildPaymentOptions } from './build-payment-options';
 
 @Injectable()
 export class GetBillSplitParticipantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly restaurantPaymentAccountRepository: RestaurantPaymentAccountRepository,
+    private readonly paymentGatewayRegistry: PaymentGatewayRegistry,
   ) {}
 
   async execute(
@@ -43,7 +45,12 @@ export class GetBillSplitParticipantService {
 
     const bill = participant.billSplit.bill;
 
-    const participantDetail = {
+    const connectedAccounts =
+      await this.restaurantPaymentAccountRepository.findConnectedByRestaurant(
+        bill.branch.restaurantId,
+      );
+
+    return {
       participantId: participant.id,
       displayName: participant.displayName,
       allocatedAmount: participant.allocatedAmount.toString(),
@@ -51,30 +58,10 @@ export class GetBillSplitParticipantService {
       status: participant.status,
       currency: bill.branch.restaurant.currency,
       billStatus: bill.status,
-    };
-
-    const account =
-      await this.restaurantPaymentAccountRepository.findByRestaurant(
-        bill.branch.restaurantId,
-      );
-
-    if (
-      account &&
-      account.status === PaymentAccountStatus.CONNECTED &&
-      account.publicKey
-    ) {
-      return {
-        ...participantDetail,
-        gatewayConnected: true,
-        provider: PaymentGatewayProvider.MERCADO_PAGO,
-        publicKey: account.publicKey,
-        environment: account.environment,
-      };
-    }
-
-    return {
-      ...participantDetail,
-      gatewayConnected: false,
+      options: buildPaymentOptions(
+        connectedAccounts,
+        this.paymentGatewayRegistry,
+      ),
     };
   }
 }

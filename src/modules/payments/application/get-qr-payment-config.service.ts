@@ -3,10 +3,8 @@ import { TableStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
 import { PaymentGatewayRegistry } from '../infrastructure/payment-gateway-registry.service';
-import type {
-  QrPaymentConfigOptionResponseDto,
-  QrPaymentConfigResponseDto,
-} from '../presentation/http/dto/payments.dto';
+import type { QrPaymentConfigResponseDto } from '../presentation/http/dto/payments.dto';
+import { buildPaymentOptions } from './build-payment-options';
 
 @Injectable()
 export class GetQrPaymentConfigService {
@@ -35,28 +33,11 @@ export class GetQrPaymentConfigService {
         table.branch.restaurantId,
       );
 
-    const options: QrPaymentConfigOptionResponseDto[] = [];
-
-    for (const account of connectedAccounts) {
-      const gateway = this.paymentGatewayRegistry.get(account.provider);
-
-      if (!gateway) {
-        continue;
-      }
-
-      if (gateway.checkoutMode === 'embedded' && !account.publicKey) {
-        continue;
-      }
-
-      options.push({
-        provider: account.provider,
-        checkoutMode: gateway.checkoutMode,
-        publicKey: account.publicKey ?? undefined,
-        environment: account.environment,
-        isPreferred: options.length === 0,
-      });
-    }
-
-    return { options };
+    return {
+      options: buildPaymentOptions(
+        connectedAccounts,
+        this.paymentGatewayRegistry,
+      ),
+    };
   }
 }

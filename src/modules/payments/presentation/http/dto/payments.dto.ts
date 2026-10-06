@@ -310,25 +310,11 @@ export class BillSplitParticipantDetailResponseDto {
   billStatus!: BillStatus;
 
   @ApiProperty({
+    type: () => [QrPaymentConfigOptionResponseDto],
     description:
-      'Si es false no hay ninguna pasarela conectada y el participante solo puede pagar de forma manual.',
+      'Pasarelas conectadas y disponibles para pagar, ordenadas por prioridad. Vacio si el participante solo puede pagar de forma manual.',
   })
-  gatewayConnected!: boolean;
-
-  @ApiPropertyOptional({
-    enum: PaymentGatewayProvider,
-    enumName: 'PaymentGatewayProvider',
-  })
-  provider?: PaymentGatewayProvider;
-
-  @ApiPropertyOptional({
-    description:
-      'Llave publica de la pasarela, segura para usar en el navegador.',
-  })
-  publicKey?: string;
-
-  @ApiPropertyOptional({ example: 'sandbox' })
-  environment?: string;
+  options!: QrPaymentConfigOptionResponseDto[];
 }
 
 export class BillSplitResponseDto {
