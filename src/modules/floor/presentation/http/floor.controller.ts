@@ -28,6 +28,9 @@ import { GetCurrentTableSessionService } from '../../application/get-current-tab
 import { ListBranchStaffService } from '../../application/list-branch-staff.service';
 import { ListTablesService } from '../../application/list-tables.service';
 import { ListTableZonesService } from '../../application/list-table-zones.service';
+import { ListCounterSessionsService } from '../../application/list-counter-sessions.service';
+import { OpenCounterSessionService } from '../../application/open-counter-session.service';
+import { RenameCounterSessionService } from '../../application/rename-counter-session.service';
 import { OpenTableSessionService } from '../../application/open-table-session.service';
 import { RenameTableZoneService } from '../../application/rename-table-zone.service';
 import { SetTableZoneService } from '../../application/set-table-zone.service';
@@ -37,10 +40,15 @@ import {
   AssignTableSessionDto,
   BranchStaffMemberResponseDto,
   CloseTableSessionDto,
+  CounterSessionListItemDto,
+  CounterSessionResponseDto,
   CreateTableDto,
   CreateTableZoneDto,
+  ListCounterSessionsQueryDto,
   ListTablesQueryDto,
+  OpenCounterSessionDto,
   OpenTableSessionDto,
+  RenameCounterSessionDto,
   RenameTableZoneDto,
   SetTableZoneDto,
   SetZoneStaffDto,
@@ -68,6 +76,9 @@ export class FloorController {
     private readonly setTableZoneService: SetTableZoneService,
     private readonly setZoneStaffService: SetZoneStaffService,
     private readonly listBranchStaffService: ListBranchStaffService,
+    private readonly openCounterSessionService: OpenCounterSessionService,
+    private readonly listCounterSessionsService: ListCounterSessionsService,
+    private readonly renameCounterSessionService: RenameCounterSessionService,
   ) {}
 
   @Post('tables')
@@ -129,7 +140,7 @@ export class FloorController {
   @RequireProfileType(LoginProfileType.STAFF)
   @ApiOperation({
     summary:
-      'Cierra manualmente una mesa cuando la cuenta activa ya no tiene saldo pendiente.',
+      'Cierra manualmente una mesa cuando la cuenta activa ya no tiene saldo pendiente. En mesa virtual exige ademas todas las ordenes entregadas (409 si no).',
   })
   closeTableSession(
     @CurrentAuthUser() authUser: JwtPayload,
@@ -144,7 +155,7 @@ export class FloorController {
   @RequireProfileType(LoginProfileType.STAFF)
   @ApiOperation({
     summary:
-      'Marca una sesion como abandonada por deuda o retiro sin pago. Solo caja, supervisor o admin.',
+      'Marca una sesion como abandonada por deuda o retiro sin pago. Solo caja, supervisor o admin; en sesiones de mesa virtual tambien un mesero.',
   })
   abandonTableSession(
     @CurrentAuthUser() authUser: JwtPayload,
@@ -256,6 +267,53 @@ export class FloorController {
     @Body() dto: SetZoneStaffDto,
   ): Promise<TableZoneResponseDto> {
     return this.setZoneStaffService.execute(authUser, zoneId, dto);
+  }
+
+  @Post('counter-sessions')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Abre un ticket de mesa virtual (sesion + cuenta sobre la mesa virtual de la sucursal). Admin, supervisor, mesero o cajero.',
+  })
+  openCounterSession(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Body() dto: OpenCounterSessionDto,
+  ): Promise<CounterSessionResponseDto> {
+    return this.openCounterSessionService.execute(authUser, dto);
+  }
+
+  @Get('counter-sessions')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Lista los tickets de mesa virtual activos con cuenta, ordenes y estado de entrega. mine=true filtra los abiertos por el solicitante.',
+  })
+  listCounterSessions(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Query() query: ListCounterSessionsQueryDto,
+  ): Promise<CounterSessionListItemDto[]> {
+    return this.listCounterSessionsService.execute(authUser, query);
+  }
+
+  @Patch('counter-sessions/:tableSessionId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Cambia el nombre del cliente de un ticket de mesa virtual activo.',
+  })
+  renameCounterSession(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('tableSessionId') tableSessionId: string,
+    @Body() dto: RenameCounterSessionDto,
+  ): Promise<CounterSessionResponseDto> {
+    return this.renameCounterSessionService.execute(
+      authUser,
+      tableSessionId,
+      dto,
+    );
   }
 
   @Get('branch-staff')

@@ -25,6 +25,7 @@ export class PushNotificationService {
     branchId: string,
     roles: Role[],
     payload: PushNotificationPayload,
+    extraStaffUserIds: string[] = [],
   ): Promise<void> {
     const branchRoles = await this.prisma.staffUserBranchRole.findMany({
       where: {
@@ -38,7 +39,10 @@ export class PushNotificationService {
     });
 
     await this.sendToStaffUsers(
-      branchRoles.map((branchRole) => branchRole.staffUserId),
+      [
+        ...branchRoles.map((branchRole) => branchRole.staffUserId),
+        ...extraStaffUserIds,
+      ],
       payload,
     );
   }

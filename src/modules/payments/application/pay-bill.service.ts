@@ -1,4 +1,8 @@
-﻿import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
@@ -9,6 +13,8 @@ import type {
   PayBillDto,
   PaymentResultResponseDto,
 } from '../presentation/http/dto/payments.dto';
+
+const STAFF_PAY_ROLES: Role[] = [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER];
 
 @Injectable()
 export class PayBillService {
@@ -32,6 +38,9 @@ export class PayBillService {
             restaurant: true,
           },
         },
+        tableSession: {
+          select: { isCounter: true },
+        },
       },
     });
 
@@ -39,11 +48,20 @@ export class PayBillService {
       throw new BadRequestException('La cuenta indicada no existe.');
     }
 
-    await this.branchAccessService.ensureAccess(authUser, bill.branchId, [
-      Role.ADMIN,
-      Role.SUPERVISOR,
-      Role.CASHIER,
-    ]);
+    const context = await this.branchAccessService.ensureAccess(
+      authUser,
+      bill.branchId,
+      [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],
+    );
+
+    if (
+      !bill.tableSession.isCounter &&
+      !context.roles.some((role) => STAFF_PAY_ROLES.includes(role))
+    ) {
+      throw new ForbiddenException(
+        'Solo caja, supervisor o admin puede cobrar una cuenta de mesa.',
+      );
+    }
 
     return this.settleBillPaymentService.execute(
       PaymentChannel.STAFF_OFFLINE,

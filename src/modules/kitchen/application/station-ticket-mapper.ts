@@ -5,6 +5,7 @@ import type {
   PreparationStationType,
   StationTicketStatus,
 } from '@prisma/client';
+import { COUNTER_TABLE_CODE } from '../../floor/domain/counter-table';
 import type { StationTicketResponseDto } from '../presentation/http/dto/kitchen.dto';
 
 export type StationTicketWithRelations = {
@@ -24,6 +25,9 @@ export type StationTicketWithRelations = {
     source: OrderSource;
     notes: string | null;
     tableSession: {
+      isCounter: boolean;
+      ticketNumber: number | null;
+      customerLabel: string | null;
       table: {
         code: string;
       };
@@ -78,7 +82,12 @@ export const mapStationTicket = (
   stationType: ticket.preparationStation.stationType,
   status: ticket.status,
   orderSource: ticket.order.source,
-  tableCode: ticket.order.tableSession.table.code,
+  tableCode: ticket.order.tableSession.isCounter
+    ? COUNTER_TABLE_CODE
+    : ticket.order.tableSession.table.code,
+  isCounter: ticket.order.tableSession.isCounter,
+  ticketNumber: ticket.order.tableSession.ticketNumber,
+  customerLabel: ticket.order.tableSession.customerLabel,
   orderNotes: ticket.order.notes,
   sentAt: ticket.sentAt?.toISOString() ?? null,
   startedAt: ticket.startedAt?.toISOString() ?? null,
@@ -90,6 +99,8 @@ export const mapStationTicket = (
     quantity: item.quantity,
     status: item.status,
     notes: item.orderItem.notes,
-    modifiers: item.orderItem.modifiers.map((modifier) => modifier.nameSnapshot),
+    modifiers: item.orderItem.modifiers.map(
+      (modifier) => modifier.nameSnapshot,
+    ),
   })),
 });

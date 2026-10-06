@@ -43,7 +43,7 @@ export class CreateQrOrderService {
       },
     });
 
-    if (!table || table.status === TableStatus.DISABLED) {
+    if (!table || table.isVirtual || table.status === TableStatus.DISABLED) {
       throw new NotFoundException('El QR indicado no esta disponible.');
     }
 

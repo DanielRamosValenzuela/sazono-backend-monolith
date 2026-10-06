@@ -344,19 +344,21 @@ model StaffUserBranchRole {
 }
 
 model Table {
-  id            String         @id @default(uuid()) @db.Uuid
-  branchId      String         @map("branch_id") @db.Uuid
-  code          String
-  name          String
-  capacity      Int?
-  zoneId        String?        @map("zone_id") @db.Uuid
-  qrToken       String         @unique @map("qr_token")
-  status        TableStatus    @default(AVAILABLE)
-  branch        Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  zone          TableZone?     @relation(fields: [zoneId], references: [id], onDelete: SetNull)
-  tableSessions TableSession[]
-  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                String         @id @default(uuid()) @db.Uuid
+  branchId          String         @map("branch_id") @db.Uuid
+  code              String
+  name              String
+  capacity          Int?
+  zoneId            String?        @map("zone_id") @db.Uuid
+  qrToken           String         @unique @map("qr_token")
+  status            TableStatus    @default(AVAILABLE)
+  isVirtual         Boolean        @default(false) @map("is_virtual")
+  counterLastTicket Int            @default(0) @map("counter_last_ticket")
+  branch            Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  zone              TableZone?     @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  tableSessions     TableSession[]
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([branchId, code])
   @@map("tables")
@@ -372,6 +374,9 @@ model TableSession {
   closedByStaffUserId String?                    @map("closed_by_staff_user_id") @db.Uuid
   assignedStaffUserId String?                    @map("assigned_staff_user_id") @db.Uuid
   guestCount          Int?                       @map("guest_count")
+  isCounter           Boolean                    @default(false) @map("is_counter")
+  ticketNumber        Int?                       @map("ticket_number")
+  customerLabel       String?                    @map("customer_label")
   closeReason         String?                    @map("close_reason")
   openedAt            DateTime                   @default(now()) @map("opened_at") @db.Timestamptz(3)
   closedAt            DateTime?                  @map("closed_at") @db.Timestamptz(3)

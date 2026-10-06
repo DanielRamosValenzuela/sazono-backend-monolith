@@ -26,6 +26,8 @@ Migración `20260721170000_add_table_assignment` escrita a mano, no generada con
 - `400 BadRequestException` si la sesión no está activa (`OPEN`/`PAYMENT_COMPLETED`).
 - Valida que el staff destino tenga un `StaffUserBranchRole` con `status: ACTIVE` y rol operativo en esa sucursal, **y que su propio `StaffUser.status` también sea `ACTIVE`**. Este segundo chequeo se agregó después de una revisión adversarial que detectó que un staff desactivado (ej. despedido) seguía siendo un destino válido de reasignación mientras nadie tocara explícitamente su fila de rol: `PATCH /staff/:id` con solo `{"status":"DISABLED"}` (una desactivación normal) no toca `StaffUserBranchRole` — ver `update-staff-user.service.ts`. Sin este chequeo, un admin podía reasignar una mesa activa a una cuenta que ya no podía ni siquiera autenticarse.
 
+`assign-table-session` responde `400` para sesiones de mesa virtual (`isCounter`): no hay mesero de mesa que reasignar (doc 26).
+
 ## Dónde más aparece `assignedStaffUserId`
 
 - `open-table-session.service.ts`: al abrir una sesión, se setea automáticamente al `staffUserId` de quien la abre **solo si** `BranchSettings.tableAssignmentEnabled` es `true` para esa sucursal; si no, queda `null` (comportamiento histórico, sin cambios para sucursales que no activaron la función).
@@ -43,8 +45,8 @@ Se corrió una revisión adversarial (3 dimensiones en paralelo — permisos de 
 
 ## Backlog
 
-Sigue pendiente el backlog #2 de doc 17: **"mesa virtual" para pedidos de mostrador/para llevar sin mesa física real** (patrón usado por la competencia, ej. Toteat). Bloqueado por una decisión de modelo de datos, no por esfuerzo de implementación: la regla activa hoy (doc 08) es que una mesa no puede tener más de una `TableSession` activa a la vez, y eso es incompatible tal cual con un mostrador que reciba varios pedidos para llevar en simultáneo. Antes de programar algo hay que elegir entre:
+~~Sigue pendiente~~ **Resuelto en doc 26** (opcion 1 con flag `isCounter` en la sesion; el texto siguiente es el registro historico de la decision). Era el backlog #2 de doc 17: **"mesa virtual" para pedidos sin mesa fisica real o para llevar sin mesa física real** (patrón usado por la competencia, ej. Toteat). Bloqueado por una decisión de modelo de datos, no por esfuerzo de implementación: la regla activa hoy (doc 08) es que una mesa no puede tener más de una `TableSession` activa a la vez, y eso es incompatible tal cual con un mostrador que reciba varios pedidos para llevar en simultáneo. Antes de programar algo hay que elegir entre:
 
-1. Relajar esa regla solo para mesas marcadas como virtuales (`Table.isVirtual` o similar) y crear una única mesa "Mostrador" por sucursal que admita N sesiones concurrentes.
+1. Relajar esa regla solo para mesas marcadas como virtuales (`Table.isVirtual` o similar) y crear una única mesa "Mesa virtual" por sucursal que admita N sesiones concurrentes.
 2. Un pool de mesas virtuales reusables ("Para llevar 1", "Para llevar 2"...) sin tocar la regla existente.
 3. Un modelo `CounterOrder` separado que no dependa de `Table` en absoluto — más limpio conceptualmente, pero duplica bastante de lo que ya hace `TableSession`/`Bill`.

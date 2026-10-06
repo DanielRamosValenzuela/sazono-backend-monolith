@@ -33,6 +33,9 @@ export class ListTableZonesService {
       },
       include: {
         tables: {
+          where: {
+            isVirtual: false,
+          },
           select: {
             id: true,
           },

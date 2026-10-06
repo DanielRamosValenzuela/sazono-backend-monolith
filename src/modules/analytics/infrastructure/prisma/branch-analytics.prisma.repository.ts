@@ -35,6 +35,7 @@ export class BranchAnalyticsPrismaRepository {
     return this.prisma.table.count({
       where: {
         branchId,
+        isVirtual: false,
       },
     });
   }
@@ -44,6 +45,7 @@ export class BranchAnalyticsPrismaRepository {
       where: {
         branchId,
         status: TableStatus.OCCUPIED,
+        isVirtual: false,
       },
     });
   }
@@ -53,6 +55,7 @@ export class BranchAnalyticsPrismaRepository {
       where: {
         branchId,
         status: TableSessionStatus.OPEN,
+        isCounter: false,
       },
     });
   }

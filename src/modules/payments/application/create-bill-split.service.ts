@@ -85,7 +85,7 @@ export class CreateBillSplitService {
       },
     });
 
-    if (!table || table.status === TableStatus.DISABLED) {
+    if (!table || table.isVirtual || table.status === TableStatus.DISABLED) {
       throw new BadRequestException('El QR indicado no esta disponible.');
     }
 

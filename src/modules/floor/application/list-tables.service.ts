@@ -42,6 +42,7 @@ export class ListTablesService {
     const tables = await this.prisma.table.findMany({
       where: {
         branchId: query.branchId,
+        isVirtual: false,
       },
       include: {
         tableSessions: {

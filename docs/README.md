@@ -26,6 +26,8 @@
 22. [22 Integración de Transbank Webpay Plus Mall](22-transbank-webpay-integracion.md)
 23. [23 Arquitectura Multi-Proveedor de Pago](23-arquitectura-multi-proveedor-de-pago.md)
 24. [24 Pagos: Visión General](24-pagos-vision-general.md)
+25. [25 Migración de Mercado Pago a Orders API](25-migracion-mercado-pago-orders-api.md)
+26. [26 Mesas virtuales (pedidos sin mesa física)](26-pedidos-de-mostrador-mesa-virtual.md)
 
 Nota: dentro del bloque de pagos (12, 13, 21, 22, 23), lee primero el doc 24
 aunque quede numerado al final — es el mapa completo (flujos de dinero, por

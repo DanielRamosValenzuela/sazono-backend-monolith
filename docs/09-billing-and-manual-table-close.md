@@ -7,7 +7,7 @@ Este slice conecta por primera vez `TableSession` con `Bill` y completa el flujo
 ## Endpoints actuales
 
 - `GET /api/v1/billing/table-sessions/:tableSessionId/current-bill`
-- `GET /api/v1/billing/branches/:branchId/open-bills`: todas las cuentas de sesiones activas de la sucursal en una sola consulta (evita N+1 al pedir el saldo mesa por mesa)
+- `GET /api/v1/billing/branches/:branchId/open-bills`: todas las cuentas de sesiones activas de la sucursal en una sola consulta (evita N+1 al pedir el saldo mesa por mesa). Cada item suma `isCounter`, `ticketNumber` y `customerLabel`; en sesiones de mesa virtual `tableCode` es `MOSTRADOR`
 - `POST /api/v1/floor/table-sessions/:tableSessionId/close`
 
 ## Reglas activas
@@ -22,6 +22,7 @@ Este slice conecta por primera vez `TableSession` con `Bill` y completa el flujo
 
 - consultar `Bill` actual: `ADMIN`, `SUPERVISOR`, `WAITER` o `CASHIER`
 - cerrar mesa: `ADMIN`, `SUPERVISOR`, `WAITER` o `CASHIER`
+- cobrar cuentas de mesa virtual: ademas de caja/supervisor/admin, `WAITER` (doc 26)
 
 ## Consumo frontend
 

@@ -89,6 +89,15 @@ export class StationTicketResponseDto {
   @ApiProperty({ example: 'M01' })
   tableCode!: string;
 
+  @ApiProperty({ example: false })
+  isCounter!: boolean;
+
+  @ApiProperty({ nullable: true, example: 12 })
+  ticketNumber!: number | null;
+
+  @ApiProperty({ nullable: true, example: 'Ana' })
+  customerLabel!: string | null;
+
   @ApiProperty({ nullable: true, required: false })
   orderNotes!: string | null;
 

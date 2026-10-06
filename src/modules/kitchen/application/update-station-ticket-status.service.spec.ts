@@ -69,12 +69,57 @@ describe('UpdateStationTicketStatusService', () => {
       notes: null,
       createdByStaffUserId: 'staff-waiter-1',
       tableSession: {
+        isCounter: false,
+        ticketNumber: null,
+        customerLabel: null,
+        openedByStaffUserId: 'staff-opener-1',
         table: {
           code: 'M01',
         },
       },
     },
     stationTicketItems: [],
+  };
+
+  const arrangeReadyTransition = (
+    orderTicketStatuses: StationTicketStatus[],
+    orderStatus: OrderStatus,
+  ) => {
+    ticketFindUniqueMock.mockResolvedValue({
+      id: 'ticket-1',
+      orderId: 'order-1',
+      branchId: 'branch-1',
+      status: StationTicketStatus.IN_PROGRESS,
+      startedAt: new Date('2026-07-07T12:00:00.000Z'),
+      order: { id: 'order-1', status: orderStatus },
+    });
+    ensureAccessMock.mockResolvedValue({
+      staffUserId: 'staff-1',
+      restaurantId: 'restaurant-1',
+      branchId: 'branch-1',
+      roles: ['KITCHEN'],
+    });
+    transactionMock.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          stationTicket: {
+            update: jest.fn().mockResolvedValue({}),
+            findMany: jest
+              .fn()
+              .mockResolvedValue(
+                orderTicketStatuses.map((status) => ({ status })),
+              ),
+          },
+          stationTicketItem: {
+            updateMany: jest.fn().mockResolvedValue({}),
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          orderItem: { updateMany: jest.fn().mockResolvedValue({}) },
+          order: {
+            update: jest.fn().mockResolvedValue({ status: orderStatus }),
+          },
+        }),
+    );
   };
 
   it('marks a ticket ready, syncs items and recomputes the order status', async () => {
@@ -108,7 +153,9 @@ describe('UpdateStationTicketStatusService', () => {
         { status: StationTicketStatus.READY },
         { status: StationTicketStatus.IN_PROGRESS },
       ]);
-    const orderUpdateMock = jest.fn().mockResolvedValue({});
+    const orderUpdateMock = jest
+      .fn()
+      .mockResolvedValue({ status: OrderStatus.IN_PREPARATION });
 
     transactionMock.mockImplementation(
       (callback: (tx: unknown) => Promise<unknown>) =>
@@ -148,9 +195,61 @@ describe('UpdateStationTicketStatusService', () => {
         data: { status: OrderStatus.PARTIALLY_READY },
       }),
     );
+    expect(emitMock).not.toHaveBeenCalled();
+  });
+
+  it('emits the ready event once the whole order rolls up to READY', async () => {
+    arrangeReadyTransition(
+      [StationTicketStatus.READY, StationTicketStatus.READY],
+      OrderStatus.PARTIALLY_READY,
+    );
+    ticketFindUniqueOrThrowMock.mockResolvedValue(mappedTicket);
+
+    await service.execute(authUser, 'ticket-1', {
+      status: StationTicketStatus.READY,
+    });
+
+    expect(emitMock).toHaveBeenCalledTimes(1);
     expect(emitMock).toHaveBeenCalledWith(STATION_TICKET_READY_EVENT, {
       orderId: 'order-1',
       createdByStaffUserId: 'staff-waiter-1',
+      branchId: 'branch-1',
+      label: 'M01',
+      isCounter: false,
+      openedByStaffUserId: 'staff-opener-1',
+    });
+  });
+
+  it('labels counter orders with the ticket number and customer label', async () => {
+    arrangeReadyTransition(
+      [StationTicketStatus.READY],
+      OrderStatus.IN_PREPARATION,
+    );
+    ticketFindUniqueOrThrowMock.mockResolvedValue({
+      ...mappedTicket,
+      order: {
+        ...mappedTicket.order,
+        tableSession: {
+          ...mappedTicket.order.tableSession,
+          isCounter: true,
+          ticketNumber: 12,
+          customerLabel: 'Ana',
+          table: { code: 'MOSTRADOR' },
+        },
+      },
+    });
+
+    await service.execute(authUser, 'ticket-1', {
+      status: StationTicketStatus.READY,
+    });
+
+    expect(emitMock).toHaveBeenCalledWith(STATION_TICKET_READY_EVENT, {
+      orderId: 'order-1',
+      createdByStaffUserId: 'staff-waiter-1',
+      branchId: 'branch-1',
+      label: '#12 Ana',
+      isCounter: true,
+      openedByStaffUserId: 'staff-opener-1',
     });
   });
 

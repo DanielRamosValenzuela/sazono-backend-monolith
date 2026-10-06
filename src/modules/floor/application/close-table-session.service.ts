@@ -1,6 +1,11 @@
-﻿import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import {
   BillStatus,
+  OrderStatus,
   Role,
   TableSessionStatus,
   TableStatus,
@@ -70,6 +75,21 @@ export class CloseTableSessionService {
         );
       }
 
+      if (existingSession.isCounter) {
+        const undeliveredOrders = await tx.order.count({
+          where: {
+            tableSessionId: existingSession.id,
+            status: { notIn: [OrderStatus.CANCELLED, OrderStatus.DELIVERED] },
+          },
+        });
+
+        if (undeliveredOrders > 0) {
+          throw new ConflictException(
+            'No se puede cerrar el pedido de mesa virtual porque aun tiene ordenes sin entregar.',
+          );
+        }
+      }
+
       const closedAt = new Date();
 
       const updatedSession = await tx.tableSession.update({
@@ -84,14 +104,16 @@ export class CloseTableSessionService {
         },
       });
 
-      await tx.table.update({
-        where: {
-          id: existingSession.tableId,
-        },
-        data: {
-          status: TableStatus.AVAILABLE,
-        },
-      });
+      if (!existingSession.isCounter) {
+        await tx.table.update({
+          where: {
+            id: existingSession.tableId,
+          },
+          data: {
+            status: TableStatus.AVAILABLE,
+          },
+        });
+      }
 
       await tx.bill.update({
         where: {

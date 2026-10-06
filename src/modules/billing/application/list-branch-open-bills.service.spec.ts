@@ -41,6 +41,9 @@ describe('ListBranchOpenBillsService', () => {
     findManyMock.mockResolvedValue([
       {
         id: 'session-1',
+        isCounter: false,
+        ticketNumber: null,
+        customerLabel: null,
         status: TableSessionStatus.OPEN,
         openedAt: new Date('2026-07-08T12:00:00.000Z'),
         table: { id: 'table-1', code: 'M01', name: 'Mesa 1' },
@@ -65,6 +68,9 @@ describe('ListBranchOpenBillsService', () => {
     expect(result[0]).toMatchObject({
       tableId: 'table-1',
       tableCode: 'M01',
+      isCounter: false,
+      ticketNumber: null,
+      customerLabel: null,
       billId: 'bill-1',
       totalAmount: '11800',
       remainingAmount: '11800',
@@ -88,5 +94,34 @@ describe('ListBranchOpenBillsService', () => {
     const result = await service.execute(authUser, 'branch-1');
 
     expect(result).toEqual([]);
+  });
+
+  it('exposes counter sessions with the MOSTRADOR fallback code', async () => {
+    ensureAccessMock.mockResolvedValue({ roles: [Role.CASHIER] });
+    findManyMock.mockResolvedValue([
+      {
+        id: 'session-3',
+        isCounter: true,
+        ticketNumber: 12,
+        customerLabel: 'Ana',
+        status: TableSessionStatus.OPEN,
+        openedAt: new Date('2026-07-08T12:00:00.000Z'),
+        table: { id: 'table-v', code: 'MOSTRADOR-X', name: 'Mesa virtual' },
+        bill: {
+          id: 'bill-3',
+          totalAmount: new Prisma.Decimal('3000'),
+          remainingAmount: new Prisma.Decimal('0'),
+        },
+      },
+    ]);
+
+    const result = await service.execute(authUser, 'branch-1');
+
+    expect(result[0]).toMatchObject({
+      tableCode: 'MOSTRADOR',
+      isCounter: true,
+      ticketNumber: 12,
+      customerLabel: 'Ana',
+    });
   });
 });

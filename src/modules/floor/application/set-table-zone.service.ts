@@ -31,6 +31,12 @@ export class SetTableZoneService {
       throw new BadRequestException('La mesa indicada no existe.');
     }
 
+    if (table.isVirtual) {
+      throw new BadRequestException(
+        'La mesa virtual no puede asignarse a una zona.',
+      );
+    }
+
     await this.branchAccessService.ensureAccess(authUser, table.branchId, [
       Role.ADMIN,
       Role.SUPERVISOR,

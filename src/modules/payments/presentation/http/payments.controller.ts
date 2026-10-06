@@ -35,7 +35,7 @@ export class PaymentsController {
   @RequireProfileType(LoginProfileType.STAFF)
   @ApiOperation({
     summary:
-      'Registra un pago total o parcial de una cuenta desde caja, supervisor o admin.',
+      'Registra un pago total o parcial de una cuenta desde caja, supervisor o admin. En sesiones de mesa virtual tambien puede cobrar un mesero.',
   })
   payBill(
     @CurrentAuthUser() authUser: JwtPayload,

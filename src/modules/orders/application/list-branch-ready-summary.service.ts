@@ -4,6 +4,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
+import { COUNTER_TABLE_CODE } from '../../floor/domain/counter-table';
 import type {
   BranchReadySummaryItemDto,
   ListBranchReadySummaryQueryDto,
@@ -54,6 +55,9 @@ export class ListBranchReadySummaryService {
             tableId: true,
             openedByStaffUserId: true,
             assignedStaffUserId: true,
+            isCounter: true,
+            ticketNumber: true,
+            customerLabel: true,
             table: {
               select: { code: true },
             },
@@ -85,6 +89,7 @@ export class ListBranchReadySummaryService {
       const minutesReady = readyAt ? (now - readyAt.getTime()) / 60_000 : 0;
 
       if (
+        !order.tableSession.isCounter &&
         autoDeliverAfterMinutes !== null &&
         readyAt &&
         minutesReady >= autoDeliverAfterMinutes
@@ -96,19 +101,28 @@ export class ListBranchReadySummaryService {
     }
 
     if (orderIdsToAutoDeliver.length > 0) {
-      await this.prisma.$transaction([
-        this.prisma.order.updateMany({
-          where: { id: { in: orderIdsToAutoDeliver } },
-          data: { status: OrderStatus.DELIVERED },
-        }),
-        this.prisma.orderItem.updateMany({
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.order.findMany({
           where: {
-            orderId: { in: orderIdsToAutoDeliver },
+            id: { in: orderIdsToAutoDeliver },
+            status: OrderStatus.READY,
+          },
+          select: { id: true },
+        });
+        const claimedIds = claimed.map((order) => order.id);
+
+        await tx.order.updateMany({
+          where: { id: { in: claimedIds }, status: OrderStatus.READY },
+          data: { status: OrderStatus.DELIVERED },
+        });
+        await tx.orderItem.updateMany({
+          where: {
+            orderId: { in: claimedIds },
             status: { not: OrderItemStatus.CANCELLED },
           },
           data: { status: OrderItemStatus.DELIVERED },
-        }),
-      ]);
+        });
+      });
     }
 
     const bySession = new Map<string, BranchReadySummaryItemDto>();
@@ -124,7 +138,12 @@ export class ListBranchReadySummaryService {
       bySession.set(order.tableSessionId, {
         tableSessionId: order.tableSessionId,
         tableId: order.tableSession.tableId,
-        tableCode: order.tableSession.table.code,
+        tableCode: order.tableSession.isCounter
+          ? COUNTER_TABLE_CODE
+          : order.tableSession.table.code,
+        isCounter: order.tableSession.isCounter,
+        ticketNumber: order.tableSession.ticketNumber,
+        customerLabel: order.tableSession.customerLabel,
         openedByStaffUserId: order.tableSession.openedByStaffUserId,
         assignedStaffUserId: isTableAssignmentEnabled
           ? order.tableSession.assignedStaffUserId

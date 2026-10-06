@@ -39,6 +39,12 @@ export class AssignTableSessionService {
       throw new BadRequestException('La sesion indicada no existe.');
     }
 
+    if (existingSession.isCounter) {
+      throw new BadRequestException(
+        'Las sesiones de mesa virtual no se asignan.',
+      );
+    }
+
     if (!ACTIVE_TABLE_SESSION_STATUSES.includes(existingSession.status)) {
       throw new BadRequestException(
         'Solo se puede asignar una sesion de mesa activa.',

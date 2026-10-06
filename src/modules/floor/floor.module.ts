@@ -12,10 +12,16 @@ import { GetCurrentTableSessionService } from './application/get-current-table-s
 import { ListBranchStaffService } from './application/list-branch-staff.service';
 import { ListTablesService } from './application/list-tables.service';
 import { ListTableZonesService } from './application/list-table-zones.service';
+import { EnsureCounterTableService } from './application/ensure-counter-table.service';
+import { ListCounterSessionsService } from './application/list-counter-sessions.service';
+import { OpenCounterSessionService } from './application/open-counter-session.service';
+import { RenameCounterSessionService } from './application/rename-counter-session.service';
 import { OpenTableSessionService } from './application/open-table-session.service';
 import { RenameTableZoneService } from './application/rename-table-zone.service';
 import { SetTableZoneService } from './application/set-table-zone.service';
 import { SetZoneStaffService } from './application/set-zone-staff.service';
+import { AbandonStaleCounterSessionsService } from './application/abandon-stale-counter-sessions.service';
+import { AbandonStaleCounterSessionsScheduler } from './infrastructure/abandon-stale-counter-sessions.scheduler';
 import { FloorController } from './presentation/http/floor.controller';
 
 @Module({
@@ -36,6 +42,12 @@ import { FloorController } from './presentation/http/floor.controller';
     SetTableZoneService,
     SetZoneStaffService,
     ListBranchStaffService,
+    EnsureCounterTableService,
+    OpenCounterSessionService,
+    ListCounterSessionsService,
+    RenameCounterSessionService,
+    AbandonStaleCounterSessionsService,
+    AbandonStaleCounterSessionsScheduler,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],

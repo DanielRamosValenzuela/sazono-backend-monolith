@@ -27,6 +27,12 @@ export class GetCurrentTableSessionService {
       throw new BadRequestException('La mesa indicada no existe.');
     }
 
+    if (table.isVirtual) {
+      throw new BadRequestException(
+        'La mesa virtual no tiene una sesion de mesa unica.',
+      );
+    }
+
     await this.branchAccessService.ensureAccess(authUser, table.branchId, [
       Role.ADMIN,
       Role.SUPERVISOR,

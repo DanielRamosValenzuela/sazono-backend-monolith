@@ -106,7 +106,7 @@ describe('PayQrOrderService', () => {
 
     const txOrderFindUniqueOrThrowMock = jest.fn().mockResolvedValue({
       id: 'order-1',
-      status: OrderStatus.AWAITING_PAYMENT,
+      status: OrderStatus.ROUTED,
     });
     const txAttemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });
     const txPaymentCreateMock = jest.fn().mockResolvedValue({
@@ -156,6 +156,7 @@ describe('PayQrOrderService', () => {
           order: {
             findUniqueOrThrow: txOrderFindUniqueOrThrowMock,
             update: txOrderUpdateMock,
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
           },
           paymentAttempt: { updateMany: txAttemptUpdateManyMock },
           payment: { create: txPaymentCreateMock },

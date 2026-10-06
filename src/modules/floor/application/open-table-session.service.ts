@@ -40,6 +40,12 @@ export class OpenTableSessionService {
       throw new BadRequestException('La mesa indicada no existe.');
     }
 
+    if (table.isVirtual) {
+      throw new BadRequestException(
+        'No se puede abrir una sesion de mesa sobre la mesa virtual.',
+      );
+    }
+
     if (table.status === TableStatus.DISABLED) {
       throw new BadRequestException(
         'No se puede abrir una sesion sobre una mesa deshabilitada.',

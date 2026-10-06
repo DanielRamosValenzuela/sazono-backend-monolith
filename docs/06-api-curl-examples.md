@@ -733,6 +733,43 @@ curl --request POST "http://localhost:3000/api/v1/floor/table-sessions/<TABLE_SE
   }'
 ```
 
+## Floor counter sessions (mesa virtual)
+
+Roles: `ADMIN`, `SUPERVISOR`, `WAITER`, `CASHIER` (no `KITCHEN`). Detalle en doc 26.
+
+```bash
+curl --request POST "http://localhost:3000/api/v1/floor/counter-sessions"   --header "Authorization: Bearer <TOKEN_STAFF_WAITER>"   --header "Content-Type: application/json"   --data '{ "branchId": "<BRANCH_ID>", "customerLabel": "Ana" }'
+```
+
+Respuesta (`CounterSessionResponseDto`):
+
+```json
+{
+  "tableSessionId": "<TABLE_SESSION_ID>",
+  "tableId": "<VIRTUAL_TABLE_ID>",
+  "branchId": "<BRANCH_ID>",
+  "billId": "<BILL_ID>",
+  "ticketNumber": 12,
+  "customerLabel": "Ana",
+  "status": "OPEN",
+  "openedByStaffUserId": "<STAFF_ID>",
+  "assignedStaffUserId": null,
+  "openedAt": "2026-07-03T12:00:00.000Z"
+}
+```
+
+```bash
+curl --request GET "http://localhost:3000/api/v1/floor/counter-sessions?branchId=<BRANCH_ID>&mine=true"   --header "Authorization: Bearer <TOKEN_STAFF_WAITER>"
+```
+
+Cada item: `{ tableSessionId, billId, ticketNumber, customerLabel, status, openedByStaffUserId, openedAt, bill: { status, total, paid, remaining }, orders: [{ orderId, status }], readiness, readyAt? }` (`readyAt` solo con `readiness = READY`).
+
+```bash
+curl --request PATCH "http://localhost:3000/api/v1/floor/counter-sessions/<TABLE_SESSION_ID>"   --header "Authorization: Bearer <TOKEN_STAFF_WAITER>"   --header "Content-Type: application/json"   --data '{ "customerLabel": "Ana M." }'
+```
+
+En sesiones de mesa virtual un `WAITER` tambien puede cobrar (`POST /payments/bills/<BILL_ID>`), cerrar y abandonar. El cierre responde `409` si queda alguna orden no cancelada sin entregar y `400` si hay saldo pendiente. `open-bills` y los tickets de cocina suman `isCounter`, `ticketNumber`, `customerLabel` (con `tableCode = "MOSTRADOR"`).
+
 ## Kitchen list station tickets
 
 ```bash

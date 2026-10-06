@@ -75,7 +75,7 @@ export class OrdersController {
   @RequireProfileType(LoginProfileType.STAFF)
   @ApiOperation({
     summary:
-      'Resume por sesion de mesa cuantas ordenes de la sucursal estan listas y sin entregar. Aplica de paso la auto-entrega configurada por sucursal.',
+      'Resume por sesion de mesa cuantas ordenes de la sucursal estan listas y sin entregar. Aplica de paso la auto-entrega configurada por sucursal, salvo en sesiones de mesa virtual.',
   })
   listBranchReadySummary(
     @CurrentAuthUser() authUser: JwtPayload,

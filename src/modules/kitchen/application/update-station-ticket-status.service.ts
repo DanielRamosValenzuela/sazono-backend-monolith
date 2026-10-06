@@ -90,8 +90,18 @@ export class UpdateStationTicketStatusService {
       );
     }
 
+    let finalOrderStatus = ticket.order.status;
+
     await this.prisma.$transaction(async (tx) => {
       const now = new Date();
+
+      const lockedOrder = await tx.order.update({
+        where: { id: ticket.orderId },
+        data: { updatedAt: now },
+        select: { status: true },
+      });
+
+      finalOrderStatus = lockedOrder.status;
 
       await tx.stationTicket.update({
         where: {
@@ -141,7 +151,7 @@ export class UpdateStationTicketStatusService {
         });
       }
 
-      if (ORDER_PRODUCTION_STATUSES.includes(ticket.order.status)) {
+      if (ORDER_PRODUCTION_STATUSES.includes(lockedOrder.status)) {
         const orderTickets = await tx.stationTicket.findMany({
           where: {
             orderId: ticket.orderId,
@@ -155,7 +165,11 @@ export class UpdateStationTicketStatusService {
           orderTickets.map((orderTicket) => orderTicket.status),
         );
 
-        if (nextOrderStatus && nextOrderStatus !== ticket.order.status) {
+        if (nextOrderStatus) {
+          finalOrderStatus = nextOrderStatus;
+        }
+
+        if (nextOrderStatus && nextOrderStatus !== lockedOrder.status) {
           await tx.order.update({
             where: {
               id: ticket.orderId,
@@ -175,10 +189,22 @@ export class UpdateStationTicketStatusService {
       include: STATION_TICKET_INCLUDE,
     });
 
-    if (dto.status === StationTicketStatus.READY) {
+    if (
+      dto.status === StationTicketStatus.READY &&
+      finalOrderStatus === OrderStatus.READY
+    ) {
+      const { tableSession } = updatedTicket.order;
       const event: StationTicketReadyEvent = {
         orderId: updatedTicket.orderId,
         createdByStaffUserId: updatedTicket.order.createdByStaffUserId,
+        branchId: updatedTicket.branchId,
+        label: tableSession.isCounter
+          ? [`#${tableSession.ticketNumber}`, tableSession.customerLabel]
+              .filter(Boolean)
+              .join(' ')
+          : tableSession.table.code,
+        isCounter: tableSession.isCounter,
+        openedByStaffUserId: tableSession.openedByStaffUserId,
       };
 
       this.eventEmitter.emit(STATION_TICKET_READY_EVENT, event);

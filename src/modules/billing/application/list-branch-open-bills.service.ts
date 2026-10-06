@@ -4,6 +4,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { COUNTER_TABLE_CODE } from '../../floor/domain/counter-table';
 import type { BranchOpenBillResponseDto } from '../presentation/http/dto/billing.dto';
 
 @Injectable()
@@ -41,7 +42,10 @@ export class ListBranchOpenBillsService {
       .filter((session) => session.bill !== null)
       .map((session) => ({
         tableId: session.table.id,
-        tableCode: session.table.code,
+        tableCode: session.isCounter ? COUNTER_TABLE_CODE : session.table.code,
+        isCounter: session.isCounter,
+        ticketNumber: session.ticketNumber,
+        customerLabel: session.customerLabel,
         tableName: session.table.name,
         tableSessionId: session.id,
         sessionStatus: session.status,

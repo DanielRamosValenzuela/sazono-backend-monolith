@@ -73,7 +73,7 @@ Transiciones vigentes: `PENDING -> IN_PROGRESS|CANCELLED`, `IN_PROGRESS -> READY
 
 `Role.KITCHEN` se agrego a `allowedRoles` en `create-waiter-order.service.ts` y `list-tables.service.ts` (mismos roles que ya tenia `WAITER`). `list-session-orders.service.ts` ya incluia `KITCHEN` desde antes, no se toco.
 
-Motivacion: en cocinas chicas el mismo staff de cocina a veces toma pedidos directo (ej. mostrador), y antes solo `WAITER`/`ADMIN`/`SUPERVISOR` podian.
+Motivacion: en cocinas chicas el mismo staff de cocina a veces toma pedidos directo (ej. mesa virtual), y antes solo `WAITER`/`ADMIN`/`SUPERVISOR` podian.
 
 ## F. Notificacion de "pedido listo" y auto-entrega
 
@@ -92,20 +92,24 @@ Motivacion: en cocinas chicas el mismo staff de cocina a veces toma pedidos dire
 Devuelve, por cada `TableSession` activa de la sucursal, en una sola query agregada (evita N+1):
 
 ```
-{ tableSessionId, tableId, tableCode, openedByStaffUserId, readyUndeliveredCount }
+{ tableSessionId, tableId, tableCode, isCounter, ticketNumber, customerLabel, openedByStaffUserId, assignedStaffUserId, readyUndeliveredCount }
 ```
 
 `readyUndeliveredCount` es la cuenta de ordenes en `READY` sin entregar de esa sesion. `openedByStaffUserId` ya existia en el schema de `TableSession` desde antes pero no se exponia en ningun DTO de respuesta — este es el primer endpoint que lo expone; el frontend lo usa para el filtro "mis mesas".
+
+### Push de pedido listo
+
+El push se dispara cuando la **orden** pasa a `READY`, con etiqueta (`#ticket cliente` en mesa virtual, codigo de mesa en salon). En mesa virtual la audiencia es quien abrio la sesion mas `WAITER`/`CASHIER` de la sucursal. Ver doc 26.
 
 ### Auto-entrega perezosa
 
 El mismo `list-branch-ready-summary.service.ts` aplica la auto-entrega: si `autoDeliverAfterMinutes` esta configurado, cualquier orden en `READY` cuyo tiempo transcurrido desde que su ultimo `StationTicket` se completo supere ese umbral se transiciona a `DELIVERED` (orden + items no cancelados) en una transaccion, ANTES de devolver la respuesta.
 
-No hay `@nestjs/schedule` instalado en el proyecto — esto es expiracion perezosa evaluada al leer el endpoint, no un cron job. Implica que una sucursal sin trafico en ese momento no dispara la auto-entrega hasta que alguien vuelva a pedir el resumen (aceptable para el caso de uso: el resumen se consulta constantemente desde las pantallas de mesero/cocina mientras hay actividad).
+La auto-entrega es expiracion perezosa evaluada al leer el endpoint, no un cron job (`@nestjs/schedule` existe en el proyecto, pero solo lo usan schedulers como el de limpieza de mesa virtual, doc 26). Solo toca ordenes que siguen en `READY` y **nunca** sesiones de mesa virtual. Implica que una sucursal sin trafico en ese momento no dispara la auto-entrega hasta que alguien vuelva a pedir el resumen (aceptable para el caso de uso: el resumen se consulta constantemente desde las pantallas de mesero/cocina mientras hay actividad).
 
 ## Backlog / pendiente
 
 No implementado en esta ronda, documentado explicitamente como pendiente:
 
 1. ~~**Asignacion formal de mesas a un mesero especifico.**~~ Resuelto, ver doc 18.
-2. **"Mesa virtual" para pedidos de mostrador/para llevar sin mesa fisica real** (patron usado por la competencia, ej. Toteat). Hoy toda orden requiere una `TableSession` sobre una `Table` real. Sigue pendiente — bloqueado por una decision de modelo de datos, ver doc 18 para el detalle.
+2. ~~**"Mesa virtual" para pedidos sin mesa fisica real o para llevar** (patron usado por la competencia, ej. Toteat).~~ Resuelto, ver doc 26.

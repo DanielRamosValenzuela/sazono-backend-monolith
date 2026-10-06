@@ -55,7 +55,7 @@ export class GetCurrentBillSplitService {
       },
     });
 
-    if (!table) {
+    if (!table || table.isVirtual) {
       throw new NotFoundException('El QR indicado no esta disponible.');
     }
 

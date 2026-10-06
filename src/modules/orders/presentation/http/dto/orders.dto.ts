@@ -106,6 +106,15 @@ export class BranchReadySummaryItemDto {
   @ApiProperty()
   tableCode!: string;
 
+  @ApiProperty({ example: false })
+  isCounter!: boolean;
+
+  @ApiProperty({ nullable: true, example: 12 })
+  ticketNumber!: number | null;
+
+  @ApiProperty({ nullable: true, example: 'Ana' })
+  customerLabel!: string | null;
+
   @ApiProperty({ format: 'uuid', nullable: true })
   openedByStaffUserId!: string | null;
 

@@ -1,9 +1,14 @@
-﻿import { ConflictException, Injectable } from '@nestjs/common';
+﻿import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { Role, TableStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { COUNTER_TABLE_CODE } from '../domain/counter-table';
 import type {
   CreateTableDto,
   TableResponseDto,
@@ -24,6 +29,12 @@ export class CreateTableService {
       Role.ADMIN,
       Role.SUPERVISOR,
     ]);
+
+    if (dto.code.trim().toUpperCase() === COUNTER_TABLE_CODE) {
+      throw new BadRequestException(
+        `El codigo ${COUNTER_TABLE_CODE} esta reservado para la mesa virtual.`,
+      );
+    }
 
     const existingTable = await this.prisma.table.findFirst({
       where: {

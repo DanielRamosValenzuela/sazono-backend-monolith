@@ -1,12 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  BillStatus,
+  OrderStatus,
   TableSessionOpenedBySource,
   TableSessionStatus,
   TableStatus,
 } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -250,4 +253,157 @@ export class BranchStaffMemberResponseDto {
 
   @ApiProperty()
   lastName!: string;
+}
+
+const trimString = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' ? value.trim() : value;
+
+export class OpenCounterSessionDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiPropertyOptional({ example: 'Ana', maxLength: 40 })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(40)
+  customerLabel?: string;
+}
+
+export class RenameCounterSessionDto {
+  @ApiProperty({
+    example: 'Ana',
+    maxLength: 40,
+    description: 'Cadena vacia borra el nombre.',
+  })
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(40)
+  customerLabel!: string;
+}
+
+export class ListCounterSessionsQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Si es true, solo los tickets abiertos por el solicitante.',
+  })
+  @IsOptional()
+  @Transform(({ obj, key }: { obj: Record<string, unknown>; key: string }) => {
+    const raw = obj[key];
+
+    if (raw === 'true' || raw === true) {
+      return true;
+    }
+
+    return raw === 'false' || raw === false ? false : raw;
+  })
+  @IsBoolean()
+  mine?: boolean;
+}
+
+export class CounterSessionResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  tableSessionId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  tableId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  branchId!: string;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
+  billId!: string | null;
+
+  @ApiProperty({ example: 12 })
+  ticketNumber!: number;
+
+  @ApiProperty({ nullable: true })
+  customerLabel!: string | null;
+
+  @ApiProperty({ enum: TableSessionStatus, enumName: 'TableSessionStatus' })
+  status!: TableSessionStatus;
+
+  @ApiProperty({ nullable: true })
+  openedByStaffUserId!: string | null;
+
+  @ApiProperty({ nullable: true })
+  assignedStaffUserId!: string | null;
+
+  @ApiProperty()
+  openedAt!: string;
+}
+
+export class CounterSessionBillDto {
+  @ApiProperty({ enum: BillStatus, enumName: 'BillStatus' })
+  status!: BillStatus;
+
+  @ApiProperty({ example: '4500.00' })
+  total!: string;
+
+  @ApiProperty({ example: '1000.00' })
+  paid!: string;
+
+  @ApiProperty({ example: '3500.00' })
+  remaining!: string;
+}
+
+export class CounterSessionOrderSummaryDto {
+  @ApiProperty({ format: 'uuid' })
+  orderId!: string;
+
+  @ApiProperty({ enum: OrderStatus, enumName: 'OrderStatus' })
+  status!: OrderStatus;
+}
+
+export const COUNTER_READINESS_VALUES = [
+  'EMPTY',
+  'WAITING',
+  'PREPARING',
+  'PARTIALLY_READY',
+  'READY',
+  'DELIVERED',
+] as const;
+
+export class CounterSessionListItemDto {
+  @ApiProperty({ format: 'uuid' })
+  tableSessionId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  billId!: string;
+
+  @ApiProperty({ example: 12 })
+  ticketNumber!: number;
+
+  @ApiProperty({ nullable: true })
+  customerLabel!: string | null;
+
+  @ApiProperty({ enum: TableSessionStatus, enumName: 'TableSessionStatus' })
+  status!: TableSessionStatus;
+
+  @ApiProperty({ nullable: true })
+  openedByStaffUserId!: string | null;
+
+  @ApiProperty()
+  openedAt!: string;
+
+  @ApiProperty({ type: CounterSessionBillDto })
+  bill!: CounterSessionBillDto;
+
+  @ApiProperty({ type: [CounterSessionOrderSummaryDto] })
+  orders!: CounterSessionOrderSummaryDto[];
+
+  @ApiProperty({
+    enum: COUNTER_READINESS_VALUES,
+    enumName: 'CounterReadiness',
+  })
+  readiness!: (typeof COUNTER_READINESS_VALUES)[number];
+
+  @ApiPropertyOptional({
+    description: 'Cuando readiness es READY: momento en que quedo listo.',
+  })
+  readyAt?: string;
 }

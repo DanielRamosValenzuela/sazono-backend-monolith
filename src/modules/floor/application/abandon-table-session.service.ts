@@ -1,4 +1,8 @@
-﻿import { BadRequestException, Injectable } from '@nestjs/common';
+﻿import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import {
   BillStatus,
   Role,
@@ -13,6 +17,8 @@ import type {
   AbandonTableSessionDto,
   TableSessionResponseDto,
 } from '../presentation/http/dto/floor.dto';
+
+const ABANDON_ROLES: Role[] = [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER];
 
 @Injectable()
 export class AbandonTableSessionService {
@@ -47,8 +53,17 @@ export class AbandonTableSessionService {
     const context = await this.branchAccessService.ensureAccess(
       authUser,
       existingSession.branchId,
-      [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER],
+      [Role.ADMIN, Role.SUPERVISOR, Role.WAITER, Role.CASHIER],
     );
+
+    if (
+      !existingSession.isCounter &&
+      !context.roles.some((role) => ABANDON_ROLES.includes(role))
+    ) {
+      throw new ForbiddenException(
+        'Solo caja, supervisor o admin puede marcar el abandono de una mesa.',
+      );
+    }
 
     const closeReason = dto.closeReason.trim();
 
@@ -87,14 +102,16 @@ export class AbandonTableSessionService {
         });
       }
 
-      await tx.table.update({
-        where: {
-          id: existingSession.tableId,
-        },
-        data: {
-          status: TableStatus.AVAILABLE,
-        },
-      });
+      if (!existingSession.isCounter) {
+        await tx.table.update({
+          where: {
+            id: existingSession.tableId,
+          },
+          data: {
+            status: TableStatus.AVAILABLE,
+          },
+        });
+      }
 
       return updatedSession;
     });
