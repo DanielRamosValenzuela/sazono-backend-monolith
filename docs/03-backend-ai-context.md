@@ -6,7 +6,7 @@ Este backend no es un CRUD simple. Tiene reglas de concurrencia, autorizacion y 
 
 ## Invariantes clave
 
-- una sola sesion activa por mesa
+- una sola sesion activa por mesa (excepcion: la mesa virtual de cada sucursal admite N sesiones `isCounter`, doc 26)
 - una sola cuenta activa por sesion
 - QR requiere pago antes de produccion
 - mesero puede generar orden postpago

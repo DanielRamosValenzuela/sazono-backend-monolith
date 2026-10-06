@@ -23,6 +23,8 @@ dispositivo puede re-registrarse (upsert) sin duplicar filas.
   si `FIREBASE_PROJECT_ID`/`FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY` no están
   las 3 presentes, `isEnabled` queda en `false` y loguea una advertencia al arrancar;
   no lanza excepción, no bloquea el arranque de la app.
+  **Verificado 2026-10-06:** con las 3 variables cargadas en el `.env` (proyecto
+  `sazono-e4d41`) el envío real funciona (ver `Pendiente`).
 - `PushNotificationService.sendToStaffUsers(staffUserIds, payload)`: junta los
   `fcmToken` de esos usuarios y llama `messaging().sendEachForMulticast(...)`; si
   `!isEnabled` o no hay tokens, `return` (no-op). Limpia automáticamente los tokens
@@ -109,9 +111,16 @@ por la UI.
 
 ## Pendiente
 
-1. **Envío real de push de punta a punta sin probar.** `FIREBASE_PROJECT_ID`/
-   `FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY` siguen vacías — se obtienen en
-   Firebase Console → Project Settings → Service Accounts → Generate new private
-   key. Sin esto, `PushNotificationService` es un no-op silencioso (ver `A.`).
+1. **Envío real de push de punta a punta sin probar** *(histórico, a 2026-07-21).*
+   Las credenciales se obtienen en Firebase Console → Project Settings → Service
+   Accounts → Generate new private key; sin ellas, `PushNotificationService` es un
+   no-op silencioso (ver `A.`).
+   **Verificado 2026-10-06:** con `FIREBASE_*` cargadas en el `.env`, un mesero
+   abrió una mesa virtual (ticket #8, "Push test"), pidió, cocina (API, cuenta
+   KITCHEN) marcó el ticket de estación `READY` y el backend envió el push FCM, que
+   llegó al emulador Android como "Pedido listo" / "#8 Push test: tu pedido esta
+   listo para servir." (audiencia: quien abrió la sesión, vía Firebase Admin). Sin
+   verificar por separado: push a otros meseros/cajeros en mesas virtuales y la
+   gestión del proyecto/claves Firebase en producción.
 2. iOS sigue bloqueado por falta de cuenta Apple Developer Program (sin cambios,
    ver docs de `sazono-staff-app`).

@@ -37,3 +37,5 @@ npm run start:dev
 npm run test
 npm run lint
 ```
+
+El backend corre desde `dist/`: tras cambios, `npm run build` y reiniciar.
