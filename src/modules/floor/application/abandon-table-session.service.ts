@@ -50,6 +50,12 @@ export class AbandonTableSessionService {
       );
     }
 
+    if (existingSession.bill?.status === BillStatus.PAID) {
+      throw new BadRequestException(
+        'La cuenta ya fue pagada; no puede marcarse como abandonada. Cierra la mesa.',
+      );
+    }
+
     const context = await this.branchAccessService.ensureAccess(
       authUser,
       existingSession.branchId,

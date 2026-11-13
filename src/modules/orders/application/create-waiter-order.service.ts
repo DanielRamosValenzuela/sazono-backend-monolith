@@ -54,6 +54,12 @@ export class CreateWaiterOrderService {
       );
     }
 
+    if (tableSession.bill?.status === BillStatus.PAID) {
+      throw new BadRequestException(
+        'La cuenta ya fue pagada; no se pueden agregar ordenes. Cierra la mesa.',
+      );
+    }
+
     const context = await this.branchAccessService.ensureAccess(
       authUser,
       tableSession.branchId,
