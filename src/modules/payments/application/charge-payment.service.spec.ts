@@ -66,6 +66,44 @@ describe('ChargePaymentService', () => {
     installments: 1,
   };
 
+  describe('application fee', () => {
+    const chargeOnline = (
+      apiMode: 'payments' | 'orders',
+      tipAmount?: Prisma.Decimal,
+    ) => {
+      Object.assign(mercadoPagoConfig, { apiMode, applicationFeeBps: 100 });
+      resolveAvailableMock.mockResolvedValue([resolvedGateway]);
+      chargeMock.mockResolvedValue({
+        kind: 'SETTLED',
+        result: 'APPROVED',
+        providerReference: 'ORD1',
+      });
+
+      return service.execute({
+        ...baseRequest,
+        channel: PaymentChannel.QR_ONLINE,
+        tipAmount,
+        checkout,
+      });
+    };
+
+    it('sends 1% of the amount without the tip as applicationFeeAmount in orders mode', async () => {
+      await chargeOnline('orders', new Prisma.Decimal(1800));
+
+      expect(chargeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ applicationFeeAmount: 100 }),
+      );
+    });
+
+    it('does not send applicationFeeAmount in payments mode', async () => {
+      await chargeOnline('payments');
+
+      expect(chargeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ applicationFeeAmount: undefined }),
+      );
+    });
+  });
+
   it('records the payment offline for STAFF_OFFLINE and never consults the gateway resolver', async () => {
     recordMock.mockResolvedValue({ providerReference: 'manual-ref-1' });
 
@@ -245,6 +283,28 @@ describe('ChargePaymentService', () => {
       providerName: 'MERCADO_PAGO',
       providerReference: 'mp-2',
       failureReason: 'La tarjeta no tiene saldo suficiente.',
+    });
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it('propagates a PENDING outcome with the provider reference and never records it offline', async () => {
+    resolveAvailableMock.mockResolvedValue([resolvedGateway]);
+    chargeMock.mockResolvedValue({
+      kind: 'PENDING',
+      providerReference: 'ORD01',
+      rawStatus: 'processing',
+    });
+
+    const result = await service.execute({
+      ...baseRequest,
+      channel: PaymentChannel.QR_ONLINE,
+      checkout,
+    });
+
+    expect(result).toEqual({
+      kind: 'PENDING',
+      providerName: 'MERCADO_PAGO',
+      providerReference: 'ORD01',
     });
     expect(recordMock).not.toHaveBeenCalled();
   });

@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { assertNever } from '../domain/assert-never';
 import { PaymentChannel } from '../domain/payment-channel';
 import { MERCADOPAGO_PROVIDER_NAME } from '../domain/mercado-pago-status';
+import { toMarketplaceFee } from '../infrastructure/mercado-pago/mercado-pago-amount';
 import { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
 import {
   OFFLINE_PAYMENT_RECORDER,
@@ -13,12 +14,16 @@ import {
   type PaymentGatewayResolverPort,
   type ResolvedPaymentGateway,
 } from './ports/payment-gateway-resolver.port';
-import type { GatewayChargeOutcome } from './ports/payment-gateway.port';
+import type {
+  GatewayChargeOutcome,
+  GatewayPendingChargeOutcome,
+} from './ports/payment-gateway.port';
 
 export type ChargePaymentCheckout = {
   cardToken: string;
   paymentMethodId: string;
   installments: number;
+  paymentTypeId?: string;
   issuerId?: string;
   payerEmail?: string;
 };
@@ -28,6 +33,7 @@ export type ChargePaymentRequest = {
   restaurantId: string;
   attemptId: string;
   amount: Prisma.Decimal;
+  tipAmount?: Prisma.Decimal;
   currency: string;
   description: string;
   checkout?: ChargePaymentCheckout;
@@ -40,6 +46,11 @@ export type ChargePaymentResult =
       providerName: string;
       providerReference?: string;
       failureReason?: string;
+    }
+  | {
+      kind: 'PENDING';
+      providerName: string;
+      providerReference?: string;
     }
   | {
       kind: 'REDIRECT';
@@ -104,6 +115,7 @@ export class ChargePaymentService {
       externalReference: request.attemptId,
       credentials: resolvedGateway.credentials,
       notificationUrl: this.resolveWebhookNotificationUrl(),
+      applicationFeeAmount: this.resolveApplicationFeeAmount(request),
       checkoutPayload: checkout,
     });
 
@@ -112,9 +124,15 @@ export class ChargePaymentService {
 
   private toChargePaymentResult(
     resolvedGateway: ResolvedPaymentGateway,
-    outcome: GatewayChargeOutcome,
+    outcome: GatewayChargeOutcome | GatewayPendingChargeOutcome,
   ): ChargePaymentResult {
     switch (outcome.kind) {
+      case 'PENDING':
+        return {
+          kind: 'PENDING',
+          providerName: resolvedGateway.gateway.providerName,
+          providerReference: outcome.providerReference,
+        };
       case 'SETTLED':
         return {
           kind: 'SETTLED',
@@ -136,6 +154,22 @@ export class ChargePaymentService {
       default:
         return assertNever(outcome);
     }
+  }
+
+  private resolveApplicationFeeAmount(
+    request: ChargePaymentRequest,
+  ): number | undefined {
+    if (this.mercadoPagoConfig.apiMode !== 'orders') {
+      return undefined;
+    }
+
+    const fee = toMarketplaceFee(
+      request.amount.sub(request.tipAmount ?? 0),
+      request.currency,
+      this.mercadoPagoConfig.applicationFeeBps,
+    );
+
+    return fee === undefined ? undefined : Number(fee);
   }
 
   private resolveWebhookNotificationUrl(): string | undefined {

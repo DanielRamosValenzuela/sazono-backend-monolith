@@ -38,6 +38,13 @@ export type GatewayChargeOutcome =
       expiresAt: Date;
     };
 
+export type GatewayPendingChargeOutcome = {
+  kind: 'PENDING';
+  providerReference?: string;
+  rawStatus?: string;
+  rawStatusDetail?: string;
+};
+
 export type GatewayPaymentSnapshotStatus = GatewaySettledResult | 'PENDING';
 
 export type GatewayPaymentSnapshot = {
@@ -54,7 +61,9 @@ export interface PaymentGatewayPort {
   readonly providerName: string;
   readonly checkoutMode: 'embedded' | 'redirect';
 
-  charge(context: GatewayChargeContext): Promise<GatewayChargeOutcome>;
+  charge(
+    context: GatewayChargeContext,
+  ): Promise<GatewayChargeOutcome | GatewayPendingChargeOutcome>;
 
   confirmRedirect?(
     providerReference: string,
@@ -63,6 +72,11 @@ export interface PaymentGatewayPort {
 
   getPayment(
     providerReference: string,
+    credentials: GatewayCredentials,
+  ): Promise<GatewayPaymentSnapshot | null>;
+
+  findByExternalReference?(
+    externalReference: string,
     credentials: GatewayCredentials,
   ): Promise<GatewayPaymentSnapshot | null>;
 }

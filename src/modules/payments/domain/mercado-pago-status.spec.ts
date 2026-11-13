@@ -1,4 +1,7 @@
-import { mapMercadoPagoStatus } from './mercado-pago-status';
+import {
+  mapMercadoPagoOrderStatus,
+  mapMercadoPagoStatus,
+} from './mercado-pago-status';
 
 describe('mapMercadoPagoStatus', () => {
   it('maps approved to APPROVED without a failure reason', () => {
@@ -39,5 +42,50 @@ describe('mapMercadoPagoStatus', () => {
 
   it('normalizes the status casing before matching', () => {
     expect(mapMercadoPagoStatus('APPROVED')).toEqual({ outcome: 'APPROVED' });
+  });
+});
+
+describe('mapMercadoPagoOrderStatus', () => {
+  it('maps processed to APPROVED', () => {
+    expect(mapMercadoPagoOrderStatus('processed')).toEqual({
+      outcome: 'APPROVED',
+    });
+  });
+
+  it.each(['created', 'processing', 'action_required'])(
+    'maps %s to PENDING',
+    (status) => {
+      expect(mapMercadoPagoOrderStatus(status).outcome).toBe('PENDING');
+    },
+  );
+
+  it.each(['failed', 'canceled', 'expired'])(
+    'maps %s to REJECTED',
+    (status) => {
+      expect(mapMercadoPagoOrderStatus(status).outcome).toBe('REJECTED');
+    },
+  );
+
+  it('uses the status detail message when rejected', () => {
+    expect(
+      mapMercadoPagoOrderStatus('failed', 'cc_rejected_insufficient_amount')
+        .failureReason,
+    ).toBe('La tarjeta no tiene saldo suficiente.');
+  });
+
+  it.each(['refunded', 'charged_back'])(
+    'handles %s explicitly without REJECTED',
+    (status) => {
+      const mapping = mapMercadoPagoOrderStatus(status);
+
+      expect(mapping.outcome).toBe('PENDING');
+      expect(mapping.failureReason).not.toBe(
+        mapMercadoPagoOrderStatus('processing').failureReason,
+      );
+    },
+  );
+
+  it('normalizes casing', () => {
+    expect(mapMercadoPagoOrderStatus('PROCESSED').outcome).toBe('APPROVED');
   });
 });

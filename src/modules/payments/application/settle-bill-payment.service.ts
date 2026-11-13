@@ -18,6 +18,10 @@ import {
   OFFLINE_PAYMENT_RECORDER,
   type OfflinePaymentRecorderPort,
 } from './ports/offline-payment-recorder.port';
+import {
+  assertNoPaymentInReview,
+  holdPendingCharge,
+} from './hold-pending-charge';
 import { requireSettledCharge } from './require-settled-charge';
 import type { PaymentChannel } from '../domain/payment-channel';
 import type { PaymentResultResponseDto } from '../presentation/http/dto/payments.dto';
@@ -72,28 +76,36 @@ export class SettleBillPaymentService {
       );
     }
 
+    await assertNoPaymentInReview(this.prisma, bill.id);
+
     const paidAmount = amount.add(tipDelta);
 
     const attempt = await this.prisma.paymentAttempt.create({
       data: {
         billId: bill.id,
         amount: paidAmount,
+        tipAmount: tipDelta,
         provider: this.offlinePaymentRecorder.providerName,
         status: PaymentAttemptStatus.PENDING,
       },
     });
 
-    const chargeResult = requireSettledCharge(
-      await this.chargePaymentService.execute({
-        channel,
-        restaurantId: bill.restaurantId,
-        attemptId: attempt.id,
-        amount: paidAmount,
-        currency: bill.currency,
-        description: `Pago de cuenta ${bill.id}`,
-        checkout,
-      }),
-    );
+    const charge = await this.chargePaymentService.execute({
+      channel,
+      restaurantId: bill.restaurantId,
+      attemptId: attempt.id,
+      amount: paidAmount,
+      tipAmount: tipDelta,
+      currency: bill.currency,
+      description: `Pago de cuenta ${bill.id}`,
+      checkout,
+    });
+
+    if (charge.kind === 'PENDING') {
+      await holdPendingCharge(this.prisma, attempt.id, charge);
+    }
+
+    const chargeResult = requireSettledCharge(charge);
 
     if (!chargeResult.approved) {
       await this.failPaymentService.execute(this.prisma, {

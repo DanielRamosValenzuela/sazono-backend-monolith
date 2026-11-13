@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { PaymentAttempt } from '@prisma/client';
 import {
   OrderStatus,
@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
+import { ConfirmRedirectPaymentService } from './confirm-redirect-payment.service';
 import { FailPaymentService } from './fail-payment.service';
 import { FinalizePaymentService } from './finalize-payment.service';
 import {
@@ -20,6 +21,7 @@ import type {
   PaymentGatewayPort,
 } from './ports/payment-gateway.port';
 import { MERCADOPAGO_PROVIDER_NAME } from '../domain/mercado-pago-status';
+import { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
 import { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
 import {
   readWebhookDataId,
@@ -41,7 +43,8 @@ export type HandleMercadoPagoWebhookResult = {
   status: HandleMercadoPagoWebhookStatus;
 };
 
-const MERCADOPAGO_PAYMENT_EVENT_TYPE = 'payment';
+const MERCADOPAGO_PAYMENT_EVENT_TYPES = new Set(['payment', 'order', 'orders']);
+const REVERSAL_STATUSES = new Set(['refunded', 'charged_back']);
 const NO_REAL_CHARGE_TIP_DELTA = new Prisma.Decimal(0);
 const WEBHOOK_REJECTED_FAILURE_REASON =
   'El pago fue rechazado por Mercado Pago (confirmado via webhook).';
@@ -70,6 +73,8 @@ export class HandleMercadoPagoWebhookService {
     private readonly restaurantPaymentAccountRepository: RestaurantPaymentAccountRepository,
     private readonly finalizePaymentService: FinalizePaymentService,
     private readonly failPaymentService: FailPaymentService,
+    private readonly confirmRedirectPaymentService: ConfirmRedirectPaymentService,
+    private readonly mercadoPagoConfig: MercadoPagoConfigService,
   ) {}
 
   async execute(
@@ -111,7 +116,7 @@ export class HandleMercadoPagoWebhookService {
       },
     });
 
-    if (eventType !== MERCADOPAGO_PAYMENT_EVENT_TYPE) {
+    if (!MERCADOPAGO_PAYMENT_EVENT_TYPES.has(eventType)) {
       await this.markProcessed(event.id);
       return { status: 'IGNORED' };
     }
@@ -341,7 +346,18 @@ export class HandleMercadoPagoWebhookService {
       context.attempt.status !== PaymentAttemptStatus.PENDING ||
       snapshot.outcome === 'PENDING'
     ) {
+      if (REVERSAL_STATUSES.has(snapshot.rawStatus.toLowerCase())) {
+        this.logger.warn(
+          `Mercado Pago reporto ${snapshot.rawStatus} para el intento ${context.attempt.id} (estado local ${context.attempt.status}). Solo se registra, no se revierte ni se acredita automaticamente.`,
+        );
+      }
+
       await this.recordProviderStatus(context.attempt.id, snapshot);
+      return;
+    }
+
+    if (this.mercadoPagoConfig.apiMode === 'orders') {
+      await this.settleOrderSnapshot(context, snapshot);
       return;
     }
 
@@ -351,6 +367,29 @@ export class HandleMercadoPagoWebhookService {
     }
 
     await this.failFromWebhook(context, snapshot);
+  }
+
+  private async settleOrderSnapshot(
+    context: AttemptContext,
+    snapshot: GatewayPaymentSnapshot,
+  ): Promise<void> {
+    try {
+      await this.confirmRedirectPaymentService.applySnapshotOutcome(
+        { ...context.attempt, provider: MERCADOPAGO_PROVIDER_NAME },
+        snapshot,
+      );
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.logger.warn(
+          `El intento ${context.attempt.id} ya fue resuelto por otro proceso; el webhook no lo aplica de nuevo.`,
+        );
+        return;
+      }
+
+      throw error;
+    }
+
+    await this.recordProviderStatus(context.attempt.id, snapshot);
   }
 
   private async finalizeFromWebhook(
@@ -385,7 +424,7 @@ export class HandleMercadoPagoWebhookService {
     });
 
     this.logger.warn(
-      `Webhook de Mercado Pago reconcilio el intento ${attempt.id}: seguia PENDING pese a binary_mode. Revisar si quedan pasos posteriores (ruteo a cocina o split) por aplicar manualmente.`,
+      `Webhook de Mercado Pago reconcilio el intento ${attempt.id}: seguia PENDING localmente y Mercado Pago lo reporta aprobado. Revisar si quedan pasos posteriores (ruteo a cocina o split) por aplicar manualmente.`,
     );
   }
 

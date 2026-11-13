@@ -14,6 +14,16 @@ describe('requireSettledCharge', () => {
     expect(requireSettledCharge(settled)).toBe(settled);
   });
 
+  it('throws the in-review ConflictException for a PENDING outcome instead of treating it as approved or rejected', () => {
+    const pending: ChargePaymentResult = {
+      kind: 'PENDING',
+      providerName: 'MERCADO_PAGO',
+      providerReference: 'ORD01',
+    };
+
+    expect(() => requireSettledCharge(pending)).toThrow(/en revision/);
+  });
+
   it('throws a ConflictException instead of silently treating a REDIRECT outcome as approved or rejected', () => {
     const redirect: ChargePaymentResult = {
       kind: 'REDIRECT',

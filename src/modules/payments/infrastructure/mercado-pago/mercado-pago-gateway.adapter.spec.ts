@@ -5,12 +5,18 @@ import type { MercadoPagoConfigService } from './mercado-pago-config.service';
 const createMock = jest.fn();
 const getMock = jest.fn();
 const cancelMock = jest.fn();
+const orderCreateMock = jest.fn();
+const orderGetMock = jest.fn();
+const orderCancelMock = jest.fn();
+const orderSearchMock = jest.fn();
 const mercadoPagoConfigMock = jest.fn();
 const paymentClientMock = jest.fn();
+const orderClientMock = jest.fn();
 
 jest.mock('mercadopago', () => ({
   MercadoPagoConfig: mercadoPagoConfigMock,
   Payment: paymentClientMock,
+  Order: orderClientMock,
 }));
 
 import { MercadoPagoGatewayAdapter } from './mercado-pago-gateway.adapter';
@@ -43,6 +49,12 @@ describe('MercadoPagoGatewayAdapter', () => {
       create: createMock,
       get: getMock,
       cancel: cancelMock,
+    }));
+    orderClientMock.mockImplementation(() => ({
+      create: orderCreateMock,
+      get: orderGetMock,
+      cancel: orderCancelMock,
+      search: orderSearchMock,
     }));
     mercadoPagoConfig = {
       timeoutMs: 15000,
@@ -231,5 +243,223 @@ describe('MercadoPagoGatewayAdapter', () => {
     const snapshot = await adapter.getPayment('129', credentials);
 
     expect(snapshot).toBeNull();
+  });
+
+  describe('orders mode', () => {
+    beforeEach(() => {
+      Object.assign(mercadoPagoConfig, { apiMode: 'orders' });
+    });
+
+    it('creates the order with string amounts, card payment method, marketplace_fee and the attemptId as idempotency key', async () => {
+      orderCreateMock.mockResolvedValue({ id: 'ORD1', status: 'processed' });
+
+      const result = await adapter.charge({
+        ...baseContext,
+        applicationFeeAmount: 118,
+        checkoutPayload: {
+          ...(baseContext.checkoutPayload as object),
+          paymentTypeId: 'debit_card',
+          payerEmail: 'a@b.cl',
+        },
+      });
+
+      expect(createMock).not.toHaveBeenCalled();
+      expect(orderCreateMock).toHaveBeenCalledWith({
+        body: {
+          type: 'online',
+          external_reference: 'attempt-1',
+          total_amount: '11800',
+          currency: 'CLP',
+          capture_mode: 'automatic',
+          description: 'Pago de prueba',
+          payer: { email: 'a@b.cl' },
+          marketplace_fee: '118',
+          transactions: {
+            payments: [
+              {
+                amount: '11800',
+                payment_method: {
+                  id: 'visa',
+                  type: 'debit_card',
+                  token: 'card-token-1',
+                  installments: 1,
+                },
+              },
+            ],
+          },
+        },
+        requestOptions: { idempotencyKey: 'attempt-1' },
+      });
+      expect(result).toMatchObject({
+        kind: 'SETTLED',
+        result: 'APPROVED',
+        providerReference: 'ORD1',
+      });
+    });
+
+    it('defaults the payment type to credit_card and omits marketplace_fee when there is no fee', async () => {
+      orderCreateMock.mockResolvedValue({ id: 'ORD2', status: 'processed' });
+
+      await adapter.charge(baseContext);
+
+      const body = orderCreateMock.mock.calls[0][0].body;
+      expect(body.transactions.payments[0].payment_method.type).toBe(
+        'credit_card',
+      );
+      expect(body.marketplace_fee).toBeUndefined();
+    });
+
+    it('rejects a failed order using the payment status_detail', async () => {
+      orderCreateMock.mockResolvedValue({
+        id: 'ORD3',
+        status: 'failed',
+        transactions: {
+          payments: [{ status_detail: 'cc_rejected_insufficient_amount' }],
+        },
+      });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(result).toMatchObject({
+        result: 'REJECTED',
+        providerReference: 'ORD3',
+        failureReason: 'La tarjeta no tiene saldo suficiente.',
+      });
+    });
+
+    it.each(['created', 'processing', 'action_required', 'something_new'])(
+      'returns a PENDING outcome with the order id for a non-final %s order and never cancels it',
+      async (status) => {
+        orderCreateMock.mockResolvedValue({ id: 'ORD4', status });
+
+        const result = await adapter.charge(baseContext);
+
+        expect(orderCancelMock).not.toHaveBeenCalled();
+        expect(result).toMatchObject({
+          kind: 'PENDING',
+          providerReference: 'ORD4',
+          rawStatus: status,
+        });
+      },
+    );
+
+    it('rejects a non-final order that carries no id because it cannot be reconciled', async () => {
+      orderCreateMock.mockResolvedValue({ status: 'processing' });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(result).toMatchObject({ kind: 'SETTLED', result: 'REJECTED' });
+    });
+
+    it('fetches the existing order on an idempotency conflict instead of rejecting', async () => {
+      orderCreateMock.mockRejectedValue({ status: 409 });
+      orderSearchMock.mockResolvedValue({
+        data: [{ id: 'ORD6', status: 'processed' }],
+      });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(orderSearchMock).toHaveBeenCalledWith({
+        options: expect.objectContaining({ external_reference: 'attempt-1' }),
+      });
+      expect(result).toMatchObject({
+        result: 'APPROVED',
+        providerReference: 'ORD6',
+      });
+    });
+
+    it('leaves the charge PENDING without reference when the idempotency conflict finds no existing order', async () => {
+      orderCreateMock.mockRejectedValue({ status: 423 });
+      orderSearchMock.mockResolvedValue({ data: [] });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(result).toEqual({ kind: 'PENDING' });
+    });
+
+    it('leaves the charge PENDING instead of rejecting when order creation fails ambiguously', async () => {
+      orderCreateMock.mockRejectedValue(new Error('timeout'));
+      orderSearchMock.mockResolvedValue({ data: [] });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(result).toEqual({ kind: 'PENDING' });
+    });
+
+    it('recovers the order created by an ambiguous failure through its external reference', async () => {
+      orderCreateMock.mockRejectedValue({ status: 502 });
+      orderSearchMock.mockResolvedValue({
+        data: [{ id: 'ORD9', status: 'processed' }],
+      });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(result).toMatchObject({
+        kind: 'SETTLED',
+        result: 'APPROVED',
+        providerReference: 'ORD9',
+      });
+    });
+
+    it('rejects when Mercado Pago answers with a definitive 4xx error', async () => {
+      orderCreateMock.mockRejectedValue({ status: 400 });
+      orderSearchMock.mockResolvedValue({ data: [] });
+
+      const result = await adapter.charge(baseContext);
+
+      expect(result).toMatchObject({ kind: 'SETTLED', result: 'REJECTED' });
+    });
+
+    it('findByExternalReference resolves the order through search and get', async () => {
+      orderSearchMock.mockResolvedValue({ data: [{ id: 'ORD7' }] });
+      orderGetMock.mockResolvedValue({ id: 'ORD7', status: 'processed' });
+
+      const snapshot = await adapter.findByExternalReference(
+        'attempt-7',
+        credentials,
+      );
+
+      expect(snapshot).toMatchObject({
+        providerReference: 'ORD7',
+        outcome: 'APPROVED',
+      });
+    });
+
+    it('findByExternalReference returns null when no order exists', async () => {
+      orderSearchMock.mockResolvedValue({ data: [] });
+
+      await expect(
+        adapter.findByExternalReference('attempt-7', credentials),
+      ).resolves.toBeNull();
+    });
+
+    it('getPayment maps an order into the snapshot shape', async () => {
+      orderGetMock.mockResolvedValue({
+        id: 'ORD7',
+        status: 'processed',
+        total_amount: '11800',
+        currency: 'CLP',
+        external_reference: 'attempt-7',
+      });
+
+      const snapshot = await adapter.getPayment('ORD7', credentials);
+
+      expect(orderGetMock).toHaveBeenCalledWith({ id: 'ORD7' });
+      expect(snapshot).toEqual({
+        providerReference: 'ORD7',
+        outcome: 'APPROVED',
+        rawStatus: 'processed',
+        rawStatusDetail: undefined,
+        amount: '11800',
+        currency: 'CLP',
+        externalReference: 'attempt-7',
+      });
+    });
+
+    it('getPayment returns null when the order call fails', async () => {
+      orderGetMock.mockRejectedValue(new Error('not found'));
+
+      expect(await adapter.getPayment('ORD8', credentials)).toBeNull();
+    });
   });
 });

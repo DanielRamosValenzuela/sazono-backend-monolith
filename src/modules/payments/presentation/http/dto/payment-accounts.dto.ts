@@ -37,6 +37,13 @@ export class MercadoPagoAuthorizationUrlResponseDto {
 
   @ApiProperty()
   expiresAt!: string;
+
+  @ApiProperty({
+    example: 'sandbox',
+    description:
+      'Ambiente de Mercado Pago contra el que se hara la conexion (sandbox o production).',
+  })
+  environment!: string;
 }
 
 export class PaymentAccountStatusResponseDto {

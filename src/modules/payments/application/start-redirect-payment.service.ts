@@ -23,7 +23,11 @@ import {
   type PaymentGatewayResolverPort,
   type ResolvedPaymentGateway,
 } from './ports/payment-gateway-resolver.port';
-import type { GatewayChargeOutcome } from './ports/payment-gateway.port';
+import type {
+  GatewayChargeOutcome,
+  GatewayPendingChargeOutcome,
+} from './ports/payment-gateway.port';
+import { PAYMENT_IN_REVIEW_MESSAGE } from './require-settled-charge';
 import type {
   RedirectPaymentResponseDto,
   StartRedirectBillPaymentDto,
@@ -357,9 +361,17 @@ export class StartRedirectPaymentService {
   private async applyChargeOutcome(
     resolvedGateway: ResolvedPaymentGateway,
     attemptId: string,
-    outcome: GatewayChargeOutcome,
+    outcome: GatewayChargeOutcome | GatewayPendingChargeOutcome,
   ): Promise<RedirectPaymentResponseDto> {
     switch (outcome.kind) {
+      case 'PENDING': {
+        await this.prisma.paymentAttempt.update({
+          where: { id: attemptId },
+          data: { providerReference: outcome.providerReference },
+        });
+
+        throw new ConflictException(PAYMENT_IN_REVIEW_MESSAGE);
+      }
       case 'REDIRECT': {
         await this.prisma.paymentAttempt.update({
           where: { id: attemptId },

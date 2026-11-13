@@ -44,6 +44,46 @@ const GENERIC_REJECTED_MESSAGE =
 const GENERIC_PENDING_MESSAGE =
   'El pago quedo en revision, intenta con otro medio de pago.';
 
+const ORDER_APPROVED_STATUSES = new Set(['processed']);
+const ORDER_PENDING_STATUSES = new Set([
+  'created',
+  'processing',
+  'action_required',
+]);
+const ORDER_REJECTED_STATUSES = new Set(['failed', 'canceled', 'expired']);
+const ORDER_REVERSAL_MESSAGES: Record<string, string> = {
+  refunded: 'El pago fue reembolsado.',
+  charged_back: 'El pago fue objetado con un contracargo.',
+};
+const GENERIC_ORDER_UNKNOWN_MESSAGE =
+  'El pago esta en un estado que requiere revision.';
+
+export function mapMercadoPagoOrderStatus(
+  status: string,
+  statusDetail?: string,
+): MercadoPagoStatusMapping {
+  const normalizedStatus = status.toLowerCase();
+
+  if (ORDER_APPROVED_STATUSES.has(normalizedStatus)) {
+    return { outcome: 'APPROVED' };
+  }
+
+  if (ORDER_PENDING_STATUSES.has(normalizedStatus)) {
+    return { outcome: 'PENDING', failureReason: GENERIC_PENDING_MESSAGE };
+  }
+
+  if (ORDER_REJECTED_STATUSES.has(normalizedStatus)) {
+    return mapMercadoPagoStatus('rejected', statusDetail);
+  }
+
+  return {
+    outcome: 'PENDING',
+    failureReason:
+      ORDER_REVERSAL_MESSAGES[normalizedStatus] ??
+      GENERIC_ORDER_UNKNOWN_MESSAGE,
+  };
+}
+
 export function mapMercadoPagoStatus(
   status: string,
   statusDetail?: string,

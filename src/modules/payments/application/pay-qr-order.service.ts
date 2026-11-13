@@ -25,6 +25,10 @@ import {
   OFFLINE_PAYMENT_RECORDER,
   type OfflinePaymentRecorderPort,
 } from './ports/offline-payment-recorder.port';
+import {
+  assertNoPaymentInReview,
+  holdPendingCharge,
+} from './hold-pending-charge';
 import { requireSettledCharge } from './require-settled-charge';
 import type {
   PayQrOrderDto,
@@ -96,6 +100,8 @@ export class PayQrOrderService {
 
     const checkout = buildCheckoutFromDto(dto);
 
+    await assertNoPaymentInReview(this.prisma, order.billId);
+
     const orderAmount = order.orderItems.reduce(
       (total, item) => total.add(item.priceSnapshot.mul(item.quantity)),
       new Prisma.Decimal(0),
@@ -108,22 +114,28 @@ export class PayQrOrderService {
         orderId: order.id,
         billId: order.billId,
         amount: paidAmount,
+        tipAmount: tipDelta,
         provider: this.offlinePaymentRecorder.providerName,
         status: PaymentAttemptStatus.PENDING,
       },
     });
 
-    const chargeResult = requireSettledCharge(
-      await this.chargePaymentService.execute({
-        channel: PaymentChannel.QR_ONLINE,
-        restaurantId: order.branch.restaurantId,
-        attemptId: attempt.id,
-        amount: paidAmount,
-        currency,
-        description: `Orden QR ${order.id}`,
-        checkout,
-      }),
-    );
+    const charge = await this.chargePaymentService.execute({
+      channel: PaymentChannel.QR_ONLINE,
+      restaurantId: order.branch.restaurantId,
+      attemptId: attempt.id,
+      amount: paidAmount,
+      tipAmount: tipDelta,
+      currency,
+      description: `Orden QR ${order.id}`,
+      checkout,
+    });
+
+    if (charge.kind === 'PENDING') {
+      await holdPendingCharge(this.prisma, attempt.id, charge);
+    }
+
+    const chargeResult = requireSettledCharge(charge);
 
     if (!chargeResult.approved) {
       await this.prisma.$transaction(async (tx) => {

@@ -1,6 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { BillStatus, TableSessionStatus } from '@prisma/client';
+import {
+  BillStatus,
+  OrderItemStatus,
+  OrderStatus,
+  TableSessionStatus,
+} from '@prisma/client';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
 
 export type BillAfterPayment = {
@@ -56,6 +61,17 @@ export async function applyPaymentToBill(
   });
 
   if (remainingAmount.lte(0)) {
+    await tx.orderItem.updateMany({
+      where: {
+        order: { billId: bill.id, status: OrderStatus.READY },
+        status: { not: OrderItemStatus.CANCELLED },
+      },
+      data: { status: OrderItemStatus.DELIVERED },
+    });
+    await tx.order.updateMany({
+      where: { billId: bill.id, status: OrderStatus.READY },
+      data: { status: OrderStatus.DELIVERED },
+    });
     await tx.tableSession.updateMany({
       where: {
         id: bill.tableSessionId,

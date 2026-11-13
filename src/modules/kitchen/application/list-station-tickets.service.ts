@@ -1,5 +1,5 @@
 ﻿import { Injectable } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { OrderStatus, Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
@@ -33,6 +33,7 @@ export class ListStationTicketsService {
     const tickets = await this.prisma.stationTicket.findMany({
       where: {
         branchId: query.branchId,
+        order: { status: { not: OrderStatus.DELIVERED } },
         ...(query.preparationStationId
           ? { preparationStationId: query.preparationStationId }
           : {}),

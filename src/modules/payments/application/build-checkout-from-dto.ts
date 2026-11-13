@@ -4,6 +4,7 @@ import type { ChargePaymentCheckout } from './charge-payment.service';
 export type CheckoutCapableDto = {
   cardToken?: string;
   paymentMethodId?: string;
+  paymentTypeId?: string;
   issuerId?: string;
   installments?: number;
   payerEmail?: string;
@@ -25,6 +26,7 @@ export function buildCheckoutFromDto(
   return {
     cardToken: dto.cardToken,
     paymentMethodId: dto.paymentMethodId,
+    paymentTypeId: dto.paymentTypeId,
     installments: dto.installments,
     issuerId: dto.issuerId,
     payerEmail: dto.payerEmail,

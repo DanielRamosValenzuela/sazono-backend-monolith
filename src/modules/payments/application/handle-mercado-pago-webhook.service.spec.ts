@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import {
   OrderStatus,
   PaymentAttemptStatus,
@@ -10,6 +11,8 @@ import { FinalizePaymentService } from './finalize-payment.service';
 import { HandleMercadoPagoWebhookService } from './handle-mercado-pago-webhook.service';
 import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 import type { PaymentGatewayPort } from './ports/payment-gateway.port';
+import type { ConfirmRedirectPaymentService } from './confirm-redirect-payment.service';
+import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
 import type { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
 
 describe('HandleMercadoPagoWebhookService', () => {
@@ -65,10 +68,19 @@ describe('HandleMercadoPagoWebhookService', () => {
   const finalizePaymentService = new FinalizePaymentService();
   const failPaymentService = new FailPaymentService();
 
+  const applySnapshotOutcomeMock = jest.fn();
+  const confirmRedirectPaymentService = {
+    applySnapshotOutcome: applySnapshotOutcomeMock,
+  } as unknown as ConfirmRedirectPaymentService;
+  const mercadoPagoConfig = {
+    apiMode: 'payments',
+  } as unknown as { apiMode: 'payments' | 'orders' };
+
   let service: HandleMercadoPagoWebhookService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mercadoPagoConfig.apiMode = 'payments';
     paymentWebhookEventCreateMock.mockResolvedValue({ id: 'event-1' });
     paymentWebhookEventUpdateMock.mockResolvedValue({});
     resolveAvailableMock.mockResolvedValue([
@@ -89,6 +101,8 @@ describe('HandleMercadoPagoWebhookService', () => {
       restaurantPaymentAccountRepository,
       finalizePaymentService,
       failPaymentService,
+      confirmRedirectPaymentService,
+      mercadoPagoConfig as unknown as MercadoPagoConfigService,
     );
   });
 
@@ -199,6 +213,8 @@ describe('HandleMercadoPagoWebhookService', () => {
             update: txBillUpdateMock,
           },
           tableSession: { updateMany: txSessionUpdateManyMock },
+          order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          orderItem: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
         }),
     );
 
@@ -222,6 +238,32 @@ describe('HandleMercadoPagoWebhookService', () => {
       where: { id: 'event-1' },
       data: { processedAt: expect.any(Date), processError: null },
     });
+  });
+
+  it('treats type order like payment: correlates by the ORD id and reconsults the gateway', async () => {
+    paymentWebhookEventFindUniqueMock.mockResolvedValue(null);
+    paymentAttemptFindFirstMock.mockResolvedValue({
+      ...pendingAttempt,
+      providerReference: 'ORD01TEST',
+    });
+    billFindUniqueMock.mockResolvedValue(billWithBranch);
+    getPaymentMock.mockResolvedValue({
+      providerReference: 'ORD01TEST',
+      outcome: 'PENDING',
+      rawStatus: 'processing',
+    });
+    paymentAttemptUpdateMock.mockResolvedValue({});
+
+    const result = await service.execute({
+      body: { id: 570, type: 'order', data: { id: 'ORD01TEST' } },
+      dataId: 'ORD01TEST',
+    });
+
+    expect(result).toEqual({ status: 'PROCESSED' });
+    expect(paymentAttemptFindFirstMock).toHaveBeenCalledWith({
+      where: { provider: 'MERCADO_PAGO', providerReference: 'ORD01TEST' },
+    });
+    expect(getPaymentMock).toHaveBeenCalledWith('ORD01TEST', credentials);
   });
 
   it('does not re-finalize an attempt that already left the PENDING state, only records the provider status', async () => {
@@ -316,6 +358,127 @@ describe('HandleMercadoPagoWebhookService', () => {
         },
       },
       data: { status: OrderStatus.PAYMENT_FAILED },
+    });
+  });
+
+  describe('orders mode', () => {
+    const orderAttempt = {
+      ...pendingAttempt,
+      orderId: 'order-1',
+      providerReference: 'ORD01TEST',
+    };
+
+    const runOrderWebhook = async (snapshot: Record<string, unknown>) => {
+      mercadoPagoConfig.apiMode = 'orders';
+      paymentWebhookEventFindUniqueMock.mockResolvedValue(null);
+      paymentAttemptFindFirstMock.mockResolvedValue(orderAttempt);
+      billFindUniqueMock.mockResolvedValue(billWithBranch);
+      paymentAttemptUpdateMock.mockResolvedValue({});
+      getPaymentMock.mockResolvedValue({
+        providerReference: 'ORD01TEST',
+        ...snapshot,
+      });
+
+      return service.execute({
+        body: { id: 600, type: 'order', data: { id: 'ORD01TEST' } },
+        dataId: 'ORD01TEST',
+      });
+    };
+
+    it('delegates a processed order on a PENDING attempt to the shared finalize path exactly once', async () => {
+      applySnapshotOutcomeMock.mockResolvedValue({ kind: 'APPROVED' });
+
+      const result = await runOrderWebhook({
+        outcome: 'APPROVED',
+        rawStatus: 'processed',
+      });
+
+      expect(result).toEqual({ status: 'PROCESSED' });
+      expect(applySnapshotOutcomeMock).toHaveBeenCalledTimes(1);
+      expect(applySnapshotOutcomeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'attempt-1', orderId: 'order-1' }),
+        expect.objectContaining({ outcome: 'APPROVED' }),
+      );
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it('delegates failed/canceled/expired orders so the attempt becomes rejected', async () => {
+      applySnapshotOutcomeMock.mockResolvedValue({
+        kind: 'REJECTED',
+        failureReason: 'x',
+      });
+
+      const result = await runOrderWebhook({
+        outcome: 'REJECTED',
+        rawStatus: 'expired',
+      });
+
+      expect(result).toEqual({ status: 'PROCESSED' });
+      expect(applySnapshotOutcomeMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ outcome: 'REJECTED' }),
+      );
+    });
+
+    it('treats a concurrent resolution as already applied and never throws or credits twice', async () => {
+      applySnapshotOutcomeMock.mockRejectedValue(
+        new ConflictException('El intento de pago ya fue resuelto.'),
+      );
+
+      const result = await runOrderWebhook({
+        outcome: 'APPROVED',
+        rawStatus: 'processed',
+      });
+
+      expect(result).toEqual({ status: 'PROCESSED' });
+      expect(applySnapshotOutcomeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['refunded', 'charged_back'])(
+      'only records %s on a PENDING attempt and never finalizes or fails it',
+      async (rawStatus) => {
+        const result = await runOrderWebhook({
+          outcome: 'PENDING',
+          rawStatus,
+        });
+
+        expect(result).toEqual({ status: 'PROCESSED' });
+        expect(applySnapshotOutcomeMock).not.toHaveBeenCalled();
+        expect(transactionMock).not.toHaveBeenCalled();
+        expect(paymentAttemptUpdateMock).toHaveBeenCalledWith({
+          where: { id: 'attempt-1' },
+          data: { providerStatus: rawStatus, providerStatusDetail: null },
+        });
+      },
+    );
+
+    it('does not change an already SUCCEEDED attempt when a reversal arrives', async () => {
+      mercadoPagoConfig.apiMode = 'orders';
+      paymentWebhookEventFindUniqueMock.mockResolvedValue(null);
+      paymentAttemptFindFirstMock.mockResolvedValue({
+        ...orderAttempt,
+        status: PaymentAttemptStatus.SUCCEEDED,
+      });
+      billFindUniqueMock.mockResolvedValue(billWithBranch);
+      paymentAttemptUpdateMock.mockResolvedValue({});
+      getPaymentMock.mockResolvedValue({
+        providerReference: 'ORD01TEST',
+        outcome: 'PENDING',
+        rawStatus: 'refunded',
+      });
+
+      const result = await service.execute({
+        body: { id: 601, type: 'order', data: { id: 'ORD01TEST' } },
+        dataId: 'ORD01TEST',
+      });
+
+      expect(result).toEqual({ status: 'PROCESSED' });
+      expect(applySnapshotOutcomeMock).not.toHaveBeenCalled();
+      expect(transactionMock).not.toHaveBeenCalled();
+      expect(paymentAttemptUpdateMock).toHaveBeenCalledWith({
+        where: { id: 'attempt-1' },
+        data: { providerStatus: 'refunded', providerStatusDetail: null },
+      });
     });
   });
 

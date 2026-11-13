@@ -28,6 +28,7 @@ import { PayQrBillService } from './application/pay-qr-bill.service';
 import { PayQrOrderService } from './application/pay-qr-order.service';
 import { OFFLINE_PAYMENT_RECORDER } from './application/ports/offline-payment-recorder.port';
 import { PAYMENT_GATEWAY_RESOLVER } from './application/ports/payment-gateway-resolver.port';
+import { ReconcileMercadoPagoPaymentsService } from './application/reconcile-mercado-pago-payments.service';
 import { ReconcileTransbankPaymentsService } from './application/reconcile-transbank-payments.service';
 import { ResumePaymentAccountService } from './application/resume-payment-account.service';
 import { SetPreferredPaymentAccountService } from './application/set-preferred-payment-account.service';
@@ -42,6 +43,7 @@ import { RestaurantPaymentAccountRepository } from './infrastructure/mercado-pag
 import { OfflinePaymentRecorderAdapter } from './infrastructure/offline-payment-recorder.adapter';
 import { PaymentGatewayRegistry } from './infrastructure/payment-gateway-registry.service';
 import { PaymentGatewayResolverService } from './infrastructure/payment-gateway-resolver.service';
+import { ReconcileMercadoPagoPaymentsScheduler } from './infrastructure/mercado-pago/reconcile-mercado-pago-payments.scheduler';
 import { ReconcileTransbankPaymentsScheduler } from './infrastructure/transbank/reconcile-transbank-payments.scheduler';
 import { TransbankConfigService } from './infrastructure/transbank/transbank-config.service';
 import { WebpayMallGatewayAdapter } from './infrastructure/transbank/webpay-mall-gateway.adapter';
@@ -88,6 +90,8 @@ import { QrPaymentsController } from './presentation/http/qr-payments.controller
     MercadoPagoGatewayAdapter,
     TransbankConfigService,
     WebpayMallGatewayAdapter,
+    ReconcileMercadoPagoPaymentsService,
+    ReconcileMercadoPagoPaymentsScheduler,
     ReconcileTransbankPaymentsService,
     ReconcileTransbankPaymentsScheduler,
     PaymentGatewayRegistry,

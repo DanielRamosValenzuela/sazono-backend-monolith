@@ -20,6 +20,8 @@ describe('PayQrOrderService', () => {
   const tableFindUniqueMock = jest.fn();
   const orderFindUniqueMock = jest.fn();
   const attemptCreateMock = jest.fn();
+  const attemptUpdateMock = jest.fn();
+  const attemptFindFirstMock = jest.fn().mockResolvedValue(null);
   const transactionMock = jest.fn();
   const prisma = {
     table: {
@@ -30,6 +32,8 @@ describe('PayQrOrderService', () => {
     },
     paymentAttempt: {
       create: attemptCreateMock,
+      updateMany: attemptUpdateMock,
+      findFirst: attemptFindFirstMock,
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
@@ -59,6 +63,7 @@ describe('PayQrOrderService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resolveAvailableMock.mockResolvedValue([]);
+    attemptFindFirstMock.mockResolvedValue(null);
     service = new PayQrOrderService(
       prisma,
       offlinePaymentRecorder,
@@ -97,6 +102,56 @@ describe('PayQrOrderService', () => {
       },
     ],
   };
+
+  it('leaves the attempt PENDING and the order untouched when the gateway reports a pending charge', async () => {
+    tableFindUniqueMock.mockResolvedValue(table);
+    orderFindUniqueMock.mockResolvedValue(awaitingOrder);
+    attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
+    attemptUpdateMock.mockResolvedValue({});
+
+    const chargeExecuteMock = jest.fn().mockResolvedValue({
+      kind: 'PENDING',
+      providerName: 'MERCADO_PAGO',
+      providerReference: 'ORD01',
+    });
+    const pendingService = new PayQrOrderService(
+      prisma,
+      offlinePaymentRecorder,
+      { execute: chargeExecuteMock } as unknown as ChargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
+
+    await expect(
+      pendingService.execute('qr-token', 'order-1', {
+        tipAmount: '1000',
+        cardToken: 't',
+        paymentMethodId: 'visa',
+        installments: 1,
+      }),
+    ).rejects.toThrow(/en revision/);
+
+    expect(attemptCreateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tipAmount: new Prisma.Decimal(1000) }),
+    });
+    expect(attemptUpdateMock).toHaveBeenCalledWith({
+      where: { id: 'attempt-1', status: PaymentAttemptStatus.PENDING },
+      data: { provider: 'MERCADO_PAGO', providerReference: 'ORD01' },
+    });
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new charge while a Mercado Pago attempt for the order is still in review', async () => {
+    tableFindUniqueMock.mockResolvedValue(table);
+    orderFindUniqueMock.mockResolvedValue(awaitingOrder);
+    attemptFindFirstMock.mockResolvedValue({ id: 'attempt-0' });
+
+    await expect(service.execute('qr-token', 'order-1', {})).rejects.toThrow(
+      /en revision/,
+    );
+
+    expect(attemptCreateMock).not.toHaveBeenCalled();
+  });
 
   it('approves the payment, charges the bill, routes the order and settles the payment', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
@@ -166,6 +221,7 @@ describe('PayQrOrderService', () => {
           },
           billItem: { createMany: txBillItemCreateManyMock },
           tableSession: { updateMany: txSessionUpdateManyMock },
+          orderItem: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
           stationTicket: { create: txStationTicketCreateMock },
         }),
     );

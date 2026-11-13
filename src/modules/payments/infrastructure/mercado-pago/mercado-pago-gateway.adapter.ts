@@ -1,18 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentGatewayProvider } from '@prisma/client';
-import { MercadoPagoConfig, Payment } from 'mercadopago';
+import { MercadoPagoConfig, Order, Payment } from 'mercadopago';
 import { PaymentGatewayAdapter } from '../../domain/payment-gateway-adapter.decorator';
 import {
   MERCADOPAGO_PROVIDER_NAME,
+  mapMercadoPagoOrderStatus,
   mapMercadoPagoStatus,
 } from '../../domain/mercado-pago-status';
-import { toGatewayAmount } from './mercado-pago-amount';
+import { toGatewayAmount, toOrderAmount } from './mercado-pago-amount';
 import { MercadoPagoConfigService } from './mercado-pago-config.service';
 import type {
   GatewayChargeContext,
   GatewayChargeOutcome,
   GatewayCredentials,
   GatewayPaymentSnapshot,
+  GatewayPendingChargeOutcome,
   PaymentGatewayPort,
 } from '../../application/ports/payment-gateway.port';
 
@@ -23,12 +25,17 @@ const PENDING_FALLBACK_FAILURE_REASON =
 const MISSING_CHECKOUT_PAYLOAD_FAILURE_REASON =
   'Falta el token de la tarjeta para completar el pago con Mercado Pago.';
 
+type MercadoPagoOrderResponse = Awaited<ReturnType<Order['create']>>;
+
+const ORDER_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
 type MercadoPagoPaymentResponse = Awaited<ReturnType<Payment['create']>>;
 
 type MercadoPagoCheckoutPayload = {
   cardToken: string;
   paymentMethodId: string;
   installments: number;
+  paymentTypeId?: string;
   issuerId?: string;
   payerEmail?: string;
 };
@@ -58,7 +65,9 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
 
   constructor(private readonly mercadoPagoConfig: MercadoPagoConfigService) {}
 
-  async charge(context: GatewayChargeContext): Promise<GatewayChargeOutcome> {
+  async charge(
+    context: GatewayChargeContext,
+  ): Promise<GatewayChargeOutcome | GatewayPendingChargeOutcome> {
     if (!isMercadoPagoCheckoutPayload(context.checkoutPayload)) {
       return {
         kind: 'SETTLED',
@@ -68,6 +77,11 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
     }
 
     const checkout = context.checkoutPayload;
+
+    if (this.mercadoPagoConfig.apiMode === 'orders') {
+      return this.chargeWithOrder(context, checkout);
+    }
+
     const paymentClient = this.buildPaymentClient(context.credentials);
     const transactionAmount = toGatewayAmount(context.amount, context.currency);
 
@@ -112,6 +126,10 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
     providerReference: string,
     credentials: GatewayCredentials,
   ): Promise<GatewayPaymentSnapshot | null> {
+    if (this.mercadoPagoConfig.apiMode === 'orders') {
+      return this.getOrder(providerReference, credentials);
+    }
+
     const paymentClient = this.buildPaymentClient(credentials);
 
     try {
@@ -142,21 +160,236 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
     }
   }
 
-  private buildPaymentClient(credentials: GatewayCredentials): Payment {
+  private async chargeWithOrder(
+    context: GatewayChargeContext,
+    checkout: MercadoPagoCheckoutPayload,
+  ): Promise<GatewayChargeOutcome | GatewayPendingChargeOutcome> {
+    const orderClient = this.buildOrderClient(context.credentials);
+    const amount = toOrderAmount(context.amount, context.currency);
+
+    try {
+      const response = await orderClient.create({
+        body: {
+          type: 'online',
+          external_reference: context.externalReference,
+          total_amount: amount,
+          currency: context.currency,
+          capture_mode: 'automatic',
+          description: context.description,
+          payer:
+            checkout.payerEmail !== undefined
+              ? { email: checkout.payerEmail }
+              : undefined,
+          marketplace_fee:
+            context.applicationFeeAmount !== undefined &&
+            context.applicationFeeAmount > 0
+              ? String(context.applicationFeeAmount)
+              : undefined,
+          transactions: {
+            payments: [
+              {
+                amount,
+                payment_method: {
+                  id: checkout.paymentMethodId,
+                  type: checkout.paymentTypeId ?? 'credit_card',
+                  token: checkout.cardToken,
+                  installments: checkout.installments,
+                },
+              },
+            ],
+          },
+        },
+        requestOptions: {
+          idempotencyKey: context.attemptId,
+        },
+      });
+
+      return this.buildOutcomeFromOrder(response);
+    } catch (error) {
+      const ambiguous = this.isAmbiguousOrderError(error);
+
+      if (ambiguous) {
+        const existing = await this.findExistingOrder(
+          orderClient,
+          context.externalReference,
+        );
+
+        if (existing !== null) {
+          return this.buildOutcomeFromOrder(existing);
+        }
+      }
+
+      this.logger.error(this.describeError(error, 'charge-order'));
+
+      if (ambiguous) {
+        return { kind: 'PENDING' };
+      }
+
+      return {
+        kind: 'SETTLED',
+        result: 'REJECTED',
+        failureReason: NETWORK_ERROR_FAILURE_REASON,
+      };
+    }
+  }
+
+  async findByExternalReference(
+    externalReference: string,
+    credentials: GatewayCredentials,
+  ): Promise<GatewayPaymentSnapshot | null> {
+    if (this.mercadoPagoConfig.apiMode !== 'orders') {
+      return null;
+    }
+
+    const existing = await this.findExistingOrder(
+      this.buildOrderClient(credentials),
+      externalReference,
+    );
+
+    return existing?.id ? this.getOrder(existing.id, credentials) : null;
+  }
+
+  private async getOrder(
+    providerReference: string,
+    credentials: GatewayCredentials,
+  ): Promise<GatewayPaymentSnapshot | null> {
+    const orderClient = this.buildOrderClient(credentials);
+
+    try {
+      const response = await orderClient.get({ id: providerReference });
+
+      if (response.id === undefined || response.status === undefined) {
+        return null;
+      }
+
+      const statusDetail = this.resolveOrderStatusDetail(response);
+      const mapped = mapMercadoPagoOrderStatus(response.status, statusDetail);
+
+      return {
+        providerReference: response.id,
+        outcome: mapped.outcome,
+        rawStatus: response.status,
+        rawStatusDetail: statusDetail,
+        amount: response.total_amount,
+        currency: response.currency,
+        externalReference: response.external_reference ?? undefined,
+      };
+    } catch (error) {
+      this.logger.warn(this.describeError(error, 'getOrder'));
+
+      return null;
+    }
+  }
+
+  private buildOutcomeFromOrder(
+    response: MercadoPagoOrderResponse,
+  ): GatewayChargeOutcome | GatewayPendingChargeOutcome {
+    const status = response.status ?? 'unknown';
+    const statusDetail = this.resolveOrderStatusDetail(response);
+    const mapped = mapMercadoPagoOrderStatus(status, statusDetail);
+
+    if (mapped.outcome === 'PENDING') {
+      if (response.id === undefined) {
+        this.logger.error(
+          `Mercado Pago devolvio una order no final sin id (status=${status}). Se trato como rechazo porque no se puede reconciliar.`,
+        );
+
+        return {
+          kind: 'SETTLED',
+          result: 'REJECTED',
+          failureReason: PENDING_FALLBACK_FAILURE_REASON,
+          rawStatus: status,
+          rawStatusDetail: statusDetail,
+        };
+      }
+
+      this.logger.warn(
+        `Mercado Pago devolvio una order no final (providerReference=${response.id}, status=${status}). Queda PENDING hasta que el webhook o la conciliacion la resuelvan.`,
+      );
+
+      return {
+        kind: 'PENDING',
+        providerReference: response.id,
+        rawStatus: status,
+        rawStatusDetail: statusDetail,
+      };
+    }
+
+    return {
+      kind: 'SETTLED',
+      result: mapped.outcome,
+      providerReference: response.id,
+      failureReason: mapped.failureReason,
+      rawStatus: status,
+      rawStatusDetail: statusDetail,
+    };
+  }
+
+  private resolveOrderStatusDetail(
+    response: MercadoPagoOrderResponse,
+  ): string | undefined {
+    return (
+      response.transactions?.payments?.[0]?.status_detail ??
+      response.status_detail
+    );
+  }
+
+  private isAmbiguousOrderError(error: unknown): boolean {
+    const status =
+      error && typeof error === 'object'
+        ? (error as { status?: unknown }).status
+        : undefined;
+
+    if (typeof status !== 'number') {
+      return true;
+    }
+
+    return status >= 500 || status === 408 || status === 409 || status === 423;
+  }
+
+  private async findExistingOrder(
+    orderClient: Order,
+    externalReference: string,
+  ): Promise<MercadoPagoOrderResponse | null> {
+    try {
+      const now = Date.now();
+      const result = await orderClient.search({
+        options: {
+          begin_date: new Date(now - ORDER_LOOKBACK_MS).toISOString(),
+          end_date: new Date(now).toISOString(),
+          external_reference: externalReference,
+        },
+      });
+
+      return result.data?.[0] ?? null;
+    } catch (error) {
+      this.logger.warn(this.describeError(error, 'find-existing-order'));
+
+      return null;
+    }
+  }
+
+  private buildSdkConfig(credentials: GatewayCredentials): MercadoPagoConfig {
     if (!credentials.accessToken) {
       throw new Error(
         'Mercado Pago requiere un accessToken en las credenciales resueltas.',
       );
     }
 
-    const config = new MercadoPagoConfig({
+    return new MercadoPagoConfig({
       accessToken: credentials.accessToken,
       options: {
         timeout: this.mercadoPagoConfig.timeoutMs,
       },
     });
+  }
 
-    return new Payment(config);
+  private buildPaymentClient(credentials: GatewayCredentials): Payment {
+    return new Payment(this.buildSdkConfig(credentials));
+  }
+
+  private buildOrderClient(credentials: GatewayCredentials): Order {
+    return new Order(this.buildSdkConfig(credentials));
   }
 
   private async buildOutcomeFromResponse(

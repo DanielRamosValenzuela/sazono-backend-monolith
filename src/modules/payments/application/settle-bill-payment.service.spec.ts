@@ -19,11 +19,15 @@ import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolve
 describe('SettleBillPaymentService', () => {
   const attemptCreateMock = jest.fn();
   const attemptUpdateManyMock = jest.fn();
+  const attemptUpdateMock = jest.fn();
+  const attemptFindFirstMock = jest.fn().mockResolvedValue(null);
   const transactionMock = jest.fn();
   const prisma = {
     paymentAttempt: {
       create: attemptCreateMock,
       updateMany: attemptUpdateManyMock,
+      update: attemptUpdateMock,
+      findFirst: attemptFindFirstMock,
     },
     $transaction: transactionMock,
   } as unknown as PrismaService;
@@ -53,6 +57,7 @@ describe('SettleBillPaymentService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resolveAvailableMock.mockResolvedValue([]);
+    attemptFindFirstMock.mockResolvedValue(null);
     service = new SettleBillPaymentService(
       prisma,
       offlinePaymentRecorder,
@@ -108,6 +113,8 @@ describe('SettleBillPaymentService', () => {
             update: txBillUpdateMock,
           },
           tableSession: { updateMany: txSessionUpdateManyMock },
+          order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          orderItem: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
         }),
     );
     const result = await service.execute(
@@ -166,6 +173,8 @@ describe('SettleBillPaymentService', () => {
             update: txBillUpdateMock,
           },
           tableSession: { updateMany: txSessionUpdateManyMock },
+          order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          orderItem: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
         }),
     );
 
@@ -254,6 +263,58 @@ describe('SettleBillPaymentService', () => {
         }),
       }),
     );
+  });
+
+  it('persists the attempt as PENDING and neither credits the bill nor fails the attempt when the gateway reports a pending charge', async () => {
+    attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
+    attemptUpdateMock.mockResolvedValue({});
+
+    const chargeExecuteMock = jest.fn().mockResolvedValue({
+      kind: 'PENDING',
+      providerName: 'MERCADO_PAGO',
+      providerReference: 'ORD01',
+    });
+    const pendingService = new SettleBillPaymentService(
+      prisma,
+      offlinePaymentRecorder,
+      { execute: chargeExecuteMock } as unknown as ChargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
+
+    await expect(
+      pendingService.execute(
+        PaymentChannel.QR_ONLINE,
+        openBill,
+        new Prisma.Decimal(10000),
+        new Prisma.Decimal(500),
+        { cardToken: 't', paymentMethodId: 'visa', installments: 1 },
+      ),
+    ).rejects.toThrow(/en revision/);
+
+    expect(attemptCreateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tipAmount: new Prisma.Decimal(500) }),
+    });
+    expect(attemptUpdateManyMock).toHaveBeenCalledWith({
+      where: { id: 'attempt-1', status: PaymentAttemptStatus.PENDING },
+      data: { provider: 'MERCADO_PAGO', providerReference: 'ORD01' },
+    });
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new charge while a Mercado Pago attempt for the same bill is still in review', async () => {
+    attemptFindFirstMock.mockResolvedValue({ id: 'attempt-0' });
+
+    await expect(
+      service.execute(
+        PaymentChannel.QR_ONLINE,
+        openBill,
+        new Prisma.Decimal(10000),
+        new Prisma.Decimal(0),
+      ),
+    ).rejects.toThrow(/en revision/);
+
+    expect(attemptCreateMock).not.toHaveBeenCalled();
   });
 
   it('forwards the checkout payload to the charge service for QR_ONLINE without ever building one for STAFF_OFFLINE', async () => {

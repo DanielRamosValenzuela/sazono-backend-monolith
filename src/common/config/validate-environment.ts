@@ -200,10 +200,23 @@ class EnvironmentVariables {
   @Min(0)
   PAYMENTS_APPLICATION_FEE_BPS = 0;
 
+  @IsIn(['payments', 'orders'])
+  MERCADOPAGO_API_MODE: 'payments' | 'orders' = 'payments';
+
   @Transform(({ value }) => toNumber(value, 15000))
   @IsInt()
   @Min(1)
   MERCADOPAGO_TIMEOUT_MS = 15000;
+
+  @Transform(({ value }) => toNumber(value, 5 * 60 * 1000))
+  @IsInt()
+  @Min(1)
+  MERCADOPAGO_RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000;
+
+  @Transform(({ value }) => toNumber(value, 5))
+  @IsInt()
+  @Min(1)
+  MERCADOPAGO_RECONCILIATION_MIN_AGE_MINUTES = 5;
 
   @Transform(({ value }) => toBoolean(value, false))
   @IsBoolean()

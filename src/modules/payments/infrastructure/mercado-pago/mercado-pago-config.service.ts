@@ -5,6 +5,8 @@ export type MercadoPagoEnvironment = 'sandbox' | 'production';
 
 const MERCADOPAGO_DEFAULT_TIMEOUT_MS = 15000;
 const MERCADOPAGO_WEBHOOK_DEFAULT_TOLERANCE_SECONDS = 300;
+const MERCADOPAGO_DEFAULT_RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000;
+const MERCADOPAGO_DEFAULT_RECONCILIATION_MIN_AGE_MINUTES = 5;
 
 @Injectable()
 export class MercadoPagoConfigService {
@@ -67,6 +69,12 @@ export class MercadoPagoConfigService {
     );
   }
 
+  get apiMode(): 'payments' | 'orders' {
+    return this.configService.get<string>('MERCADOPAGO_API_MODE') === 'orders'
+      ? 'orders'
+      : 'payments';
+  }
+
   get applicationFeeBps(): number {
     return this.configService.get<number>('PAYMENTS_APPLICATION_FEE_BPS') ?? 0;
   }
@@ -81,6 +89,22 @@ export class MercadoPagoConfigService {
     return (
       this.configService.get<number>('MERCADOPAGO_TIMEOUT_MS') ??
       MERCADOPAGO_DEFAULT_TIMEOUT_MS
+    );
+  }
+
+  get reconciliationIntervalMs(): number {
+    return (
+      this.configService.get<number>(
+        'MERCADOPAGO_RECONCILIATION_INTERVAL_MS',
+      ) ?? MERCADOPAGO_DEFAULT_RECONCILIATION_INTERVAL_MS
+    );
+  }
+
+  get reconciliationMinAgeMinutes(): number {
+    return (
+      this.configService.get<number>(
+        'MERCADOPAGO_RECONCILIATION_MIN_AGE_MINUTES',
+      ) ?? MERCADOPAGO_DEFAULT_RECONCILIATION_MIN_AGE_MINUTES
     );
   }
 

@@ -50,6 +50,12 @@ export class PayQrOrderDto {
   @MaxLength(40)
   paymentMethodId?: string;
 
+  @ApiPropertyOptional({ example: 'credit_card' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentTypeId?: string;
+
   @ApiPropertyOptional({
     description: 'Identificador del banco emisor de la tarjeta.',
   })
@@ -103,6 +109,12 @@ export class PayQrBillDto extends PayBillDto {
   @IsString()
   @MaxLength(40)
   paymentMethodId?: string;
+
+  @ApiPropertyOptional({ example: 'credit_card' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentTypeId?: string;
 
   @ApiPropertyOptional({
     description: 'Identificador del banco emisor de la tarjeta.',
@@ -237,6 +249,12 @@ export class PayBillSplitParticipantDto {
   @IsString()
   @MaxLength(40)
   paymentMethodId?: string;
+
+  @ApiPropertyOptional({ example: 'credit_card' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentTypeId?: string;
 
   @ApiPropertyOptional({
     description: 'Identificador del banco emisor de la tarjeta.',

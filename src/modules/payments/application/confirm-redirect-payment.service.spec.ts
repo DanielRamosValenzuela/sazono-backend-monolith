@@ -243,6 +243,7 @@ describe('ConfirmRedirectPaymentService', () => {
             order: {
               findUnique: txOrderFindUniqueMock,
               update: txOrderUpdateMock,
+              updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             paymentAttempt: { updateMany: txAttemptUpdateManyMock },
             payment: { create: txPaymentCreateMock },
@@ -252,6 +253,9 @@ describe('ConfirmRedirectPaymentService', () => {
             },
             billItem: { createMany: txBillItemCreateManyMock },
             tableSession: { updateMany: txSessionUpdateManyMock },
+            orderItem: {
+              updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
             stationTicket: { create: txStationTicketCreateMock },
           }),
       );
@@ -380,6 +384,9 @@ describe('ConfirmRedirectPaymentService', () => {
               update: txBillUpdateMock,
             },
             tableSession: { updateMany: txSessionUpdateManyMock },
+            orderItem: {
+              updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
           }),
       );
 
@@ -539,6 +546,27 @@ describe('ConfirmRedirectPaymentService', () => {
       expect(getPaymentMock).not.toHaveBeenCalled();
     });
 
+    it('looks up an attempt without providerReference by its id when the gateway supports it and keeps it PENDING when nothing is found', async () => {
+      const findByExternalReferenceMock = jest.fn().mockResolvedValue(null);
+      registryGetMock.mockReturnValue({
+        ...transbankGateway,
+        findByExternalReference: findByExternalReferenceMock,
+      });
+
+      const result = await service.reconcilePendingAttempt(
+        { ...pendingOrderAttempt, providerReference: null },
+        { rejectWhenMissingAtProvider: false },
+      );
+
+      expect(findByExternalReferenceMock).toHaveBeenCalledWith(
+        'attempt-5',
+        expect.anything(),
+      );
+      expect(getPaymentMock).not.toHaveBeenCalled();
+      expect(result).toEqual({ kind: 'STILL_PENDING' });
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
     it('fails the attempt with a clear reason when Transbank has no record of the transaction', async () => {
       getPaymentMock.mockResolvedValue(null);
       const txAttemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });
@@ -567,6 +595,35 @@ describe('ConfirmRedirectPaymentService', () => {
         }),
       );
     });
+
+    it('keeps the attempt PENDING instead of failing it when the provider lookup returns nothing and rejectWhenMissingAtProvider is false', async () => {
+      getPaymentMock.mockResolvedValue(null);
+
+      const result = await service.reconcilePendingAttempt(
+        pendingOrderAttempt,
+        { rejectWhenMissingAtProvider: false },
+      );
+
+      expect(result).toEqual({ kind: 'STILL_PENDING' });
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['refunded', 'charged_back'])(
+      'never finalizes or fails the attempt when the provider reports %s',
+      async (rawStatus) => {
+        getPaymentMock.mockResolvedValue({
+          providerReference: 'tbk-token-5',
+          outcome: 'PENDING',
+          rawStatus,
+        });
+
+        const result =
+          await service.reconcilePendingAttempt(pendingOrderAttempt);
+
+        expect(result).toEqual({ kind: 'STILL_PENDING' });
+        expect(transactionMock).not.toHaveBeenCalled();
+      },
+    );
 
     it('approves and finalizes the order exactly like the normal confirmation flow when Transbank reports AUTHORIZED late', async () => {
       getPaymentMock.mockResolvedValue({
@@ -640,6 +697,7 @@ describe('ConfirmRedirectPaymentService', () => {
             order: {
               findUnique: txOrderFindUniqueMock,
               update: txOrderUpdateMock,
+              updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             paymentAttempt: { updateMany: txAttemptUpdateManyMock },
             payment: { create: txPaymentCreateMock },
@@ -649,6 +707,9 @@ describe('ConfirmRedirectPaymentService', () => {
             },
             billItem: { createMany: txBillItemCreateManyMock },
             tableSession: { updateMany: txSessionUpdateManyMock },
+            orderItem: {
+              updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
             stationTicket: { create: txStationTicketCreateMock },
           }),
       );

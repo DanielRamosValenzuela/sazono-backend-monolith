@@ -110,6 +110,7 @@ export class ConfirmRedirectPaymentService {
 
   async reconcilePendingAttempt(
     attempt: PaymentAttempt,
+    options: { rejectWhenMissingAtProvider?: boolean } = {},
   ): Promise<ReconcileAttemptOutcome> {
     const gateway = this.paymentGatewayRegistry.get(
       attempt.provider as PaymentGatewayProvider,
@@ -122,7 +123,7 @@ export class ConfirmRedirectPaymentService {
       );
     }
 
-    if (!attempt.providerReference) {
+    if (!attempt.providerReference && !gateway.findByExternalReference) {
       return this.rejectUnresolvableAttempt(
         attempt,
         MISSING_PROVIDER_REFERENCE_FAILURE_REASON,
@@ -130,10 +131,14 @@ export class ConfirmRedirectPaymentService {
     }
 
     const credentials = await this.resolveCredentials(attempt);
-    const snapshot = await gateway.getPayment(
-      attempt.providerReference,
-      credentials,
-    );
+    const snapshot = attempt.providerReference
+      ? await gateway.getPayment(attempt.providerReference, credentials)
+      : ((await gateway.findByExternalReference?.(attempt.id, credentials)) ??
+        null);
+
+    if (!snapshot && options.rejectWhenMissingAtProvider === false) {
+      return { kind: 'STILL_PENDING' };
+    }
 
     if (!snapshot) {
       return this.rejectUnresolvableAttempt(
@@ -145,7 +150,7 @@ export class ConfirmRedirectPaymentService {
     return this.applySnapshotOutcome(attempt, snapshot);
   }
 
-  private async applySnapshotOutcome(
+  async applySnapshotOutcome(
     attempt: PaymentAttempt,
     snapshot: GatewayPaymentSnapshot,
   ): Promise<ReconcileAttemptOutcome> {
@@ -178,7 +183,7 @@ export class ConfirmRedirectPaymentService {
     }
   }
 
-  private async rejectUnresolvableAttempt(
+  async rejectUnresolvableAttempt(
     attempt: PaymentAttempt,
     failureReason: string,
   ): Promise<ReconcileAttemptOutcome> {

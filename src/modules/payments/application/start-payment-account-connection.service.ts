@@ -93,6 +93,7 @@ export class StartPaymentAccountConnectionService {
       authorizationUrl,
       state,
       expiresAt: expiresAt.toISOString(),
+      environment: this.mercadoPagoConfig.environment,
     };
   }
 }

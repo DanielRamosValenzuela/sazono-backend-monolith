@@ -95,3 +95,42 @@ sigue sin existir reconciliacion por cron para Mercado Pago (solo Transbank).
 2. Preguntar a Mercado Pago (soporte o contacto comercial): fecha de descontinuacion de Payments API; si Orders soporta comision de plataforma con vendedores OAuth en Chile; si el webhook del panel recibe los eventos de vendedores conectados.
 3. Si el spike confirma comision: migrar con un flag `MERCADOPAGO_API_MODE` (payments u orders) para convivir durante el corte.
 4. Si no: mantener Payments API y decidir el modelo de monetizacion con esa restriccion en mente.
+
+## Orders API (implementado detras de MERCADOPAGO_API_MODE)
+
+### Que se implemento
+
+- `MERCADOPAGO_API_MODE=payments|orders` (default `payments`). Con `payments` el camino de cobro es el de siempre; no se envia comision.
+- Con `orders`, `MercadoPagoGatewayAdapter.charge()` llama `POST /v1/orders` (SDK `Order.create`) con `type=online`, `capture_mode=automatic`, `total_amount` y `payments[].amount` como string, `payment_method.type` (`credit_card` por defecto, o el `paymentTypeId` que entrega el Brick) e `idempotencyKey = attemptId`. `getPayment()` usa `Order.get`. Ante 409/423 se busca la order existente con `Order.search` por `external_reference` (ultimas 24 h).
+- Estados de order (`mapMercadoPagoOrderStatus`): `processed` = APPROVED; `failed`, `canceled`, `expired` = REJECTED; `created`, `processing`, `action_required`, `refunded`, `charged_back` y desconocidos = PENDING. En `charge()` un PENDING se devuelve como `kind: 'PENDING'` con `providerReference` = id de la order (ver "Order no final" abajo). Una order no final sin id se rechaza porque no se puede conciliar.
+- El webhook acepta `type` = `order` / `orders` ademas de `payment`; `scripts/mp-webhook-curl.mjs` acepta `order` como 4to argumento.
+- UI y DTOs transportan `paymentTypeId` (opcional) desde el Brick hasta el adaptador.
+
+### Como habilitarlo
+
+1. `MERCADOPAGO_API_MODE=orders`.
+2. `PAYMENTS_APPLICATION_FEE_BPS=100` (1%).
+3. Reiniciar el backend. Para volver atras basta `MERCADOPAGO_API_MODE=payments`.
+
+### Decision de comision (1%)
+
+- Se envia como `marketplace_fee` (string, entero en CLP) = `floor(monto_sin_propina * bps / 10000)`; se omite si es 0. Ejemplo: 11800 CLP = 118.
+- La propina NO paga comision: la base es `amount - tipAmount` (`ChargePaymentRequest.tipAmount`, informado por `pay-qr-order`, `pay-bill-split-participant` y `settle-bill-payment`).
+- Solo aplica en modo `orders`. En modo `payments` `PAYMENTS_APPLICATION_FEE_BPS` sigue sin cobrarse (no se cablea `application_fee` en Payments).
+
+### Sin verificar (requiere el spike en sandbox)
+
+- Que un access token OAuth de vendedor sea aceptado en `POST /v1/orders`.
+- Que `marketplace_fee` sea aceptada en el flujo de tarjeta directa (la doc la menciona solo para Checkout Pro via Orders) y que el monto se acredite a Sazono.
+- Entrega de webhooks de orders para vendedores conectados, los valores reales de `type`/`action` y si la firma usa el mismo manifest que Payments.
+- Requisitos de moneda CLP (entero como string) y de `payment_method.type` (debito/prepago segun el Brick); el codigo del error 409/423 y su forma en el SDK.
+- `refunded` / `charged_back` no revierten nada (el webhook solo registra el estado).
+
+
+### Order no final (sin binary_mode)
+
+- El adapter devuelve `PENDING`; `ChargePaymentService` lo propaga y los servicios que cobran (`settle-bill-payment`, `pay-qr-order`, `pay-bill-split-participant`) dejan el `PaymentAttempt` en PENDING con `provider=MERCADO_PAGO`, `providerReference` y `tipAmount` (y el participante en el split), no acreditan la cuenta ni rutean la orden, y responden 409 "El pago esta en revision..." (la UI ya muestra el mensaje del error). El `tipAmount` (y el participante en el split) se guardan al crear el intento, antes de cobrar. Mientras haya un intento MP PENDING en la misma cuenta (`billId`), no se acepta un nuevo cobro (evita doble cobro; riesgo resuelto para este camino). El 409 lleva `code: 'PAYMENT_IN_REVIEW'`: la UI de tarjeta (`use-card-checkout-payment`) lo trata como "verificando" y consulta el estado de la orden/cuenta durante 30 s; si sigue pendiente muestra el aviso existente de "no se pudo verificar".
+- Webhook `order`/`orders` con `processed` sobre un intento PENDING: finaliza una sola vez (pago, credito de cuenta, ruteo de orden o split) via `ConfirmRedirectPaymentService.applySnapshotOutcome`. `failed`/`canceled`/`expired`: el intento pasa a FAILED y la orden a PAYMENT_FAILED. `refunded`/`charged_back` solo se registran y se loguean; nunca se reversan ni acreditan automaticamente. En modo `payments` el webhook conserva su comportamiento anterior.
+- Red de seguridad: `ReconcileMercadoPagoPaymentsScheduler` (solo con `MERCADOPAGO_API_MODE=orders`) consulta `Order.get` de los intentos MP PENDING con mas de `MERCADOPAGO_RECONCILIATION_MIN_AGE_MINUTES` (5) cada `MERCADOPAGO_RECONCILIATION_INTERVAL_MS` (5 min) y los finaliza o rechaza. Si Mercado Pago no responde, el intento sigue PENDING (no se rechaza). Un `Order.create` ambiguo (timeout, sin status HTTP, 5xx, 408/409/423) primero busca la order por `external_reference`; si no la encuentra queda PENDING sin referencia y el reconciliador la busca por id de intento (se rechaza tras 2 h sin hallazgo). Todo intento aun PENDING tras 48 h se rechaza (orden a PAYMENT_FAILED) con un `logger.error` para revision manual en Mercado Pago.
+- Limite conocido: un intento que quede PENDING con la order `refunded`/`charged_back` nunca se resuelve solo y bloquea nuevos cobros sobre esa orden/cuenta/participante hasta revision manual (o hasta el tope de 48 h si la order sigue en estado no final).
+- Otros limites: un pago offline que sobrepague la cuenta mientras hay un intento PENDING impide finalizarlo (se rechaza al tope de 48 h aunque se haya cobrado); si falla el update de `providerReference` tras crear la order, el intento queda MANUAL sin referencia y solo lo resuelve un webhook por `external_reference`; el boton de pago no-tarjeta (`bill-pay-sheet`) muestra un error generico.
