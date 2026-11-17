@@ -202,7 +202,13 @@ function paymentsUnionSql(filter: PaymentsReportFilter): Prisma.Sql {
     JOIN bills b ON b.id = a.bill_id
     WHERE b.branch_id = ${filter.branchId}::uuid
       AND NOT EXISTS (
-        SELECT 1 FROM payments pa WHERE pa.payment_attempt_id = a.id
+        SELECT 1 FROM payments pa
+        WHERE pa.payment_attempt_id = a.id
+          OR (
+            pa.bill_id = a.bill_id
+            AND pa.provider_reference IS NOT NULL
+            AND pa.provider_reference = a.provider_reference
+          )
       )
   `;
 
