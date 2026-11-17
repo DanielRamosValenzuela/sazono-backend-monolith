@@ -14,7 +14,7 @@ import { PayBillService } from '../../application/pay-bill.service';
 import {
   BillSplitResponseDto,
   CreateBillSplitDto,
-  PayBillDto,
+  PayStaffBillDto,
   PaymentResultResponseDto,
   PaymentSummaryResponseDto,
 } from './dto/payments.dto';
@@ -40,7 +40,7 @@ export class PaymentsController {
   payBill(
     @CurrentAuthUser() authUser: JwtPayload,
     @Param('billId') billId: string,
-    @Body() dto: PayBillDto,
+    @Body() dto: PayStaffBillDto,
   ): Promise<PaymentResultResponseDto> {
     return this.payBillService.execute(authUser, billId, dto);
   }

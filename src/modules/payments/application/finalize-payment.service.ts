@@ -1,6 +1,14 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import type { Payment, Prisma } from '@prisma/client';
-import { PaymentAttemptStatus, PaymentStatus } from '@prisma/client';
+import type { Payment, PaymentMethod } from '@prisma/client';
+import { PaymentAttemptStatus, PaymentStatus, Prisma } from '@prisma/client';
+
+export const PaymentSource = {
+  WEB_QR: 'WEB_QR',
+  CASHIER: 'CASHIER',
+  WAITER: 'WAITER',
+} as const;
+
+export type PaymentSource = (typeof PaymentSource)[keyof typeof PaymentSource];
 
 export type FinalizePaymentInput = {
   attemptId: string;
@@ -10,6 +18,11 @@ export type FinalizePaymentInput = {
   currency: string;
   provider: string;
   providerReference?: string | null;
+  tipAmount?: Prisma.Decimal;
+  method?: PaymentMethod | null;
+  staffUserId?: string | null;
+  source?: PaymentSource;
+  gatewayMeta?: Prisma.InputJsonObject;
 };
 
 @Injectable()
@@ -43,6 +56,11 @@ export class FinalizePaymentService {
         providerReference: input.providerReference ?? null,
         status: PaymentStatus.PAID,
         paidAt: new Date(),
+        tipAmount: input.tipAmount ?? new Prisma.Decimal(0),
+        method: input.method ?? null,
+        staffUserId: input.staffUserId ?? null,
+        source: input.source ?? null,
+        gatewayMeta: input.gatewayMeta ?? Prisma.DbNull,
       },
     });
   }

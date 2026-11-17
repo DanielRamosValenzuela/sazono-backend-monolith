@@ -4,7 +4,12 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import { BillStatus, PaymentAttemptStatus, Prisma } from '@prisma/client';
+import {
+  BillStatus,
+  PaymentAttemptStatus,
+  type PaymentMethod,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import {
@@ -12,7 +17,10 @@ import {
   type ChargePaymentCheckout,
 } from './charge-payment.service';
 import { FailPaymentService } from './fail-payment.service';
-import { FinalizePaymentService } from './finalize-payment.service';
+import {
+  FinalizePaymentService,
+  PaymentSource,
+} from './finalize-payment.service';
 import { mapPaymentResult } from './payment-result-mapper';
 import {
   OFFLINE_PAYMENT_RECORDER,
@@ -38,6 +46,12 @@ type PayableBill = {
   currency: string;
   restaurantId: string;
 };
+export type PaymentCollector = {
+  staffUserId: string;
+  source: PaymentSource;
+  method: PaymentMethod;
+};
+
 @Injectable()
 export class SettleBillPaymentService {
   constructor(
@@ -55,6 +69,7 @@ export class SettleBillPaymentService {
     amount: Prisma.Decimal,
     tipDelta: Prisma.Decimal,
     checkout?: ChargePaymentCheckout,
+    collector?: PaymentCollector,
   ): Promise<PaymentResultResponseDto> {
     if (!PAYABLE_BILL_STATUSES.includes(bill.status)) {
       throw new ConflictException(
@@ -128,6 +143,11 @@ export class SettleBillPaymentService {
         currency: bill.currency,
         provider: chargeResult.providerName,
         providerReference: chargeResult.providerReference,
+        tipAmount: tipDelta,
+        method: collector?.method ?? chargeResult.paymentMethod,
+        staffUserId: collector?.staffUserId,
+        source: collector?.source ?? PaymentSource.WEB_QR,
+        gatewayMeta: chargeResult.gatewayMeta,
       });
 
       const billAfterPayment = await applyPaymentToBill(

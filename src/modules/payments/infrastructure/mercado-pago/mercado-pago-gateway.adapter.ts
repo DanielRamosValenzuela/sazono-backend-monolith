@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PaymentGatewayProvider } from '@prisma/client';
+import { PaymentGatewayProvider, PaymentMethod } from '@prisma/client';
 import { MercadoPagoConfig, Order, Payment } from 'mercadopago';
 import { PaymentGatewayAdapter } from '../../domain/payment-gateway-adapter.decorator';
 import {
@@ -13,6 +13,7 @@ import type {
   GatewayChargeContext,
   GatewayChargeOutcome,
   GatewayCredentials,
+  GatewayPaymentDetails,
   GatewayPaymentSnapshot,
   GatewayPendingChargeOutcome,
   PaymentGatewayPort,
@@ -152,6 +153,7 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
         amount: response.transaction_amount?.toString(),
         currency: response.currency_id,
         externalReference: response.external_reference ?? undefined,
+        ...this.buildPaymentApiDetails(response),
       };
     } catch (error) {
       this.logger.warn(this.describeError(error, 'getPayment'));
@@ -273,6 +275,7 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
         amount: response.total_amount,
         currency: response.currency,
         externalReference: response.external_reference ?? undefined,
+        ...this.buildOrderDetails(response),
       };
     } catch (error) {
       this.logger.warn(this.describeError(error, 'getOrder'));
@@ -322,6 +325,37 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
       failureReason: mapped.failureReason,
       rawStatus: status,
       rawStatusDetail: statusDetail,
+      ...this.buildOrderDetails(response),
+    };
+  }
+
+  private buildOrderDetails(
+    response: MercadoPagoOrderResponse,
+  ): GatewayPaymentDetails {
+    const payment = response.transactions?.payments?.[0];
+
+    return {
+      paymentMethod: PaymentMethod.MERCADO_PAGO,
+      gatewayMeta: {
+        transactionId: payment?.id ?? null,
+        payment_type_id: payment?.payment_method?.type ?? null,
+        payment_method_id: payment?.payment_method?.id ?? null,
+        installments: payment?.payment_method?.installments ?? null,
+      },
+    };
+  }
+
+  private buildPaymentApiDetails(
+    response: MercadoPagoPaymentResponse,
+  ): GatewayPaymentDetails {
+    return {
+      paymentMethod: PaymentMethod.MERCADO_PAGO,
+      gatewayMeta: {
+        transactionId: response.id !== undefined ? String(response.id) : null,
+        payment_type_id: response.payment_type_id ?? null,
+        payment_method_id: response.payment_method_id ?? null,
+        installments: response.installments ?? null,
+      },
     };
   }
 
@@ -419,6 +453,7 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
       failureReason: mapped.failureReason,
       rawStatus: status,
       rawStatusDetail: statusDetail,
+      ...this.buildPaymentApiDetails(response),
     };
   }
 

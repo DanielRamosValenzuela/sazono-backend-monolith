@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { PaymentMethod, Prisma } from '@prisma/client';
 
 export type GatewayCredentials = {
   accessToken?: string;
@@ -20,15 +20,20 @@ export type GatewayChargeContext = {
 
 export type GatewaySettledResult = 'APPROVED' | 'REJECTED';
 
+export type GatewayPaymentDetails = {
+  paymentMethod?: PaymentMethod;
+  gatewayMeta?: Prisma.InputJsonObject;
+};
+
 export type GatewayChargeOutcome =
-  | {
+  | ({
       kind: 'SETTLED';
       result: GatewaySettledResult;
       providerReference?: string;
       failureReason?: string;
       rawStatus?: string;
       rawStatusDetail?: string;
-    }
+    } & GatewayPaymentDetails)
   | {
       kind: 'REDIRECT';
       providerReference: string;
@@ -55,7 +60,7 @@ export type GatewayPaymentSnapshot = {
   amount?: string;
   currency?: string;
   externalReference?: string;
-};
+} & GatewayPaymentDetails;
 
 export interface PaymentGatewayPort {
   readonly providerName: string;

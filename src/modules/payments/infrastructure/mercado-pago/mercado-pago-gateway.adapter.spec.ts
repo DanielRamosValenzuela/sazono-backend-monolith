@@ -91,6 +91,13 @@ describe('MercadoPagoGatewayAdapter', () => {
       failureReason: undefined,
       rawStatus: 'approved',
       rawStatusDetail: undefined,
+      paymentMethod: 'MERCADO_PAGO',
+      gatewayMeta: {
+        transactionId: '123',
+        payment_type_id: null,
+        payment_method_id: null,
+        installments: null,
+      },
     });
   });
 
@@ -110,6 +117,13 @@ describe('MercadoPagoGatewayAdapter', () => {
       failureReason: 'La tarjeta no tiene saldo suficiente.',
       rawStatus: 'rejected',
       rawStatusDetail: 'cc_rejected_insufficient_amount',
+      paymentMethod: 'MERCADO_PAGO',
+      gatewayMeta: {
+        transactionId: '124',
+        payment_type_id: null,
+        payment_method_id: null,
+        installments: null,
+      },
     });
   });
 
@@ -220,6 +234,13 @@ describe('MercadoPagoGatewayAdapter', () => {
       rawStatusDetail: undefined,
       amount: '11800',
       currency: 'CLP',
+      paymentMethod: 'MERCADO_PAGO',
+      gatewayMeta: {
+        transactionId: '128',
+        payment_type_id: null,
+        payment_method_id: null,
+        installments: null,
+      },
     });
   });
 
@@ -453,6 +474,46 @@ describe('MercadoPagoGatewayAdapter', () => {
         amount: '11800',
         currency: 'CLP',
         externalReference: 'attempt-7',
+        paymentMethod: 'MERCADO_PAGO',
+        gatewayMeta: {
+          transactionId: null,
+          payment_type_id: null,
+          payment_method_id: null,
+          installments: null,
+        },
+      });
+    });
+
+    it('getPayment captures the order transaction id, type and installments in gatewayMeta', async () => {
+      orderGetMock.mockResolvedValue({
+        id: 'ORD8',
+        status: 'processed',
+        total_amount: '11800',
+        currency: 'CLP',
+        transactions: {
+          payments: [
+            {
+              id: 'PAY-8',
+              payment_method: {
+                id: 'master',
+                type: 'credit_card',
+                installments: 3,
+              },
+            },
+          ],
+        },
+      });
+
+      const snapshot = await adapter.getPayment('ORD8', credentials);
+
+      expect(snapshot).toMatchObject({
+        paymentMethod: 'MERCADO_PAGO',
+        gatewayMeta: {
+          transactionId: 'PAY-8',
+          payment_type_id: 'credit_card',
+          payment_method_id: 'master',
+          installments: 3,
+        },
       });
     });
 

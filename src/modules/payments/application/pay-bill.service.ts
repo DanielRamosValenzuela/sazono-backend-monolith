@@ -3,14 +3,15 @@
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { PaymentMethod, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { PaymentChannel } from '../domain/payment-channel';
+import { PaymentSource } from './finalize-payment.service';
 import { SettleBillPaymentService } from './settle-bill-payment.service';
 import type {
-  PayBillDto,
+  PayStaffBillDto,
   PaymentResultResponseDto,
 } from '../presentation/http/dto/payments.dto';
 
@@ -26,7 +27,7 @@ export class PayBillService {
   async execute(
     authUser: JwtPayload,
     billId: string,
-    dto: PayBillDto,
+    dto: PayStaffBillDto,
   ): Promise<PaymentResultResponseDto> {
     const bill = await this.prisma.bill.findUnique({
       where: {
@@ -74,6 +75,14 @@ export class PayBillService {
       },
       new Prisma.Decimal(dto.amount),
       new Prisma.Decimal(dto.tipAmount ?? 0),
+      undefined,
+      {
+        staffUserId: context.staffUserId,
+        source: context.roles.some((role) => STAFF_PAY_ROLES.includes(role))
+          ? PaymentSource.CASHIER
+          : PaymentSource.WAITER,
+        method: dto.paymentMethod ?? PaymentMethod.CASH,
+      },
     );
   }
 }

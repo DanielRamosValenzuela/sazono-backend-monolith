@@ -5,6 +5,7 @@ import { PaymentGatewayAdapter } from '../../domain/payment-gateway-adapter.deco
 import { buildTransbankBuyOrder } from '../../domain/transbank-buy-order';
 import {
   TRANSBANK_PROVIDER_NAME,
+  mapTransbankPaymentMethod,
   mapTransbankStatus,
 } from '../../domain/transbank-status';
 import { toTransbankAmount } from './transbank-amount';
@@ -13,6 +14,7 @@ import type {
   GatewayChargeContext,
   GatewayChargeOutcome,
   GatewayCredentials,
+  GatewayPaymentDetails,
   GatewayPaymentSnapshot,
   PaymentGatewayPort,
 } from '../../application/ports/payment-gateway.port';
@@ -189,6 +191,7 @@ export class WebpayMallGatewayAdapter implements PaymentGatewayPort {
         amount: detail.amount?.toString(),
         currency: 'CLP',
         externalReference: response.buy_order,
+        ...this.buildPaymentDetails(detail),
       };
     } catch (error) {
       this.logger.warn(this.describeError(error, 'getPayment'));
@@ -224,6 +227,22 @@ export class WebpayMallGatewayAdapter implements PaymentGatewayPort {
       failureReason: mapped.failureReason,
       rawStatus: detail.status,
       rawStatusDetail: String(detail.response_code),
+      ...this.buildPaymentDetails(detail),
+    };
+  }
+
+  private buildPaymentDetails(
+    detail: TransbankTransactionDetailResponse,
+  ): GatewayPaymentDetails {
+    return {
+      paymentMethod: mapTransbankPaymentMethod(detail.payment_type_code),
+      gatewayMeta: {
+        payment_type_code: detail.payment_type_code ?? null,
+        installments: detail.installments_number ?? null,
+        authorization_code: detail.authorization_code ?? null,
+        buy_order: detail.buy_order ?? null,
+        childCommerceCode: detail.commerce_code ?? null,
+      },
     };
   }
 

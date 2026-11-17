@@ -31,6 +31,15 @@ const TOP_ITEMS_LIMIT = 5;
 export class BranchAnalyticsPrismaRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findBranchTimezone(branchId: string): Promise<string | null> {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { restaurant: { select: { timezone: true } } },
+    });
+
+    return branch?.restaurant.timezone ?? null;
+  }
+
   countTables(branchId: string): Promise<number> {
     return this.prisma.table.count({
       where: {

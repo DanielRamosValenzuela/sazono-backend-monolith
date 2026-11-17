@@ -16,6 +16,7 @@ import {
 } from './ports/payment-gateway-resolver.port';
 import type {
   GatewayChargeOutcome,
+  GatewayPaymentDetails,
   GatewayPendingChargeOutcome,
 } from './ports/payment-gateway.port';
 
@@ -40,13 +41,13 @@ export type ChargePaymentRequest = {
 };
 
 export type ChargePaymentResult =
-  | {
+  | ({
       kind: 'SETTLED';
       approved: boolean;
       providerName: string;
       providerReference?: string;
       failureReason?: string;
-    }
+    } & GatewayPaymentDetails)
   | {
       kind: 'PENDING';
       providerName: string;
@@ -140,6 +141,8 @@ export class ChargePaymentService {
           providerName: resolvedGateway.gateway.providerName,
           providerReference: outcome.providerReference,
           failureReason: outcome.failureReason,
+          paymentMethod: outcome.paymentMethod,
+          gatewayMeta: outcome.gatewayMeta,
         };
       case 'REDIRECT':
         return {

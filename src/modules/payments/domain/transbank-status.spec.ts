@@ -1,4 +1,7 @@
-import { mapTransbankStatus } from './transbank-status';
+import {
+  mapTransbankPaymentMethod,
+  mapTransbankStatus,
+} from './transbank-status';
 
 describe('mapTransbankStatus', () => {
   it('maps AUTHORIZED with response_code 0 to APPROVED', () => {
@@ -33,5 +36,22 @@ describe('mapTransbankStatus', () => {
       outcome: 'REJECTED',
       failureReason: 'El medio de pago rechazo el cobro, intenta con otro.',
     });
+  });
+});
+
+describe('mapTransbankPaymentMethod', () => {
+  it.each([
+    ['VD', 'DEBIT_CARD'],
+    ['VP', 'DEBIT_CARD'],
+    ['VN', 'CREDIT_CARD'],
+    ['VC', 'CREDIT_CARD'],
+    ['SI', 'CREDIT_CARD'],
+    ['S2', 'CREDIT_CARD'],
+    ['NC', 'CREDIT_CARD'],
+    ['N2', 'CREDIT_CARD'],
+    ['XX', 'OTHER'],
+    [undefined, 'OTHER'],
+  ])('maps %s to %s', (code, expected) => {
+    expect(mapTransbankPaymentMethod(code)).toBe(expected);
   });
 });

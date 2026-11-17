@@ -184,6 +184,17 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  TRANSFER
+  MERCADO_PAGO
+  VOUCHER
+  MACH
+  OTHER
+}
+
 enum PaymentAttemptStatus {
   PENDING
   FAILED
@@ -290,6 +301,7 @@ model StaffUser {
   zoneMemberships           StaffUserZone[]
   createdOrders             Order[]               @relation("OrderCreatedBy")
   resolvedBills             Bill[]                @relation("BillResolvedBy")
+  collectedPayments         Payment[]             @relation("PaymentCollectedBy")
   deviceTokens              StaffDeviceToken[]
   createdPaymentOAuthStates PaymentOAuthState[]
   createdAt                 DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -603,6 +615,7 @@ model Bill {
   updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([branchId, status])
+  @@index([branchId, closedAt])
   @@map("bills")
 }
 
@@ -770,15 +783,23 @@ model Payment {
   providerReference      String?               @map("provider_reference")
   status                 PaymentStatus         @default(PENDING)
   paidAt                 DateTime?             @map("paid_at") @db.Timestamptz(3)
+  method                 PaymentMethod?
+  staffUserId            String?               @map("staff_user_id") @db.Uuid
+  tipAmount              Decimal               @default(0) @map("tip_amount") @db.Decimal(12, 2)
+  source                 String?
+  gatewayMeta            Json?                 @map("gateway_meta")
   bill                   Bill                  @relation(fields: [billId], references: [id], onDelete: Cascade)
   billSplitParticipant   BillSplitParticipant? @relation(fields: [billSplitParticipantId], references: [id], onDelete: SetNull)
   paymentAttempt         PaymentAttempt?       @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  staffUser              StaffUser?            @relation("PaymentCollectedBy", fields: [staffUserId], references: [id], onDelete: SetNull)
   createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([provider, providerReference])
   @@index([billId, status])
   @@index([billSplitParticipantId])
+  @@index([paidAt, status])
+  @@index([staffUserId, paidAt])
   @@map("payments")
 }
 

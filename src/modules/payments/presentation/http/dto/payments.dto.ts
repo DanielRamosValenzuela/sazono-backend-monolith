@@ -7,6 +7,7 @@ import {
   OrderStatus,
   PaymentAttemptStatus,
   PaymentGatewayProvider,
+  PaymentMethod,
   PaymentStatus,
 } from '@prisma/client';
 import { Type } from 'class-transformer';
@@ -16,6 +17,7 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumberString,
   IsOptional,
@@ -92,6 +94,29 @@ export class PayBillDto {
   @IsOptional()
   @IsNumberString()
   tipAmount?: string;
+}
+
+export const MANUAL_PAYMENT_METHODS = [
+  PaymentMethod.CASH,
+  PaymentMethod.CREDIT_CARD,
+  PaymentMethod.DEBIT_CARD,
+  PaymentMethod.TRANSFER,
+  PaymentMethod.VOUCHER,
+  PaymentMethod.MACH,
+  PaymentMethod.OTHER,
+] as const;
+
+export class PayStaffBillDto extends PayBillDto {
+  @ApiPropertyOptional({
+    enum: MANUAL_PAYMENT_METHODS,
+    enumName: 'ManualPaymentMethod',
+    default: PaymentMethod.CASH,
+    description:
+      'Medio con el que el cliente pago en caja. Si se omite se registra como efectivo.',
+  })
+  @IsOptional()
+  @IsIn(MANUAL_PAYMENT_METHODS)
+  paymentMethod?: (typeof MANUAL_PAYMENT_METHODS)[number];
 }
 
 export class PayQrBillDto extends PayBillDto {

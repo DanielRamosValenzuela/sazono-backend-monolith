@@ -14,7 +14,10 @@ import { applyPaymentToBill } from './apply-payment-to-bill';
 import type { BillAfterPayment } from './apply-payment-to-bill';
 import { assertNever } from '../domain/assert-never';
 import { FailPaymentService } from './fail-payment.service';
-import { FinalizePaymentService } from './finalize-payment.service';
+import {
+  FinalizePaymentService,
+  PaymentSource,
+} from './finalize-payment.service';
 import { mapPaymentResult } from './payment-result-mapper';
 import type { PaidOrderSummary } from './payment-result-mapper';
 import { PaymentGatewayRegistry } from '../infrastructure/payment-gateway-registry.service';
@@ -25,6 +28,7 @@ import {
 import type {
   GatewayChargeOutcome,
   GatewayCredentials,
+  GatewayPaymentDetails,
   GatewayPaymentSnapshot,
 } from './ports/payment-gateway.port';
 import { updateBillSplitStatus } from './update-bill-split-status';
@@ -165,6 +169,8 @@ export class ConfirmRedirectPaymentService {
           providerReference: snapshot.providerReference,
           rawStatus: snapshot.rawStatus,
           rawStatusDetail: snapshot.rawStatusDetail,
+          paymentMethod: snapshot.paymentMethod,
+          gatewayMeta: snapshot.gatewayMeta,
         };
         const result = await this.applyOutcome(attempt, outcome);
 
@@ -503,6 +509,7 @@ export class ConfirmRedirectPaymentService {
         tipDelta,
         context.currency,
         providerReference,
+        outcome,
       );
     }
 
@@ -515,6 +522,7 @@ export class ConfirmRedirectPaymentService {
         tipDelta,
         context.currency,
         providerReference,
+        outcome,
       );
     }
 
@@ -526,6 +534,7 @@ export class ConfirmRedirectPaymentService {
       tipDelta,
       context.currency,
       providerReference,
+      outcome,
     );
   }
 
@@ -537,6 +546,7 @@ export class ConfirmRedirectPaymentService {
     tipDelta: Prisma.Decimal,
     currency: string,
     providerReference: string | undefined,
+    details: GatewayPaymentDetails,
   ): Promise<PaymentResultResponseDto> {
     const orderId = attempt.orderId as string;
     const order = await tx.order.findUnique({
@@ -551,6 +561,10 @@ export class ConfirmRedirectPaymentService {
       currency,
       provider: attempt.provider,
       providerReference,
+      tipAmount: tipDelta,
+      method: details.paymentMethod,
+      source: PaymentSource.WEB_QR,
+      gatewayMeta: details.gatewayMeta,
     });
 
     if (!order || !PAYABLE_ORDER_STATUSES.includes(order.status)) {
@@ -611,6 +625,7 @@ export class ConfirmRedirectPaymentService {
     tipDelta: Prisma.Decimal,
     currency: string,
     providerReference: string | undefined,
+    details: GatewayPaymentDetails,
   ): Promise<PaymentResultResponseDto> {
     const participantId = attempt.billSplitParticipantId as string;
     const participant = await tx.billSplitParticipant.findUnique({
@@ -625,6 +640,10 @@ export class ConfirmRedirectPaymentService {
       currency,
       provider: attempt.provider,
       providerReference,
+      tipAmount: tipDelta,
+      method: details.paymentMethod,
+      source: PaymentSource.WEB_QR,
+      gatewayMeta: details.gatewayMeta,
     });
 
     const billAfterPayment = await applyPaymentToBill(
@@ -664,6 +683,7 @@ export class ConfirmRedirectPaymentService {
     tipDelta: Prisma.Decimal,
     currency: string,
     providerReference: string | undefined,
+    details: GatewayPaymentDetails,
   ): Promise<PaymentResultResponseDto> {
     const payment = await this.finalizePaymentService.execute(tx, {
       attemptId: attempt.id,
@@ -672,6 +692,10 @@ export class ConfirmRedirectPaymentService {
       currency,
       provider: attempt.provider,
       providerReference,
+      tipAmount: tipDelta,
+      method: details.paymentMethod,
+      source: PaymentSource.WEB_QR,
+      gatewayMeta: details.gatewayMeta,
     });
 
     const billAfterPayment = await applyPaymentToBill(

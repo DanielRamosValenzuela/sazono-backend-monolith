@@ -1,3 +1,5 @@
+import { PaymentMethod } from '@prisma/client';
+
 export const TRANSBANK_PROVIDER_NAME = 'TRANSBANK';
 
 export const TRANSBANK_WEBPAY_STATUS_DOCS_URL =
@@ -25,4 +27,28 @@ export function mapTransbankStatus(
   }
 
   return { outcome: 'REJECTED', failureReason: GENERIC_REJECTED_MESSAGE };
+}
+
+const TRANSBANK_CREDIT_TYPE_CODES = new Set([
+  'VN',
+  'VC',
+  'SI',
+  'S2',
+  'NC',
+  'N2',
+]);
+const TRANSBANK_DEBIT_TYPE_CODES = new Set(['VD', 'VP']);
+
+export function mapTransbankPaymentMethod(
+  paymentTypeCode: string | undefined,
+): PaymentMethod {
+  if (paymentTypeCode && TRANSBANK_CREDIT_TYPE_CODES.has(paymentTypeCode)) {
+    return PaymentMethod.CREDIT_CARD;
+  }
+
+  if (paymentTypeCode && TRANSBANK_DEBIT_TYPE_CODES.has(paymentTypeCode)) {
+    return PaymentMethod.DEBIT_CARD;
+  }
+
+  return PaymentMethod.OTHER;
 }

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   BillStatus,
   PaymentAttemptStatus,
+  PaymentMethod,
   PaymentStatus,
   Prisma,
   TableSessionStatus,
@@ -9,7 +10,10 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { ChargePaymentService } from './charge-payment.service';
 import { FailPaymentService } from './fail-payment.service';
-import { FinalizePaymentService } from './finalize-payment.service';
+import {
+  FinalizePaymentService,
+  PaymentSource,
+} from './finalize-payment.service';
 import { PaymentChannel } from '../domain/payment-channel';
 import { SettleBillPaymentService } from './settle-bill-payment.service';
 import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
@@ -130,6 +134,73 @@ describe('SettleBillPaymentService', () => {
     expect(result.bill.remainingAmount).toBe('13600');
     expect(txSessionUpdateManyMock).not.toHaveBeenCalled();
     expect(resolveAvailableMock).not.toHaveBeenCalled();
+  });
+
+  it('persists tip separately plus the collector method, cashier and source on the payment', async () => {
+    attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
+    recordMock.mockResolvedValue({ providerReference: 'manual-ref-1' });
+
+    const txPaymentCreateMock = jest.fn().mockResolvedValue({
+      id: 'payment-1',
+      billId: 'bill-1',
+      amount: new Prisma.Decimal(11000),
+      currency: 'CLP',
+      provider: 'MANUAL',
+      providerReference: 'manual-ref-1',
+      status: PaymentStatus.PAID,
+      paidAt: new Date('2026-07-07T12:00:00.000Z'),
+    });
+
+    transactionMock.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          paymentAttempt: {
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          },
+          payment: { create: txPaymentCreateMock },
+          bill: {
+            findUniqueOrThrow: jest.fn().mockResolvedValue({
+              id: 'bill-1',
+              tableSessionId: 'session-1',
+              status: BillStatus.OPEN,
+              subtotalAmount: new Prisma.Decimal(23600),
+              tipAmount: new Prisma.Decimal(0),
+              taxAmount: new Prisma.Decimal(0),
+              totalAmount: new Prisma.Decimal(23600),
+              remainingAmount: new Prisma.Decimal(23600),
+            }),
+            update: jest.fn().mockResolvedValue({}),
+          },
+          tableSession: { updateMany: jest.fn() },
+          order: { updateMany: jest.fn() },
+          orderItem: { updateMany: jest.fn() },
+        }),
+    );
+
+    await service.execute(
+      PaymentChannel.STAFF_OFFLINE,
+      openBill,
+      new Prisma.Decimal(10000),
+      new Prisma.Decimal(1000),
+      undefined,
+      {
+        staffUserId: 'staff-9',
+        source: PaymentSource.CASHIER,
+        method: PaymentMethod.VOUCHER,
+      },
+    );
+
+    const data = (
+      txPaymentCreateMock.mock.calls[0] as [{ data: Record<string, unknown> }]
+    )[0].data;
+
+    expect(String(data.amount)).toBe('11000');
+    expect(String(data.tipAmount)).toBe('1000');
+    expect(data).toMatchObject({
+      method: PaymentMethod.VOUCHER,
+      staffUserId: 'staff-9',
+      source: 'CASHIER',
+    });
   });
 
   it('marks the session PAYMENT_COMPLETED when the payment settles the full balance', async () => {

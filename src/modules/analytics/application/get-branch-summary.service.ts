@@ -9,12 +9,22 @@ import type {
   GetBranchSummaryQueryDto,
 } from '../presentation/http/dto/analytics.dto';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import {
+  DEFAULT_RESTAURANT_TIMEZONE,
+  addDaysToDateKey,
+  daysBetweenDateKeys,
+  isDateKey,
+  zonedDateKey,
+  zonedStartOfDay,
+} from '../../../common/time/restaurant-time';
 
 const DEFAULT_SERIES_DAYS = 7;
 const DEFAULT_TOP_ITEMS_WINDOW_DAYS = 30;
 const MAX_RANGE_DAYS = 92;
 
 type ResolvedRange = { start: Date; end: Date };
+
+const ONE_MILLISECOND = 1;
 
 @Injectable()
 export class GetBranchSummaryService {
@@ -33,24 +43,29 @@ export class GetBranchSummaryService {
       Role.SUPERVISOR,
     ]);
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = this.endOfDay(startOfToday);
+    const timeZone =
+      (await this.branchAnalyticsRepository.findBranchTimezone(branchId)) ??
+      DEFAULT_RESTAURANT_TIMEZONE;
+    const todayKey = zonedDateKey(new Date(), timeZone);
+    const todayRange = this.rangeFromKeys(todayKey, todayKey, timeZone);
 
-    const customRange = this.resolveCustomRange(query);
+    const customRange = this.resolveCustomRange(query, timeZone);
 
-    const seriesRange: ResolvedRange = customRange ?? {
-      start: this.daysBefore(startOfToday, DEFAULT_SERIES_DAYS - 1),
-      end: endOfToday,
-    };
-    const ordersByStatusRange: ResolvedRange = customRange ?? {
-      start: startOfToday,
-      end: endOfToday,
-    };
-    const topItemsRange: ResolvedRange = customRange ?? {
-      start: this.daysBefore(startOfToday, DEFAULT_TOP_ITEMS_WINDOW_DAYS - 1),
-      end: endOfToday,
-    };
+    const seriesRange: ResolvedRange =
+      customRange ??
+      this.rangeFromKeys(
+        addDaysToDateKey(todayKey, -(DEFAULT_SERIES_DAYS - 1)),
+        todayKey,
+        timeZone,
+      );
+    const ordersByStatusRange: ResolvedRange = customRange ?? todayRange;
+    const topItemsRange: ResolvedRange =
+      customRange ??
+      this.rangeFromKeys(
+        addDaysToDateKey(todayKey, -(DEFAULT_TOP_ITEMS_WINDOW_DAYS - 1)),
+        todayKey,
+        timeZone,
+      );
 
     const [
       totalTables,
@@ -66,8 +81,8 @@ export class GetBranchSummaryService {
       this.branchAnalyticsRepository.countOpenSessions(branchId),
       this.branchAnalyticsRepository.findPaidPaymentsInRange(
         branchId,
-        startOfToday,
-        endOfToday,
+        todayRange.start,
+        todayRange.end,
       ),
       this.branchAnalyticsRepository.findPaidPaymentsInRange(
         branchId,
@@ -103,11 +118,7 @@ export class GetBranchSummaryService {
       todayRevenue: todayAmount.toFixed(2),
       todayPaymentsCount: todayPayments.length,
       averageTicket,
-      dailySeries: this.buildDailySeries(
-        seriesRange.start,
-        seriesRange.end,
-        seriesPayments,
-      ),
+      dailySeries: this.buildDailySeries(seriesRange, seriesPayments, timeZone),
       ordersByStatus: orderGroups.sort((a, b) => b.count - a.count),
       topItems: topItems.map((item) => ({
         name: item.name,
@@ -119,6 +130,7 @@ export class GetBranchSummaryService {
 
   private resolveCustomRange(
     query: GetBranchSummaryQueryDto,
+    timeZone: string,
   ): ResolvedRange | null {
     if (!query.from && !query.to) {
       return null;
@@ -130,48 +142,46 @@ export class GetBranchSummaryService {
       );
     }
 
-    const start = new Date(`${query.from}T00:00:00.000`);
-    const end = new Date(`${query.to}T23:59:59.999`);
+    const fromKey = query.from.slice(0, 10);
+    const toKey = query.to.slice(0, 10);
 
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    if (!isDateKey(fromKey) || !isDateKey(toKey)) {
       throw new BadRequestException(
         'El rango de fechas indicado no es valido.',
       );
     }
 
-    if (start > end) {
+    if (fromKey > toKey) {
       throw new BadRequestException('"from" debe ser anterior o igual a "to".');
     }
 
-    const spanDays =
-      Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-
-    if (spanDays > MAX_RANGE_DAYS) {
+    if (daysBetweenDateKeys(fromKey, toKey) + 1 > MAX_RANGE_DAYS) {
       throw new BadRequestException(
         `El rango no puede superar ${MAX_RANGE_DAYS} dias.`,
       );
     }
 
-    return { start, end };
+    return this.rangeFromKeys(fromKey, toKey, timeZone);
   }
 
-  private daysBefore(date: Date, days: number): Date {
-    const result = new Date(date);
-    result.setDate(result.getDate() - days);
-    return result;
-  }
-
-  private endOfDay(date: Date): Date {
-    const result = new Date(date);
-    result.setDate(result.getDate() + 1);
-    result.setMilliseconds(-1);
-    return result;
+  private rangeFromKeys(
+    fromKey: string,
+    toKey: string,
+    timeZone: string,
+  ): ResolvedRange {
+    return {
+      start: zonedStartOfDay(fromKey, timeZone),
+      end: new Date(
+        zonedStartOfDay(addDaysToDateKey(toKey, 1), timeZone).getTime() -
+          ONE_MILLISECOND,
+      ),
+    };
   }
 
   private buildDailySeries(
-    rangeStart: Date,
-    rangeEnd: Date,
+    range: ResolvedRange,
     payments: PaidPaymentRecord[],
+    timeZone: string,
   ): DailyPaymentsMetricDto[] {
     const totalsByDate = new Map<
       string,
@@ -179,7 +189,10 @@ export class GetBranchSummaryService {
     >();
 
     for (const payment of payments) {
-      const dateKey = this.toDateKey(payment.paidAt ?? payment.createdAt);
+      const dateKey = zonedDateKey(
+        payment.paidAt ?? payment.createdAt,
+        timeZone,
+      );
       const current = totalsByDate.get(dateKey) ?? {
         amount: new Prisma.Decimal(0),
         count: 0,
@@ -192,13 +205,13 @@ export class GetBranchSummaryService {
     }
 
     const series: DailyPaymentsMetricDto[] = [];
-    const cursor = new Date(rangeStart);
-    cursor.setHours(0, 0, 0, 0);
-    const lastDay = new Date(rangeEnd);
-    lastDay.setHours(0, 0, 0, 0);
+    const lastKey = zonedDateKey(range.end, timeZone);
 
-    while (cursor <= lastDay) {
-      const dateKey = this.toDateKey(cursor);
+    for (
+      let dateKey = zonedDateKey(range.start, timeZone);
+      dateKey <= lastKey;
+      dateKey = addDaysToDateKey(dateKey, 1)
+    ) {
       const totals = totalsByDate.get(dateKey);
 
       series.push({
@@ -206,18 +219,8 @@ export class GetBranchSummaryService {
         amount: (totals?.amount ?? new Prisma.Decimal(0)).toFixed(2),
         count: totals?.count ?? 0,
       });
-
-      cursor.setDate(cursor.getDate() + 1);
     }
 
     return series;
-  }
-
-  private toDateKey(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
   }
 }

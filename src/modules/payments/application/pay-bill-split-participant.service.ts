@@ -17,7 +17,10 @@ import { buildCheckoutFromDto } from './build-checkout-from-dto';
 import { ChargePaymentService } from './charge-payment.service';
 import { PaymentChannel } from '../domain/payment-channel';
 import { FailPaymentService } from './fail-payment.service';
-import { FinalizePaymentService } from './finalize-payment.service';
+import {
+  FinalizePaymentService,
+  PaymentSource,
+} from './finalize-payment.service';
 import { mapPaymentResult } from './payment-result-mapper';
 import {
   OFFLINE_PAYMENT_RECORDER,
@@ -204,6 +207,10 @@ export class PayBillSplitParticipantService {
         currency,
         provider: chargeResult.providerName,
         providerReference: chargeResult.providerReference,
+        tipAmount: tipDelta,
+        method: chargeResult.paymentMethod,
+        source: PaymentSource.WEB_QR,
+        gatewayMeta: chargeResult.gatewayMeta,
       });
 
       const billAfterPayment = await applyPaymentToBill(

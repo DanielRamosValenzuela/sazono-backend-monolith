@@ -10,7 +10,10 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import { ConfirmRedirectPaymentService } from './confirm-redirect-payment.service';
 import { FailPaymentService } from './fail-payment.service';
-import { FinalizePaymentService } from './finalize-payment.service';
+import {
+  FinalizePaymentService,
+  PaymentSource,
+} from './finalize-payment.service';
 import {
   PAYMENT_GATEWAY_RESOLVER,
   type PaymentGatewayResolverPort,
@@ -418,6 +421,10 @@ export class HandleMercadoPagoWebhookService {
         provider: MERCADOPAGO_PROVIDER_NAME,
         providerReference:
           snapshot.providerReference ?? attempt.providerReference,
+        tipAmount: attempt.tipAmount ?? undefined,
+        method: snapshot.paymentMethod,
+        source: PaymentSource.WEB_QR,
+        gatewayMeta: snapshot.gatewayMeta,
       });
 
       await applyPaymentToBill(tx, billId, amount, NO_REAL_CHARGE_TIP_DELTA);

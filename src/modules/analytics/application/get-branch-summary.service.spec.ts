@@ -12,6 +12,7 @@ describe('GetBranchSummaryService', () => {
   const findPaidPaymentsInRangeMock = jest.fn();
   const groupOrdersByStatusInRangeMock = jest.fn();
   const findTopItemsInRangeMock = jest.fn();
+  const findBranchTimezoneMock = jest.fn();
 
   const repository = {
     countTables: countTablesMock,
@@ -20,6 +21,7 @@ describe('GetBranchSummaryService', () => {
     findPaidPaymentsInRange: findPaidPaymentsInRangeMock,
     groupOrdersByStatusInRange: groupOrdersByStatusInRangeMock,
     findTopItemsInRange: findTopItemsInRangeMock,
+    findBranchTimezone: findBranchTimezoneMock,
   } as unknown as BranchAnalyticsPrismaRepository;
 
   const ensureAccessMock = jest.fn();
@@ -52,6 +54,11 @@ describe('GetBranchSummaryService', () => {
     findPaidPaymentsInRangeMock.mockResolvedValue([]);
     groupOrdersByStatusInRangeMock.mockResolvedValue([]);
     findTopItemsInRangeMock.mockResolvedValue([]);
+    findBranchTimezoneMock.mockResolvedValue('America/Santiago');
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('uses independent default windows when no range is given (today / 7 days / 30 days)', async () => {
@@ -86,14 +93,7 @@ describe('GetBranchSummaryService', () => {
     expect(topSpanDays).toBe(30);
   });
 
-  function toLocalDateKey(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  it('applies the same custom range to the series, orders-by-status and top items', async () => {
+  it('applies the same custom range to the series, orders-by-status and top items in the restaurant timezone', async () => {
     await service.execute(authUser, 'branch-1', {
       from: '2026-07-01',
       to: '2026-07-03',
@@ -104,11 +104,45 @@ describe('GetBranchSummaryService', () => {
     const topCall = findTopItemsInRangeMock.mock.calls[0];
 
     for (const call of [seriesCall, ordersCall, topCall]) {
-      const start = call[1] as Date;
-      const end = call[2] as Date;
-      expect(toLocalDateKey(start)).toBe('2026-07-01');
-      expect(toLocalDateKey(end)).toBe('2026-07-03');
+      expect((call[1] as Date).toISOString()).toBe('2026-07-01T04:00:00.000Z');
+      expect((call[2] as Date).toISOString()).toBe('2026-07-04T03:59:59.999Z');
     }
+  });
+
+  it('computes today in the restaurant timezone, not in the server timezone', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-16T03:30:00.000Z'));
+
+    await service.execute(authUser, 'branch-1', {});
+
+    const todayCall = findPaidPaymentsInRangeMock.mock.calls[0];
+
+    expect((todayCall[1] as Date).toISOString()).toBe(
+      '2026-07-15T04:00:00.000Z',
+    );
+    expect((todayCall[2] as Date).toISOString()).toBe(
+      '2026-07-16T03:59:59.999Z',
+    );
+  });
+
+  it('keeps a 23:30 Santiago sale on its own day in the daily series', async () => {
+    findPaidPaymentsInRangeMock.mockResolvedValue([
+      {
+        amount: new Prisma.Decimal(5000),
+        paidAt: new Date('2026-07-03T03:30:00.000Z'),
+        createdAt: new Date('2026-07-03T03:30:00.000Z'),
+      },
+    ]);
+
+    const result = await service.execute(authUser, 'branch-1', {
+      from: '2026-07-01',
+      to: '2026-07-03',
+    });
+
+    expect(result.dailySeries).toEqual([
+      { date: '2026-07-01', amount: '0.00', count: 0 },
+      { date: '2026-07-02', amount: '5000.00', count: 1 },
+      { date: '2026-07-03', amount: '0.00', count: 0 },
+    ]);
   });
 
   it('builds a dailySeries entry per day of a custom range, defaulting to zero', async () => {

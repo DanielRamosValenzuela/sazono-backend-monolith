@@ -189,6 +189,8 @@ describe('WebpayMallGatewayAdapter', () => {
           status: 'AUTHORIZED',
           response_code: 0,
           authorization_code: '123456',
+          payment_type_code: 'VD',
+          installments_number: 0,
           commerce_code: '597055555536',
           buy_order: 'sz-abc123',
         },
@@ -205,6 +207,14 @@ describe('WebpayMallGatewayAdapter', () => {
       failureReason: undefined,
       rawStatus: 'AUTHORIZED',
       rawStatusDetail: '0',
+      paymentMethod: 'DEBIT_CARD',
+      gatewayMeta: {
+        payment_type_code: 'VD',
+        installments: 0,
+        authorization_code: '123456',
+        buy_order: 'sz-abc123',
+        childCommerceCode: '597055555536',
+      },
     });
   });
 
@@ -270,6 +280,14 @@ describe('WebpayMallGatewayAdapter', () => {
       amount: '11800',
       currency: 'CLP',
       externalReference: 'sz-abc123',
+      paymentMethod: 'OTHER',
+      gatewayMeta: {
+        payment_type_code: null,
+        installments: null,
+        authorization_code: null,
+        buy_order: 'sz-abc123',
+        childCommerceCode: '597055555536',
+      },
     });
   });
 
