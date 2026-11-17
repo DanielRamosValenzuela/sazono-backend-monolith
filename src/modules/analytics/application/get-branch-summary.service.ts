@@ -102,7 +102,7 @@ export class GetBranchSummaryService {
     ]);
 
     const todayAmount = todayPayments.reduce(
-      (total, payment) => total.add(payment.amount),
+      (total, payment) => total.add(payment.amount.minus(payment.tipAmount)),
       new Prisma.Decimal(0),
     );
     const averageTicket =
@@ -199,7 +199,7 @@ export class GetBranchSummaryService {
       };
 
       totalsByDate.set(dateKey, {
-        amount: current.amount.plus(payment.amount),
+        amount: current.amount.plus(payment.amount.minus(payment.tipAmount)),
         count: current.count + 1,
       });
     }

@@ -10,6 +10,7 @@ import { PrismaService } from '../../../../common/prisma/prisma.service';
 
 export type PaidPaymentRecord = {
   amount: Prisma.Decimal;
+  tipAmount: Prisma.Decimal;
   paidAt: Date | null;
   createdAt: Date;
 };
@@ -98,6 +99,7 @@ export class BranchAnalyticsPrismaRepository {
       },
       select: {
         amount: true,
+        tipAmount: true,
         paidAt: true,
         createdAt: true,
       },

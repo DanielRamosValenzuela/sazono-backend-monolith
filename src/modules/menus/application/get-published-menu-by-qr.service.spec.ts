@@ -194,3 +194,45 @@ describe('GetPublishedMenuByQrService', () => {
     );
   });
 });
+
+describe('GetPublishedMenuByQrService qr ordering flag', () => {
+  const build = (qrOrderingEnabled: boolean | undefined) => {
+    const tableFindUnique = jest.fn().mockResolvedValue({
+      status: TableStatus.AVAILABLE,
+      branch: {
+        settings: {
+          ...(qrOrderingEnabled === undefined ? {} : { qrOrderingEnabled }),
+          defaultMenu: { id: 'menu-1', status: MenuStatus.PUBLISHED },
+        },
+      },
+    });
+    const menuFindUniqueOrThrow = jest.fn().mockResolvedValue({
+      id: 'menu-1',
+      branchId: 'branch-1',
+      name: 'Carta',
+      status: MenuStatus.PUBLISHED,
+      version: 1,
+      defaultLanguage: 'es',
+      publishedAt: null,
+      categories: [],
+    });
+    const prisma = {
+      table: { findUnique: tableFindUnique },
+      menu: { findUniqueOrThrow: menuFindUniqueOrThrow },
+    } as unknown as PrismaService;
+
+    return new GetPublishedMenuByQrService(prisma);
+  };
+
+  it('exposes false when the branch disabled QR ordering', async () => {
+    const result = await build(false).execute('qr-token');
+
+    expect(result.qrOrderingEnabled).toBe(false);
+  });
+
+  it('defaults to true when the setting is absent', async () => {
+    const result = await build(undefined).execute('qr-token');
+
+    expect(result.qrOrderingEnabled).toBe(true);
+  });
+});

@@ -8,15 +8,12 @@ import {
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { keepReachableCategories } from './menu-category-tree';
 import { groupTranslationsByEntity, mapMenuDetail } from './menu-mapper';
-import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
+import type { QrMenuResponseDto } from '../presentation/http/dto/menus.dto';
 
 @Injectable()
 export class GetPublishedMenuByQrService {
   constructor(private readonly prisma: PrismaService) {}
-  async execute(
-    qrToken: string,
-    locale?: string,
-  ): Promise<MenuDetailResponseDto> {
+  async execute(qrToken: string, locale?: string): Promise<QrMenuResponseDto> {
     const table = await this.prisma.table.findUnique({
       where: {
         qrToken,
@@ -86,13 +83,15 @@ export class GetPublishedMenuByQrService {
       },
     });
 
+    const qrOrderingEnabled = table.branch.settings?.qrOrderingEnabled ?? true;
+
     const menu = {
       ...storedMenu,
       categories: keepReachableCategories(storedMenu.categories),
     };
 
     if (!locale || locale === menu.defaultLanguage) {
-      return mapMenuDetail(menu, true);
+      return { ...mapMenuDetail(menu, true), qrOrderingEnabled };
     }
 
     const categoryIds = menu.categories.map((category) => category.id);
@@ -121,6 +120,7 @@ export class GetPublishedMenuByQrService {
 
     return {
       ...detail,
+      qrOrderingEnabled,
       categories: detail.categories.map((category) => {
         const categoryTranslation = translationsByEntity
           .get(category.menuCategoryId)

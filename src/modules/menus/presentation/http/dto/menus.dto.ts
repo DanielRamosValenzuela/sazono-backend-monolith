@@ -476,6 +476,11 @@ export class MenuDetailResponseDto {
   categories!: MenuCategoryDetailResponseDto[];
 }
 
+export class QrMenuResponseDto extends MenuDetailResponseDto {
+  @ApiProperty()
+  qrOrderingEnabled!: boolean;
+}
+
 export class CreatePreparationStationDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()

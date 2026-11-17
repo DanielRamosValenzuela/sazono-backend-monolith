@@ -128,6 +128,7 @@ describe('GetBranchSummaryService', () => {
     findPaidPaymentsInRangeMock.mockResolvedValue([
       {
         amount: new Prisma.Decimal(5000),
+        tipAmount: new Prisma.Decimal(0),
         paidAt: new Date('2026-07-03T03:30:00.000Z'),
         createdAt: new Date('2026-07-03T03:30:00.000Z'),
       },
@@ -143,6 +144,24 @@ describe('GetBranchSummaryService', () => {
       { date: '2026-07-02', amount: '5000.00', count: 1 },
       { date: '2026-07-03', amount: '0.00', count: 0 },
     ]);
+  });
+
+  it('excludes the tip from the daily series and from today revenue', async () => {
+    findPaidPaymentsInRangeMock.mockResolvedValue([
+      {
+        amount: new Prisma.Decimal(5500),
+        tipAmount: new Prisma.Decimal(500),
+        paidAt: new Date(),
+        createdAt: new Date(),
+      },
+    ]);
+
+    const result = await service.execute(authUser, 'branch-1', {});
+
+    expect(result.todayRevenue).toBe('5000.00');
+    expect(result.dailySeries.reduce((s, d) => s + Number(d.amount), 0)).toBe(
+      5000,
+    );
   });
 
   it('builds a dailySeries entry per day of a custom range, defaulting to zero', async () => {
@@ -167,6 +186,7 @@ describe('GetBranchSummaryService', () => {
           return Promise.resolve([
             {
               amount: new Prisma.Decimal(5000),
+              tipAmount: new Prisma.Decimal(0),
               paidAt: new Date(),
               createdAt: new Date(),
             },
