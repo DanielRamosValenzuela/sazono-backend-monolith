@@ -538,6 +538,7 @@ model ModifierOption {
   priceDelta         Decimal             @default(0) @map("price_delta") @db.Decimal(12, 2)
   isAvailable        Boolean             @default(true) @map("is_available")
   sortOrder          Int                 @default(0) @map("sort_order")
+  imageUrl           String?             @map("image_url")
   modifierGroup      ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
   orderItemModifiers OrderItemModifier[]
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)

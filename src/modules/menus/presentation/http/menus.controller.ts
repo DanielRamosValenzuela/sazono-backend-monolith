@@ -39,6 +39,7 @@ import { ListPreparationStationsService } from '../../application/list-preparati
 import { PublishMenuService } from '../../application/publish-menu.service';
 import { SetMenuItemModifierGroupsService } from '../../application/set-menu-item-modifier-groups.service';
 import { UpdatePreparationStationService } from '../../application/update-preparation-station.service';
+import { RemoveModifierOptionImageService } from '../../application/remove-modifier-option-image.service';
 import { RemoveMenuItemImageService } from '../../application/remove-menu-item-image.service';
 import { ReorderMenuCategoriesService } from '../../application/reorder-menu-categories.service';
 import { ReorderMenuItemsService } from '../../application/reorder-menu-items.service';
@@ -46,6 +47,7 @@ import { UpdateMenuCategoryService } from '../../application/update-menu-categor
 import { UpdateMenuItemService } from '../../application/update-menu-item.service';
 import { UpdateModifierGroupService } from '../../application/update-modifier-group.service';
 import { UpdateModifierOptionService } from '../../application/update-modifier-option.service';
+import { UploadModifierOptionImageService } from '../../application/upload-modifier-option-image.service';
 import { UploadMenuItemImageService } from '../../application/upload-menu-item-image.service';
 import { UpsertMenuCategoryTranslationService } from '../../application/upsert-menu-category-translation.service';
 import { UpsertMenuItemTranslationService } from '../../application/upsert-menu-item-translation.service';
@@ -103,6 +105,8 @@ export class MenusController {
     private readonly reorderMenuItemsService: ReorderMenuItemsService,
     private readonly uploadMenuItemImageService: UploadMenuItemImageService,
     private readonly removeMenuItemImageService: RemoveMenuItemImageService,
+    private readonly uploadModifierOptionImageService: UploadModifierOptionImageService,
+    private readonly removeModifierOptionImageService: RemoveModifierOptionImageService,
     private readonly upsertMenuCategoryTranslationService: UpsertMenuCategoryTranslationService,
     private readonly upsertMenuItemTranslationService: UpsertMenuItemTranslationService,
     private readonly publishMenuService: PublishMenuService,
@@ -371,6 +375,43 @@ export class MenusController {
       authUser,
       modifierOptionId,
       dto,
+    );
+  }
+
+  @Post('modifier-options/:modifierOptionId/image')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Sube (o reemplaza) la foto de una opcion de modificador. Campo multipart "file", JPEG/PNG/WEBP hasta 5MB.',
+  })
+  uploadModifierOptionImage(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('modifierOptionId') modifierOptionId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<ModifierOptionResponseDto> {
+    return this.uploadModifierOptionImageService.execute(
+      authUser,
+      modifierOptionId,
+      file,
+    );
+  }
+
+  @Delete('modifier-options/:modifierOptionId/image')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Quita la foto de una opcion de modificador.',
+  })
+  removeModifierOptionImage(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('modifierOptionId') modifierOptionId: string,
+  ): Promise<ModifierOptionResponseDto> {
+    return this.removeModifierOptionImageService.execute(
+      authUser,
+      modifierOptionId,
     );
   }
 

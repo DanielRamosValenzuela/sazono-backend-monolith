@@ -14,6 +14,7 @@ import { ListMenusService } from './application/list-menus.service';
 import { ListModifierGroupsService } from './application/list-modifier-groups.service';
 import { ListPreparationStationsService } from './application/list-preparation-stations.service';
 import { PublishMenuService } from './application/publish-menu.service';
+import { RemoveModifierOptionImageService } from './application/remove-modifier-option-image.service';
 import { RemoveMenuItemImageService } from './application/remove-menu-item-image.service';
 import { ReorderMenuCategoriesService } from './application/reorder-menu-categories.service';
 import { ReorderMenuItemsService } from './application/reorder-menu-items.service';
@@ -23,6 +24,7 @@ import { UpdateMenuItemService } from './application/update-menu-item.service';
 import { UpdateModifierGroupService } from './application/update-modifier-group.service';
 import { UpdateModifierOptionService } from './application/update-modifier-option.service';
 import { UpdatePreparationStationService } from './application/update-preparation-station.service';
+import { UploadModifierOptionImageService } from './application/upload-modifier-option-image.service';
 import { UploadMenuItemImageService } from './application/upload-menu-item-image.service';
 import { UpsertMenuCategoryTranslationService } from './application/upsert-menu-category-translation.service';
 import { UpsertMenuItemTranslationService } from './application/upsert-menu-item-translation.service';
@@ -54,6 +56,8 @@ import { QrMenuController } from './presentation/http/qr-menu.controller';
     ReorderMenuItemsService,
     UploadMenuItemImageService,
     RemoveMenuItemImageService,
+    UploadModifierOptionImageService,
+    RemoveModifierOptionImageService,
     UpsertMenuCategoryTranslationService,
     UpsertMenuItemTranslationService,
     PublishMenuService,

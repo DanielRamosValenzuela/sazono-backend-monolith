@@ -38,6 +38,9 @@ export class ModifierOptionResponseDto {
 
   @ApiProperty()
   sortOrder!: number;
+
+  @ApiProperty({ type: String, nullable: true })
+  imageUrl!: string | null;
 }
 
 export class ModifierGroupResponseDto {

@@ -20,6 +20,7 @@ type ModifierOptionRecord = {
   priceDelta: { toString(): string };
   isAvailable: boolean;
   sortOrder: number;
+  imageUrl: string | null;
 };
 
 type ModifierGroupRecord = {
@@ -42,6 +43,7 @@ export const mapModifierOption = (
   priceDelta: option.priceDelta.toString(),
   isAvailable: option.isAvailable,
   sortOrder: option.sortOrder,
+  imageUrl: option.imageUrl,
 });
 
 export const mapModifierGroup = (
