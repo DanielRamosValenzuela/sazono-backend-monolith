@@ -3,9 +3,10 @@
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { Role, MenuCategoryStatus, MenuStatus } from '@prisma/client';
+import { Role, MenuStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { hasPublishableContent } from './menu-category-tree';
 import { mapMenuDetail } from './menu-mapper';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
@@ -54,13 +55,7 @@ export class PublishMenuService {
       );
     }
 
-    const hasPublishableContent = menu.categories.some(
-      (category) =>
-        category.status === MenuCategoryStatus.ACTIVE &&
-        category.items.length > 0,
-    );
-
-    if (!hasPublishableContent) {
+    if (!hasPublishableContent(menu.categories)) {
       throw new BadRequestException(
         'La carta debe tener al menos una categoria activa con items para publicarse.',
       );

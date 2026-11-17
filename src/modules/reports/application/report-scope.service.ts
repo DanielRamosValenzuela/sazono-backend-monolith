@@ -62,12 +62,12 @@ export class ReportScopeService {
     authUser: JwtPayload,
     branchId: string,
     query: ReportScopeQuery,
-    options: { forCsv: boolean },
+    options: { forCsv: boolean; fullAccessOnly?: boolean },
   ): Promise<ReportScope> {
     const context = await this.branchAccessService.ensureAccess(
       authUser,
       branchId,
-      REPORT_ROLES,
+      options.fullAccessOnly ? FULL_ACCESS_ROLES : REPORT_ROLES,
     );
     const timeZone = await this.reportsRepository.findBranchTimezone(branchId);
 

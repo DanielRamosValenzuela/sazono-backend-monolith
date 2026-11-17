@@ -11,6 +11,10 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import {
+  HIERARCHY_GROUPS,
+  type HierarchyGroupBy,
+} from '../../../application/hierarchy-tree';
 import { MAX_PAGE_LIMIT, METHOD_KEYS } from '../../../application/report-types';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -104,4 +108,53 @@ export class PaymentsReportQueryDto extends ReportRangeQueryDto {
   @IsOptional()
   @IsIn(REPORT_STATUSES)
   paymentStatus?: string;
+}
+
+export class SalesByHierarchyQueryDto {
+  @ApiPropertyOptional({
+    example: '2026-11-01',
+    description:
+      'Inicio del rango (inclusive, YYYY-MM-DD en la zona horaria del restaurante). Obligatorio.',
+  })
+  @IsOptional()
+  @Matches(DATE_PATTERN)
+  from?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-17',
+    description:
+      'Fin del rango (inclusive, YYYY-MM-DD). Obligatorio. Maximo 366 dias (92 para CSV).',
+  })
+  @IsOptional()
+  @Matches(DATE_PATTERN)
+  to?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Id opaco de una categoria devuelto por una llamada anterior (nodes[].id o breadcrumb[].id). Ausente = categorias raiz. Solo aplica con groupBy=category.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  parentId?: string;
+
+  @ApiPropertyOptional({ enum: HIERARCHY_GROUPS, default: 'category' })
+  @IsOptional()
+  @IsIn(HIERARCHY_GROUPS)
+  groupBy?: HierarchyGroupBy;
+
+  @ApiPropertyOptional({
+    enum: ['true', 'false'],
+    default: 'true',
+    description:
+      'true: el monto incluye los extras (modificadores). false: monto solo del precio base.',
+  })
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  includeModifiers?: 'true' | 'false';
+
+  @ApiPropertyOptional({ enum: ['json', 'csv'], default: 'json' })
+  @IsOptional()
+  @IsIn(['json', 'csv'])
+  format?: 'json' | 'csv';
 }

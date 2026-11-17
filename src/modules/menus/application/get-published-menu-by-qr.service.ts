@@ -6,6 +6,7 @@ import {
   TranslationEntityType,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { keepReachableCategories } from './menu-category-tree';
 import { groupTranslationsByEntity, mapMenuDetail } from './menu-mapper';
 import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
 
@@ -45,7 +46,7 @@ export class GetPublishedMenuByQrService {
       );
     }
 
-    const menu = await this.prisma.menu.findUniqueOrThrow({
+    const storedMenu = await this.prisma.menu.findUniqueOrThrow({
       where: {
         id: defaultMenu.id,
       },
@@ -84,6 +85,11 @@ export class GetPublishedMenuByQrService {
         },
       },
     });
+
+    const menu = {
+      ...storedMenu,
+      categories: keepReachableCategories(storedMenu.categories),
+    };
 
     if (!locale || locale === menu.defaultLanguage) {
       return mapMenuDetail(menu, true);

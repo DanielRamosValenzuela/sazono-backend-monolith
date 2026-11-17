@@ -20,11 +20,19 @@ import {
   type PaymentsReportResponse,
 } from '../../application/get-payments-report.service';
 import {
+  GetSalesByHierarchyService,
+  type SalesByHierarchyResponse,
+} from '../../application/get-sales-by-hierarchy.service';
+import {
   GetSalesByOrderService,
   type CsvDownload,
   type SalesByOrderResponse,
 } from '../../application/get-sales-by-order.service';
-import { PaymentsReportQueryDto, ReportRangeQueryDto } from './dto/reports.dto';
+import {
+  PaymentsReportQueryDto,
+  ReportRangeQueryDto,
+  SalesByHierarchyQueryDto,
+} from './dto/reports.dto';
 
 function toCsvFile(download: CsvDownload): StreamableFile {
   return new StreamableFile(download.stream, {
@@ -40,6 +48,7 @@ export class ReportsController {
   constructor(
     private readonly getSalesByOrderService: GetSalesByOrderService,
     private readonly getPaymentsReportService: GetPaymentsReportService,
+    private readonly getSalesByHierarchyService: GetSalesByHierarchyService,
   ) {}
 
   @Get('branches/:branchId/sales-by-order')
@@ -61,6 +70,31 @@ export class ReportsController {
     }
 
     return this.getSalesByOrderService.execute(authUser, branchId, query);
+  }
+
+  @Get('branches/:branchId/sales-by-hierarchy')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Jerarquia de ventas (categoria > subcategoria > producto) con drill-down por parentId, o lista plana por producto o estacion. Solo ADMIN y SUPERVISOR. format=csv descarga la vista actual (separador ";", BOM UTF-8).',
+  })
+  async getSalesByHierarchy(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Query() query: SalesByHierarchyQueryDto,
+  ): Promise<SalesByHierarchyResponse | StreamableFile> {
+    if (query.format === 'csv') {
+      return toCsvFile(
+        await this.getSalesByHierarchyService.executeCsv(
+          authUser,
+          branchId,
+          query,
+        ),
+      );
+    }
+
+    return this.getSalesByHierarchyService.execute(authUser, branchId, query);
   }
 
   @Get('branches/:branchId/payments')

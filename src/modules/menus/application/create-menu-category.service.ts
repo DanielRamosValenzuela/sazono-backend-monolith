@@ -7,6 +7,7 @@ import { Role, MenuStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { assertValidCategoryParent } from './menu-category-tree';
 import type {
   CreateMenuCategoryDto,
   MenuCategoryResponseDto,
@@ -44,6 +45,17 @@ export class CreateMenuCategoryService {
       );
     }
 
+    if (dto.parentId) {
+      assertValidCategoryParent(
+        await this.prisma.menuCategory.findMany({
+          where: { menuId },
+          select: { id: true, parentId: true },
+        }),
+        dto.parentId,
+        null,
+      );
+    }
+
     const nextSortOrder =
       dto.sortOrder ??
       ((
@@ -62,6 +74,7 @@ export class CreateMenuCategoryService {
         menuId,
         name: dto.name.trim(),
         sortOrder: nextSortOrder,
+        parentId: dto.parentId ?? null,
       },
     });
 
@@ -71,6 +84,7 @@ export class CreateMenuCategoryService {
       name: category.name,
       sortOrder: category.sortOrder,
       status: category.status,
+      parentId: category.parentId,
     };
   }
 }

@@ -55,6 +55,8 @@ describe('CreateQrOrderService', () => {
         menuItemId: 'menu-item-1',
         name: 'Pisco Sour',
         price: new Prisma.Decimal(5900),
+        menuCategoryId: 'category-bar',
+        categoryPath: ['Bar', 'Cocteles'],
         preparationStationId: 'station-bar',
         quantity: 1,
         notes: null,
@@ -126,6 +128,15 @@ describe('CreateQrOrderService', () => {
     };
     expect(sessionCreateArgs.data).toMatchObject({
       openedBySource: TableSessionOpenedBySource.QR,
+    });
+    const orderItemCreateArgs = orderItemCreateMock.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+    expect(orderItemCreateArgs.data).toMatchObject({
+      menuItemId: 'menu-item-1',
+      menuCategoryId: 'category-bar',
+      categoryPathSnapshot: ['Bar', 'Cocteles'],
+      nameSnapshot: 'Pisco Sour',
     });
     expect(billItemCreateManyMock).not.toHaveBeenCalled();
     expect(stationTicketCreateMock).not.toHaveBeenCalled();

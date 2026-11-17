@@ -29,6 +29,7 @@
 25. [25 Migración de Mercado Pago a Orders API](25-migracion-mercado-pago-orders-api.md)
 26. [26 Mesas virtuales (pedidos sin mesa física)](26-pedidos-de-mostrador-mesa-virtual.md)
 27. [27 Reportería M1: medio de pago y cierre por comanda](27-reporteria-m1.md)
+28. [28 Reportería M2: jerarquía de ventas por categoría](28-reporteria-m2-jerarquia.md)
 
 Nota: dentro del bloque de pagos (12, 13, 21, 22, 23), lee primero el doc 24
 aunque quede numerado al final — es el mapa completo (flujos de dinero, por

@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 const BOM = '\uFEFF';
 const SEPARATOR = ';';
 const LINE_BREAK = '\r\n';
-const FORMULA_PREFIXES = ['=', '+', '-', '@'];
+const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
 
 export type CsvCell = string | number | null | undefined;
 

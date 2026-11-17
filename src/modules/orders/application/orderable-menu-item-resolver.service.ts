@@ -6,6 +6,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { categoryPathOf } from '../../menus/application/menu-category-tree';
 import type { CreateOrderItemDto } from '../presentation/http/dto/orders.dto';
 
 export type OrderableModifier = {
@@ -18,6 +19,8 @@ export type OrderableMenuItem = {
   menuItemId: string;
   name: string;
   price: Prisma.Decimal;
+  menuCategoryId: string;
+  categoryPath: string[];
   preparationStationId: string;
   quantity: number;
   notes: string | null;
@@ -60,7 +63,15 @@ export class OrderableMenuItemResolverService {
         },
       },
       include: {
-        menuCategory: true,
+        menuCategory: {
+          include: {
+            parent: {
+              include: {
+                parent: true,
+              },
+            },
+          },
+        },
         preparationStation: true,
         modifierGroups: {
           include: {
@@ -87,6 +98,13 @@ export class OrderableMenuItemResolverService {
 
       if (
         menuItem.menuCategory.status !== MenuCategoryStatus.ACTIVE ||
+        [
+          menuItem.menuCategory.parent,
+          menuItem.menuCategory.parent?.parent,
+        ].some(
+          (ancestor) =>
+            ancestor && ancestor.status !== MenuCategoryStatus.ACTIVE,
+        ) ||
         !menuItem.isAvailable
       ) {
         throw new BadRequestException(
@@ -112,6 +130,8 @@ export class OrderableMenuItemResolverService {
         menuItemId: menuItem.id,
         name: menuItem.name,
         price: menuItem.price.add(modifiersDelta),
+        menuCategoryId: menuItem.menuCategoryId,
+        categoryPath: categoryPathOf(menuItem.menuCategory),
         preparationStationId: menuItem.preparationStationId,
         quantity: itemDto.quantity,
         notes: itemDto.notes?.trim() || null,

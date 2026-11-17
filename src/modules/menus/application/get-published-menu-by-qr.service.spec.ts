@@ -9,6 +9,54 @@ import {
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { GetPublishedMenuByQrService } from './get-published-menu-by-qr.service';
 
+describe('GetPublishedMenuByQrService nested categories', () => {
+  it('hides subcategories whose parent is not active and keeps parentId', async () => {
+    const tableFindUnique = jest.fn().mockResolvedValue({
+      status: TableStatus.AVAILABLE,
+      branch: {
+        settings: {
+          defaultMenu: { id: 'menu-1', status: MenuStatus.PUBLISHED },
+        },
+      },
+    });
+    const emptyCategory = (id: string, parentId: string | null) => ({
+      id,
+      name: id,
+      sortOrder: 0,
+      status: MenuCategoryStatus.ACTIVE,
+      parentId,
+      items: [],
+    });
+    const menuFindUniqueOrThrow = jest.fn().mockResolvedValue({
+      id: 'menu-1',
+      branchId: 'branch-1',
+      name: 'Carta',
+      status: MenuStatus.PUBLISHED,
+      version: 1,
+      defaultLanguage: 'es',
+      publishedAt: null,
+      categories: [
+        emptyCategory('visible-root', null),
+        emptyCategory('visible-child', 'visible-root'),
+        emptyCategory('orphan-child', 'hidden-parent'),
+      ],
+    });
+    const service = new GetPublishedMenuByQrService({
+      table: { findUnique: tableFindUnique },
+      menu: { findUniqueOrThrow: menuFindUniqueOrThrow },
+    } as unknown as PrismaService);
+
+    const result = await service.execute('qr-token');
+
+    expect(
+      result.categories.map((c) => [c.menuCategoryId, c.parentId]),
+    ).toEqual([
+      ['visible-root', null],
+      ['visible-child', 'visible-root'],
+    ]);
+  });
+});
+
 describe('GetPublishedMenuByQrService', () => {
   const tableFindUniqueMock = jest.fn();
   const menuFindUniqueOrThrowMock = jest.fn();

@@ -7,7 +7,7 @@ import {
   PreparationStationStatus,
   PreparationStationType,
 } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   ArrayUnique,
@@ -15,6 +15,7 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsNumberString,
   IsOptional,
   IsString,
@@ -311,6 +312,14 @@ export class MenuCategoryResponseDto {
     enumName: 'MenuCategoryStatus',
   })
   status!: MenuCategoryStatus;
+
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'Categoria padre (null = categoria raiz).',
+  })
+  parentId!: string | null;
 }
 
 class MenuCategoryDetailResponseDto {
@@ -322,6 +331,15 @@ class MenuCategoryDetailResponseDto {
 
   @ApiProperty()
   sortOrder!: number;
+
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Categoria padre (null = categoria raiz). La lista de categorias sigue siendo plana.',
+  })
+  parentId!: string | null;
 
   @ApiProperty({
     enum: MenuCategoryStatus,
@@ -530,7 +548,11 @@ export class ListMenusQueryDto {
 
 export class CreateMenuCategoryDto {
   @ApiProperty({ example: 'Fondos' })
+  @Transform(({ value }: { value: unknown }): unknown =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @IsNotEmpty()
   @MaxLength(100)
   name!: string;
 
@@ -540,6 +562,15 @@ export class CreateMenuCategoryDto {
   @IsInt()
   @Min(0)
   sortOrder?: number;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Categoria padre de la misma carta. Maximo 3 niveles. Omitir para crear una categoria raiz.',
+  })
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
 }
 
 export class CreateMenuItemDto {
@@ -588,7 +619,11 @@ export class CreateMenuItemDto {
 export class UpdateMenuCategoryDto {
   @ApiPropertyOptional({ example: 'Fondos' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }): unknown =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @IsNotEmpty()
   @MaxLength(100)
   name?: string;
 
@@ -606,6 +641,17 @@ export class UpdateMenuCategoryDto {
   @IsOptional()
   @IsEnum(MenuCategoryStatus)
   status?: MenuCategoryStatus;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    type: String,
+    nullable: true,
+    description:
+      'Nueva categoria padre de la misma carta (maximo 3 niveles, sin ciclos). null la mueve a la raiz; omitir no la cambia.',
+  })
+  @IsOptional()
+  @IsUUID()
+  parentId?: string | null;
 }
 
 export class UpdateMenuItemDto {

@@ -458,12 +458,16 @@ model MenuCategory {
   name      String
   sortOrder Int                @default(0) @map("sort_order")
   status    MenuCategoryStatus @default(ACTIVE)
+  parentId  String?            @map("parent_id") @db.Uuid
   menu      Menu               @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  parent    MenuCategory?      @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  MenuCategory[]     @relation("CategoryTree")
   items     MenuItem[]
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([menuId, sortOrder])
+  @@index([menuId, parentId, sortOrder])
   @@map("menu_categories")
 }
 
@@ -650,8 +654,10 @@ model OrderItem {
   id                   String              @id @default(uuid()) @db.Uuid
   orderId              String              @map("order_id") @db.Uuid
   menuItemId           String?             @map("menu_item_id") @db.Uuid
+  menuCategoryId       String?             @map("menu_category_id") @db.Uuid
   preparationStationId String              @map("preparation_station_id") @db.Uuid
   nameSnapshot         String              @map("name_snapshot")
+  categoryPathSnapshot String[]            @default([]) @map("category_path_snapshot")
   priceSnapshot        Decimal             @map("price_snapshot") @db.Decimal(12, 2)
   quantity             Int
   status               OrderItemStatus     @default(PENDING)

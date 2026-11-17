@@ -80,6 +80,31 @@ export type PaymentStatusTotalRecord = {
   tip: Prisma.Decimal.Value;
 };
 
+export type HierarchyFilter = {
+  branchId: string;
+  start: Date;
+  end: Date;
+  includeModifiers: boolean;
+};
+
+export type HierarchyLineRecord = {
+  category_path: string[] | null;
+  item_name: string;
+  station_name: string;
+  amount: Prisma.Decimal.Value;
+  quantity: number;
+  cancelled_quantity: number;
+};
+
+const SOLD_ORDER_STATUSES = [
+  'CONFIRMED',
+  'ROUTED',
+  'IN_PREPARATION',
+  'PARTIALLY_READY',
+  'READY',
+  'DELIVERED',
+];
+
 function joinAnd(conditions: Prisma.Sql[]): Prisma.Sql {
   return Prisma.join(conditions, ' AND ');
 }
@@ -331,6 +356,41 @@ export class ReportsPrismaRepository {
       FROM (${eligibleBillsSql(filter)}) e
       JOIN payments p ON p.bill_id = e.id AND ${paidPaymentConditionSql(filter)}
       GROUP BY 1
+    `);
+  }
+
+  findHierarchyLines(filter: HierarchyFilter): Promise<HierarchyLineRecord[]> {
+    const unitPrice = filter.includeModifiers
+      ? Prisma.sql`oi.price_snapshot`
+      : Prisma.sql`(oi.price_snapshot - mods.delta)`;
+    const sold = Prisma.sql`(oi.status::text <> 'CANCELLED' AND o.status::text IN (${Prisma.join(SOLD_ORDER_STATUSES)}))`;
+
+    return this.prisma.$queryRaw<HierarchyLineRecord[]>(Prisma.sql`
+      SELECT
+        oi.category_path_snapshot AS category_path,
+        oi.name_snapshot AS item_name,
+        ps.name AS station_name,
+        COALESCE(SUM(${unitPrice} * oi.quantity) FILTER (WHERE ${sold}), 0) AS amount,
+        COALESCE(SUM(oi.quantity) FILTER (WHERE ${sold}), 0)::int AS quantity,
+        COALESCE(SUM(oi.quantity) FILTER (WHERE oi.status::text = 'CANCELLED'), 0)::int AS cancelled_quantity
+      FROM (${eligibleBillsSql({
+        branchId: filter.branchId,
+        start: filter.start,
+        end: filter.end,
+        cashierId: null,
+        methods: [],
+      })}) e
+      JOIN orders o ON o.bill_id = e.id
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN preparation_stations ps ON ps.id = oi.preparation_station_id
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(m.price_delta_snapshot), 0) AS delta
+        FROM order_item_modifiers m
+        WHERE m.order_item_id = oi.id
+      ) mods ON TRUE
+      GROUP BY oi.category_path_snapshot, oi.name_snapshot, ps.name
+      HAVING COALESCE(SUM(oi.quantity) FILTER (WHERE ${sold}), 0) > 0
+        OR COALESCE(SUM(oi.quantity) FILTER (WHERE oi.status::text = 'CANCELLED'), 0) > 0
     `);
   }
 

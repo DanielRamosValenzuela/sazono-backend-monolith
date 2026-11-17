@@ -87,6 +87,8 @@ describe('CreateWaiterOrderService', () => {
         menuItemId: 'menu-item-1',
         name: 'Pisco Sour',
         price: new Prisma.Decimal(5900),
+        menuCategoryId: 'category-bar',
+        categoryPath: ['Bar'],
         preparationStationId: 'station-bar',
         quantity: 2,
         notes: null,
@@ -96,6 +98,8 @@ describe('CreateWaiterOrderService', () => {
         menuItemId: 'menu-item-2',
         name: 'Lomo saltado',
         price: new Prisma.Decimal(11900),
+        menuCategoryId: 'category-fondos',
+        categoryPath: ['Cocina', 'Fondos'],
         preparationStationId: 'station-kitchen',
         quantity: 1,
         notes: 'Sin cebolla.',
@@ -215,6 +219,8 @@ describe('CreateWaiterOrderService', () => {
         menuItemId: 'menu-item-1',
         name: 'Lomo saltado',
         price: new Prisma.Decimal(13400),
+        menuCategoryId: 'category-latte',
+        categoryPath: ['Cafe', 'Bebidas Calientes', 'Latte'],
         preparationStationId: 'station-kitchen',
         quantity: 1,
         notes: null,
@@ -287,10 +293,18 @@ describe('CreateWaiterOrderService', () => {
 
     const orderItemCreateArgs = orderItemCreateMock.mock.calls[0][0] as {
       data: {
+        menuCategoryId: string;
+        categoryPathSnapshot: string[];
         priceSnapshot: Prisma.Decimal;
         modifiers: { create: Array<Record<string, unknown>> };
       };
     };
+    expect(orderItemCreateArgs.data.menuCategoryId).toBe('category-latte');
+    expect(orderItemCreateArgs.data.categoryPathSnapshot).toEqual([
+      'Cafe',
+      'Bebidas Calientes',
+      'Latte',
+    ]);
     expect(orderItemCreateArgs.data.priceSnapshot).toEqual(
       new Prisma.Decimal(13400),
     );

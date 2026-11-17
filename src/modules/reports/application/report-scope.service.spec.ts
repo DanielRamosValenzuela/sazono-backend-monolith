@@ -194,6 +194,70 @@ describe('ReportScopeService', () => {
     ).rejects.toThrow('92');
   });
 
+  describe('fullAccessOnly (hierarchy report)', () => {
+    const strict = { forCsv: false, fullAccessOnly: true };
+
+    it.each([Role.CASHIER, Role.WAITER, Role.KITCHEN, Role.BAR])(
+      'rejects the %s role with 403',
+      async (role) => {
+        mockRoles(role);
+
+        await expect(
+          service.resolve(
+            authUser,
+            'branch-1',
+            { from: '2026-11-01', to: '2026-11-02' },
+            strict,
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      },
+    );
+
+    it.each([Role.ADMIN, Role.SUPERVISOR])(
+      'lets %s read the requested range without cashier scoping',
+      async (role) => {
+        mockRoles(role);
+
+        const scope = await service.resolve(
+          authUser,
+          'branch-1',
+          { from: '2026-11-01', to: '2026-11-03' },
+          strict,
+        );
+
+        expect(scope).toMatchObject({
+          from: '2026-11-01',
+          to: '2026-11-03',
+          cashierId: null,
+          methods: [],
+          cashierScoped: false,
+        });
+      },
+    );
+
+    it('requires from and to, with the same limits as the other reports', async () => {
+      await expect(
+        service.resolve(authUser, 'branch-1', {}, strict),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.resolve(
+          authUser,
+          'branch-1',
+          { from: '2025-01-01', to: '2026-01-02' },
+          strict,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.resolve(
+          authUser,
+          'branch-1',
+          { from: '2026-01-01', to: '2026-04-03' },
+          { forCsv: true, fullAccessOnly: true },
+        ),
+      ).rejects.toThrow('92');
+    });
+  });
+
   it('rejects unknown payment methods', async () => {
     await expect(
       service.resolve(

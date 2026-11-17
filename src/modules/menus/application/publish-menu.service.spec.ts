@@ -168,6 +168,96 @@ describe('PublishMenuService', () => {
     expect(updateBranchSettingsMock).toHaveBeenCalled();
   });
 
+  it('publishes a menu whose parent category only has subcategories with items', async () => {
+    const station = {
+      id: 'station-1',
+      name: 'Cocina',
+      stationType: PreparationStationType.KITCHEN,
+      status: PreparationStationStatus.ACTIVE,
+    };
+    const item = {
+      id: 'item-1',
+      name: 'Latte',
+      description: null,
+      price: { toString: () => '3500' },
+      sku: null,
+      itemType: 'DRINK',
+      isAvailable: true,
+      sortOrder: 0,
+      media: [],
+      preparationStation: station,
+      modifierGroups: [],
+    };
+    const categories = [
+      {
+        id: 'cafe',
+        name: 'Cafe',
+        sortOrder: 0,
+        status: MenuCategoryStatus.ACTIVE,
+        parentId: null,
+        items: [],
+      },
+      {
+        id: 'calientes',
+        name: 'Bebidas Calientes',
+        sortOrder: 1,
+        status: MenuCategoryStatus.ACTIVE,
+        parentId: 'cafe',
+        items: [item],
+      },
+    ];
+
+    findUniqueMock.mockResolvedValue({
+      id: 'menu-1',
+      branchId: 'branch-1',
+      status: MenuStatus.DRAFT,
+      categories,
+    });
+    ensureAccessMock.mockResolvedValue({
+      staffUserId: 'staff-1',
+      branchId: 'branch-1',
+      restaurantId: 'restaurant-1',
+    });
+    transactionMock.mockImplementation(
+      (callback: (transactionClient: TransactionClient) => Promise<unknown>) =>
+        callback({
+          menu: {
+            updateMany: jest.fn().mockResolvedValue({}),
+            update: jest.fn().mockResolvedValue({}),
+            findUniqueOrThrow: jest.fn().mockResolvedValue({
+              id: 'menu-1',
+              branchId: 'branch-1',
+              name: 'Carta',
+              status: MenuStatus.PUBLISHED,
+              version: 1,
+              defaultLanguage: 'es',
+              publishedAt: new Date('2026-07-07T12:00:00.000Z'),
+              categories,
+            }),
+          },
+          branchSettings: { update: jest.fn().mockResolvedValue({}) },
+        }),
+    );
+
+    const result = await service.execute(
+      {
+        sub: 'auth-1',
+        profileType: LoginProfileType.STAFF,
+        profileId: 'staff-1',
+        restaurantId: 'restaurant-1',
+      },
+      'menu-1',
+    );
+
+    expect(result.status).toBe(MenuStatus.PUBLISHED);
+    expect(
+      result.categories.map((c) => [c.menuCategoryId, c.parentId]),
+    ).toEqual([
+      ['cafe', null],
+      ['calientes', 'cafe'],
+    ]);
+  });
+
   it('rejects publishing a menu without active categories with items', async () => {
     findUniqueMock.mockResolvedValue({
       id: 'menu-1',

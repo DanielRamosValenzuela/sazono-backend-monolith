@@ -105,8 +105,10 @@ export class CreateWaiterOrderService {
           data: {
             orderId: order.id,
             menuItemId: item.menuItemId,
+            menuCategoryId: item.menuCategoryId,
             preparationStationId: item.preparationStationId,
             nameSnapshot: item.name,
+            categoryPathSnapshot: item.categoryPath,
             priceSnapshot: item.price,
             quantity: item.quantity,
             notes: item.notes,

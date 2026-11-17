@@ -156,6 +156,7 @@ type MenuDetailWithRelations = {
     name: string;
     sortOrder: number;
     status: MenuCategoryStatus;
+    parentId: string | null;
     items: Array<{
       id: string;
       name: string;
@@ -235,6 +236,7 @@ export const mapMenuDetail = (
     name: category.name,
     sortOrder: category.sortOrder,
     status: category.status,
+    parentId: category.parentId,
     translations: translationsByEntity.get(category.id) ?? [],
     items: category.items.map((item) => ({
       menuItemId: item.id,

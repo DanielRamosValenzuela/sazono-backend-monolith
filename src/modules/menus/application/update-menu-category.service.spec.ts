@@ -8,9 +8,11 @@ import { UpdateMenuCategoryService } from './update-menu-category.service';
 describe('UpdateMenuCategoryService', () => {
   const categoryFindUniqueMock = jest.fn();
   const categoryUpdateMock = jest.fn();
+  const categoryFindManyMock = jest.fn();
   const prisma = {
     menuCategory: {
       findUnique: categoryFindUniqueMock,
+      findMany: categoryFindManyMock,
       update: categoryUpdateMock,
     },
   } as unknown as PrismaService;
@@ -65,6 +67,74 @@ describe('UpdateMenuCategoryService', () => {
       data: Record<string, unknown>;
     };
     expect(updateArgs.data).toEqual({ status: MenuCategoryStatus.ARCHIVED });
+  });
+
+  describe('parentId', () => {
+    beforeEach(() => {
+      ensureAccessMock.mockResolvedValue({});
+      categoryFindUniqueMock.mockResolvedValue({
+        id: 'cafe',
+        menuId: 'menu-1',
+        menu: { id: 'menu-1', branchId: 'branch-1', status: MenuStatus.DRAFT },
+      });
+      categoryUpdateMock.mockImplementation(
+        ({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'cafe',
+            menuId: 'menu-1',
+            name: 'Cafe',
+            sortOrder: 0,
+            status: MenuCategoryStatus.ACTIVE,
+            parentId: null,
+            ...data,
+          }),
+      );
+      categoryFindManyMock.mockResolvedValue([
+        { id: 'cafe', parentId: null },
+        { id: 'calientes', parentId: 'cafe' },
+        { id: 'postres', parentId: null },
+      ]);
+    });
+
+    it('moves a category under another parent', async () => {
+      const result = await service.execute(authUser, 'calientes', {
+        parentId: 'postres',
+      });
+
+      expect(result.parentId).toBe('postres');
+    });
+
+    it('moves a category back to the root with null', async () => {
+      const result = await service.execute(authUser, 'calientes', {
+        parentId: null,
+      });
+
+      expect(result.parentId).toBeNull();
+      expect(categoryFindManyMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cycle', async () => {
+      await expect(
+        service.execute(authUser, 'cafe', { parentId: 'calientes' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(categoryUpdateMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a parent id that is the category itself', async () => {
+      await expect(
+        service.execute(authUser, 'cafe', { parentId: 'cafe' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('leaves parentId untouched when omitted', async () => {
+      await service.execute(authUser, 'cafe', { name: 'Cafeteria' });
+
+      const args = categoryUpdateMock.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      };
+
+      expect(args.data).toEqual({ name: 'Cafeteria' });
+    });
   });
 
   it('rejects edits on a published menu', async () => {
