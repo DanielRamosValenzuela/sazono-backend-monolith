@@ -11,7 +11,7 @@ import {
   buildPaymentsReportTotals,
 } from './get-payments-report.service';
 import type { ReportScopeService } from './report-scope.service';
-import type { ReportScope } from './report-types';
+import { EMPTY_FILTERS, type ReportScope } from './report-types';
 
 const BOM = String.fromCharCode(0xfeff);
 
@@ -32,6 +32,7 @@ const scope: ReportScope = {
   cashierId: null,
   methods: [],
   cashierScoped: false,
+  filters: EMPTY_FILTERS,
 };
 
 function record(extra: Partial<PaymentReportRecord> = {}): PaymentReportRecord {

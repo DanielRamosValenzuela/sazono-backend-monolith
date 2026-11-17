@@ -1,5 +1,6 @@
 ﻿import { Injectable } from '@nestjs/common';
-import { OrderStatus, Role } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { OrderStatus, Role, StationTicketStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
@@ -17,6 +18,7 @@ export class ListStationTicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly branchAccessService: BranchAccessService,
+    private readonly configService: ConfigService,
   ) {}
 
   async execute(
@@ -30,10 +32,34 @@ export class ListStationTicketsService {
       Role.BAR,
     ]);
 
+    const now = Date.now();
+    const readyCutoff = new Date(
+      now -
+        this.configService.get<number>('KITCHEN_READY_VISIBLE_MINUTES', 10) *
+          60_000,
+    );
+    const staleCutoff = new Date(
+      now -
+        this.configService.get<number>('KITCHEN_STALE_TICKET_HOURS', 12) *
+          3_600_000,
+    );
+
     const tickets = await this.prisma.stationTicket.findMany({
       where: {
         branchId: query.branchId,
-        order: { status: { not: OrderStatus.DELIVERED } },
+        order: {
+          status: { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] },
+        },
+        OR: [
+          {
+            status: StationTicketStatus.READY,
+            completedAt: { gte: readyCutoff },
+          },
+          {
+            status: { not: StationTicketStatus.READY },
+            createdAt: { gte: staleCutoff },
+          },
+        ],
         ...(query.preparationStationId
           ? { preparationStationId: query.preparationStationId }
           : {}),

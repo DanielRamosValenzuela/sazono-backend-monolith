@@ -12,7 +12,7 @@ import {
 import { buildHierarchyView, encodeNodeId } from './hierarchy-tree';
 import { csvLine } from './report-csv';
 import type { ReportScopeService } from './report-scope.service';
-import type { ReportScope } from './report-types';
+import { EMPTY_FILTERS, type ReportScope } from './report-types';
 
 const BOM = String.fromCharCode(0xfeff);
 
@@ -33,6 +33,7 @@ const scope: ReportScope = {
   cashierId: null,
   methods: [],
   cashierScoped: false,
+  filters: EMPTY_FILTERS,
 };
 
 function record(
@@ -127,9 +128,13 @@ describe('GetSalesByHierarchyService', () => {
     });
 
     expect(findHierarchyLinesMock).toHaveBeenCalledWith({
+      ...EMPTY_FILTERS,
       branchId: 'branch-1',
       start: scope.start,
       end: scope.end,
+      timeZone: 'America/Santiago',
+      cashierId: null,
+      methods: [],
       includeModifiers: true,
     });
     expect(response).toMatchObject({

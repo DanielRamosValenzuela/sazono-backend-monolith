@@ -6,12 +6,17 @@ import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import {
   ReportsPrismaRepository,
   type BillPageFilter,
+  type BillPageRecord,
   type BillPaymentRecord,
   type BillRowRecord,
   type MethodTotalRecord,
 } from '../infrastructure/reports.prisma.repository';
 import { csvStream, type CsvCell } from './report-csv';
-import { decodeCursor, encodeCursor } from './report-cursor';
+import {
+  decodeCursor,
+  encodeCursor,
+  type CursorValueKind,
+} from './report-cursor';
 import {
   ReportScopeService,
   type ReportScopeQuery,
@@ -29,11 +34,24 @@ import {
   type MethodAmount,
   type MethodKey,
   type ReportScope,
+  type SalesOrderBy,
+  type SortDirection,
 } from './report-types';
 
 export type SalesByOrderQuery = ReportScopeQuery & {
+  minTotal?: number;
+  maxTotal?: number;
+  orderBy?: SalesOrderBy;
+  direction?: SortDirection;
   cursor?: string;
   limit?: number;
+};
+
+const CURSOR_KINDS: Record<SalesOrderBy, CursorValueKind> = {
+  closedAt: 'timestamp',
+  total: 'number',
+  tip: 'number',
+  orderNumber: 'text',
 };
 
 export type SalesByOrderRow = {
@@ -74,11 +92,29 @@ export type SalesByOrderResponse = {
   to: string;
   timeZone: string;
   cashierId: string | null;
+  orderBy: SalesOrderBy;
+  direction: SortDirection;
   rows: SalesByOrderRow[];
   totals: SalesByOrderTotals;
   nextCursor: string | null;
   limit: number;
 };
+
+export function sortValueOf(
+  bill: BillPageRecord,
+  orderBy: SalesOrderBy,
+): string {
+  switch (orderBy) {
+    case 'total':
+      return new Prisma.Decimal(bill.bill_total).toFixed(2);
+    case 'tip':
+      return new Prisma.Decimal(bill.bill_tip).toFixed(2);
+    case 'orderNumber':
+      return bill.order_key;
+    default:
+      return bill.closed_at.toISOString();
+  }
+}
 
 export type CsvDownload = { filename: string; stream: Readable };
 
@@ -284,15 +320,16 @@ export class GetSalesByOrderService {
     branchId: string,
     query: SalesByOrderQuery,
   ): Promise<SalesByOrderResponse> {
-    const scope = await this.scopeService.resolve(authUser, branchId, query, {
-      forCsv: false,
-    });
-    const filter = this.toFilter(scope);
+    const scope = await this.resolveScope(authUser, branchId, query, false);
+    const filter = this.toFilter(scope, query);
     const limit = Math.min(query.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
 
-    const [page, billCount, methodTotals] = await Promise.all([
-      this.loadPage(filter, decodeCursor(query.cursor), limit),
-      this.reportsRepository.countBills(filter),
+    const [page, methodTotals] = await Promise.all([
+      this.loadPage(
+        filter,
+        decodeCursor(query.cursor, CURSOR_KINDS[filter.orderBy]),
+        limit,
+      ),
       this.reportsRepository.findMethodTotals(filter),
     ]);
 
@@ -301,8 +338,13 @@ export class GetSalesByOrderService {
       to: scope.to,
       timeZone: scope.timeZone,
       cashierId: scope.cashierId,
+      orderBy: filter.orderBy,
+      direction: filter.direction,
       rows: page.rows,
-      totals: buildSalesByOrderTotals(billCount, methodTotals),
+      totals: buildSalesByOrderTotals(
+        methodTotals[0]?.bills ?? 0,
+        methodTotals,
+      ),
       nextCursor: page.nextCursor,
       limit,
     };
@@ -313,15 +355,13 @@ export class GetSalesByOrderService {
     branchId: string,
     query: SalesByOrderQuery,
   ): Promise<CsvDownload> {
-    const scope = await this.scopeService.resolve(authUser, branchId, query, {
-      forCsv: true,
-    });
-    const filter = this.toFilter(scope);
-    const [billCount, methodTotals] = await Promise.all([
-      this.reportsRepository.countBills(filter),
-      this.reportsRepository.findMethodTotals(filter),
-    ]);
-    const totals = buildSalesByOrderTotals(billCount, methodTotals);
+    const scope = await this.resolveScope(authUser, branchId, query, true);
+    const filter = this.toFilter(scope, query);
+    const methodTotals = await this.reportsRepository.findMethodTotals(filter);
+    const totals = buildSalesByOrderTotals(
+      methodTotals[0]?.bills ?? 0,
+      methodTotals,
+    );
 
     return {
       filename: `cierre-ventas_${branchId}_${scope.from}_${scope.to}.csv`,
@@ -330,6 +370,24 @@ export class GetSalesByOrderService {
         this.csvLines(filter, scope.timeZone, totals),
       ),
     };
+  }
+
+  private resolveScope(
+    authUser: JwtPayload,
+    branchId: string,
+    query: SalesByOrderQuery,
+    forCsv: boolean,
+  ): Promise<ReportScope> {
+    return this.scopeService.resolve(
+      authUser,
+      branchId,
+      {
+        ...query,
+        minAmount: query.minTotal,
+        maxAmount: query.maxTotal,
+      },
+      { forCsv },
+    );
   }
 
   private async *csvLines(
@@ -346,19 +404,29 @@ export class GetSalesByOrderService {
         yield salesRowToCsv(row, timeZone);
       }
 
-      cursor = decodeCursor(page.nextCursor ?? undefined);
+      cursor = decodeCursor(
+        page.nextCursor ?? undefined,
+        CURSOR_KINDS[filter.orderBy],
+      );
     } while (cursor !== null);
 
     yield salesTotalsToCsv(totals);
   }
 
-  private toFilter(scope: ReportScope): BillPageFilter {
+  private toFilter(
+    scope: ReportScope,
+    query: SalesByOrderQuery,
+  ): BillPageFilter {
     return {
+      ...scope.filters,
       branchId: scope.branchId,
       start: scope.start,
       end: scope.end,
+      timeZone: scope.timeZone,
       cashierId: scope.cashierId,
       methods: scope.methods,
+      orderBy: query.orderBy ?? 'closedAt',
+      direction: query.direction ?? 'desc',
     };
   }
 
@@ -374,28 +442,16 @@ export class GetSalesByOrderService {
     );
     const hasMore = fetched.length > limit;
     const bills = hasMore ? fetched.slice(0, limit) : fetched;
-    const payments = await this.reportsRepository.findPaymentsForBills(
-      bills.map((bill) => bill.id),
-      filter,
-    );
-    const paymentsByBill = new Map<string, BillPaymentRecord[]>();
-
-    for (const payment of payments) {
-      const list = paymentsByBill.get(payment.bill_id) ?? [];
-
-      list.push(payment);
-      paymentsByBill.set(payment.bill_id, list);
-    }
-
     const last = bills[bills.length - 1];
 
     return {
-      rows: bills.map((bill) =>
-        buildSalesByOrderRow(bill, paymentsByBill.get(bill.id) ?? []),
-      ),
+      rows: bills.map((bill) => buildSalesByOrderRow(bill, bill.payments)),
       nextCursor:
         hasMore && last
-          ? encodeCursor({ at: last.closed_at, id: last.id })
+          ? encodeCursor({
+              value: sortValueOf(last, filter.orderBy),
+              id: last.id,
+            })
           : null,
     };
   }

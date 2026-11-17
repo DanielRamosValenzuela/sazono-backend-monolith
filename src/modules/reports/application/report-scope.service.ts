@@ -14,6 +14,7 @@ import {
 } from '../../../common/time/restaurant-time';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { ReportsPrismaRepository } from '../infrastructure/reports.prisma.repository';
+import { parseReportFilters, type RawReportFilters } from './report-filters';
 import {
   MAX_CSV_RANGE_DAYS,
   MAX_RANGE_DAYS,
@@ -22,11 +23,19 @@ import {
   type ReportScope,
 } from './report-types';
 
-export type ReportScopeQuery = {
+export type ReportScopeQuery = RawReportFilters & {
   from?: string;
   to?: string;
   cashierId?: string;
   method?: string;
+};
+
+export type BranchAccessScope = {
+  timeZone: string;
+  cashierScoped: boolean;
+  staffUserId: string;
+  todayStart: Date;
+  todayEnd: Date;
 };
 
 const REPORT_ROLES: Role[] = [Role.ADMIN, Role.SUPERVISOR, Role.CASHIER];
@@ -76,6 +85,7 @@ export class ReportScopeService {
     }
 
     const methods = parseMethods(query.method);
+    const filters = parseReportFilters(query);
     const cashierScoped = !context.roles.some((role) =>
       FULL_ACCESS_ROLES.includes(role),
     );
@@ -87,6 +97,7 @@ export class ReportScopeService {
         cashierId: context.staffUserId,
         methods,
         cashierScoped,
+        filters,
       });
     }
 
@@ -96,7 +107,36 @@ export class ReportScopeService {
       cashierId: query.cashierId ?? null,
       methods,
       cashierScoped,
+      filters,
     });
+  }
+
+  async resolveAccess(
+    authUser: JwtPayload,
+    branchId: string,
+  ): Promise<BranchAccessScope> {
+    const context = await this.branchAccessService.ensureAccess(
+      authUser,
+      branchId,
+      REPORT_ROLES,
+    );
+    const timeZone = await this.reportsRepository.findBranchTimezone(branchId);
+
+    if (timeZone === null) {
+      throw new NotFoundException('La sucursal indicada no existe.');
+    }
+
+    const today = zonedDateKey(new Date(), timeZone);
+
+    return {
+      timeZone,
+      cashierScoped: !context.roles.some((role) =>
+        FULL_ACCESS_ROLES.includes(role),
+      ),
+      staffUserId: context.staffUserId,
+      todayStart: zonedStartOfDay(today, timeZone),
+      todayEnd: zonedStartOfDay(addDaysToDateKey(today, 1), timeZone),
+    };
   }
 
   private validateRange(
@@ -135,7 +175,10 @@ export class ReportScopeService {
     timeZone: string,
     from: string,
     to: string,
-    rest: Pick<ReportScope, 'cashierId' | 'methods' | 'cashierScoped'>,
+    rest: Pick<
+      ReportScope,
+      'cashierId' | 'methods' | 'cashierScoped' | 'filters'
+    >,
   ): ReportScope {
     return {
       branchId,

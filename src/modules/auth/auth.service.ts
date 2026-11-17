@@ -65,18 +65,14 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    const authenticatedIdentity = await this.authProvider.signInWithPassword(
-      loginDto.email,
-      loginDto.password,
-    );
+    const [authenticatedIdentity, resolvedRestaurantId] = await Promise.all([
+      this.authProvider.signInWithPassword(loginDto.email, loginDto.password),
+      this.resolveRestaurantIdFromSlug(loginDto.restaurantSlug),
+    ]);
 
     if (!authenticatedIdentity) {
       throw new UnauthorizedException('Credenciales invalidas.');
     }
-
-    const resolvedRestaurantId = await this.resolveRestaurantIdFromSlug(
-      loginDto.restaurantSlug,
-    );
 
     const profile = await this.resolveProfileFromAuthUserId(
       authenticatedIdentity.authUserId,
@@ -137,17 +133,19 @@ export class AuthService {
   }
 
   async getCurrentUser(payload: JwtPayload): Promise<AuthenticatedProfileDto> {
-    const authenticatedIdentity = await this.authProvider.getUserById(
-      payload.sub,
-    );
+    const [authenticatedIdentity, profileRecords] = await Promise.all([
+      this.authProvider.getUserById(payload.sub),
+      this.findProfileRecords(payload.sub),
+    ]);
 
     if (!authenticatedIdentity) {
       throw new UnauthorizedException('Sesion invalida.');
     }
 
-    return this.resolveProfileFromAuthUserId(
+    return this.resolveProfileFromRecords(
       authenticatedIdentity.authUserId,
       authenticatedIdentity.email ?? '',
+      profileRecords,
       {
         email: authenticatedIdentity.email ?? '',
         password: '',
@@ -383,6 +381,21 @@ export class AuthService {
     loginDto: LoginDto,
     restaurantId?: string,
   ): Promise<AuthenticatedProfileDto> {
+    const profileRecords = await this.findProfileRecords(authUserId);
+
+    return this.resolveProfileFromRecords(
+      authUserId,
+      email,
+      profileRecords,
+      loginDto,
+      restaurantId,
+    );
+  }
+
+  private async findProfileRecords(authUserId: string): Promise<{
+    platformAdmins: PlatformAdminRecord[];
+    staffUsers: StaffUserRecord[];
+  }> {
     const [platformAdmins, staffUsers] = await Promise.all([
       this.prisma.platformAdmin.findMany({
         where: {
@@ -403,11 +416,24 @@ export class AuthService {
       }),
     ]);
 
-    const activePlatformAdmins = platformAdmins.filter(
+    return { platformAdmins, staffUsers };
+  }
+
+  private resolveProfileFromRecords(
+    authUserId: string,
+    email: string,
+    records: {
+      platformAdmins: PlatformAdminRecord[];
+      staffUsers: StaffUserRecord[];
+    },
+    loginDto: LoginDto,
+    restaurantId?: string,
+  ): AuthenticatedProfileDto {
+    const activePlatformAdmins = records.platformAdmins.filter(
       (platformAdmin) => platformAdmin.status === PlatformAdminStatus.ACTIVE,
     );
 
-    const activeStaffUsers = staffUsers.filter(
+    const activeStaffUsers = records.staffUsers.filter(
       (staffUser) => staffUser.status === StaffUserStatus.ACTIVE,
     );
 

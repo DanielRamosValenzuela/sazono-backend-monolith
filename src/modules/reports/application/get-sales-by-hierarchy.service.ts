@@ -15,12 +15,26 @@ import {
   type HierarchyNode,
 } from './hierarchy-tree';
 import { csvStream, type CsvCell } from './report-csv';
-import { ReportScopeService } from './report-scope.service';
+import {
+  ReportScopeService,
+  type ReportScopeQuery,
+} from './report-scope.service';
 import type { ReportScope } from './report-types';
 
-export type SalesByHierarchyQuery = {
-  from?: string;
-  to?: string;
+export type SalesByHierarchyQuery = Pick<
+  ReportScopeQuery,
+  | 'from'
+  | 'to'
+  | 'cashierId'
+  | 'method'
+  | 'waiterId'
+  | 'tableId'
+  | 'zoneId'
+  | 'source'
+  | 'timeFrom'
+  | 'timeTo'
+  | 'weekdays'
+> & {
   parentId?: string;
   groupBy?: HierarchyGroupBy;
   includeModifiers?: 'true' | 'false';
@@ -158,9 +172,13 @@ export class GetSalesByHierarchyService {
         ? decodeCategoryNodeId(query.parentId)
         : null;
     const records = await this.reportsRepository.findHierarchyLines({
+      ...scope.filters,
       branchId: scope.branchId,
       start: scope.start,
       end: scope.end,
+      timeZone: scope.timeZone,
+      cashierId: scope.cashierId,
+      methods: scope.methods,
       includeModifiers,
     });
     const view = buildHierarchyView(

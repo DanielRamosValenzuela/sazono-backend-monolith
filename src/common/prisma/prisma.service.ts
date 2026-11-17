@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
 
+const POOL_IDLE_TIMEOUT_MS = 300_000;
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -14,6 +16,8 @@ export class PrismaService
     const adapter = datasourceUrl
       ? new PrismaPg({
           connectionString: datasourceUrl,
+          idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS,
+          keepAlive: true,
         })
       : undefined;
 
@@ -34,6 +38,8 @@ export class PrismaService
     if (this.configService.get<boolean>('PRISMA_CONNECT_ON_STARTUP')) {
       await this.$connect();
     }
+
+    void this.$queryRaw`SELECT 1`.catch(() => undefined);
   }
 
   async onModuleDestroy() {

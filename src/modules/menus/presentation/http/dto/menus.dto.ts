@@ -545,6 +545,29 @@ export class CreateMenuDto {
   defaultLanguage!: string;
 }
 
+export class DuplicateMenuDto {
+  @ApiPropertyOptional({ example: 'Carta invierno 2026 (copia)' })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }): unknown =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name?: string;
+}
+
+export class UpdateMenuDto {
+  @ApiProperty({ example: 'Carta invierno 2026' })
+  @Transform(({ value }: { value: unknown }): unknown =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name!: string;
+}
+
 export class ListMenusQueryDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()

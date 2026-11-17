@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -32,6 +34,8 @@ import { CreateMenuService } from '../../application/create-menu.service';
 import { CreateModifierGroupService } from '../../application/create-modifier-group.service';
 import { CreateModifierOptionService } from '../../application/create-modifier-option.service';
 import { CreatePreparationStationService } from '../../application/create-preparation-station.service';
+import { DeleteMenuService } from '../../application/delete-menu.service';
+import { DuplicateMenuService } from '../../application/duplicate-menu.service';
 import { GetMenuDetailService } from '../../application/get-menu-detail.service';
 import { ListMenusService } from '../../application/list-menus.service';
 import { ListModifierGroupsService } from '../../application/list-modifier-groups.service';
@@ -43,6 +47,7 @@ import { RemoveModifierOptionImageService } from '../../application/remove-modif
 import { RemoveMenuItemImageService } from '../../application/remove-menu-item-image.service';
 import { ReorderMenuCategoriesService } from '../../application/reorder-menu-categories.service';
 import { ReorderMenuItemsService } from '../../application/reorder-menu-items.service';
+import { UpdateMenuService } from '../../application/update-menu.service';
 import { UpdateMenuCategoryService } from '../../application/update-menu-category.service';
 import { UpdateMenuItemService } from '../../application/update-menu-item.service';
 import { UpdateModifierGroupService } from '../../application/update-modifier-group.service';
@@ -58,6 +63,7 @@ import {
   CreateModifierGroupDto,
   CreateModifierOptionDto,
   CreatePreparationStationDto,
+  DuplicateMenuDto,
   ListMenusQueryDto,
   ListModifierGroupsQueryDto,
   ListPreparationStationsQueryDto,
@@ -72,6 +78,7 @@ import {
   ReorderMenuItemsDto,
   SetMenuItemModifierGroupsDto,
   UpdateMenuCategoryDto,
+  UpdateMenuDto,
   UpdateMenuItemDto,
   UpdateModifierGroupDto,
   UpdateModifierOptionDto,
@@ -110,6 +117,9 @@ export class MenusController {
     private readonly upsertMenuCategoryTranslationService: UpsertMenuCategoryTranslationService,
     private readonly upsertMenuItemTranslationService: UpsertMenuItemTranslationService,
     private readonly publishMenuService: PublishMenuService,
+    private readonly duplicateMenuService: DuplicateMenuService,
+    private readonly deleteMenuService: DeleteMenuService,
+    private readonly updateMenuService: UpdateMenuService,
   ) {}
 
   @Post('preparation-stations')
@@ -512,5 +522,49 @@ export class MenusController {
     @Param('menuId') menuId: string,
   ): Promise<MenuDetailResponseDto> {
     return this.publishMenuService.execute(authUser, menuId);
+  }
+
+  @Post(':menuId/duplicate')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Copia una carta (cualquier estado) a una nueva version draft con categorias, items, imagenes y traducciones.',
+  })
+  duplicateMenu(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('menuId') menuId: string,
+    @Body() dto: DuplicateMenuDto,
+  ): Promise<MenuDetailResponseDto> {
+    return this.duplicateMenuService.execute(authUser, menuId, dto);
+  }
+
+  @Patch(':menuId')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary: 'Renombra una carta (cualquier estado).',
+  })
+  updateMenu(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('menuId') menuId: string,
+    @Body() dto: UpdateMenuDto,
+  ): Promise<MenuListItemResponseDto> {
+    return this.updateMenuService.execute(authUser, menuId, dto);
+  }
+
+  @Delete(':menuId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Elimina una carta en estado draft con sus categorias, items, imagenes y traducciones.',
+  })
+  deleteMenu(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('menuId') menuId: string,
+  ): Promise<void> {
+    return this.deleteMenuService.execute(authUser, menuId);
   }
 }

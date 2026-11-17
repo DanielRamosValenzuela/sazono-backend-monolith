@@ -6,11 +6,15 @@ import {
   ReportsPrismaRepository,
   type PaymentReportRecord,
   type PaymentStatusTotalRecord,
-  type PaymentsReportFilter,
+  type PaymentsPageFilter,
 } from '../infrastructure/reports.prisma.repository';
 import type { CsvDownload } from './get-sales-by-order.service';
 import { csvStream, type CsvCell } from './report-csv';
-import { decodeCursor, encodeCursor } from './report-cursor';
+import {
+  decodeCursor,
+  encodeCursor,
+  type CursorValueKind,
+} from './report-cursor';
 import {
   ReportScopeService,
   type ReportScopeQuery,
@@ -25,13 +29,17 @@ import {
   UNCLASSIFIED_METHOD,
   type KeysetCursor,
   type MethodKey,
+  type PaymentsOrderBy,
   type ReportScope,
+  type SortDirection,
 } from './report-types';
 
 export type PaymentsReportQuery = ReportScopeQuery & {
   kind?: 'payment' | 'attempt' | 'all';
   provider?: string;
   paymentStatus?: string;
+  orderBy?: PaymentsOrderBy;
+  direction?: SortDirection;
   cursor?: string;
   limit?: number;
 };
@@ -79,6 +87,8 @@ export type PaymentsReportResponse = {
   to: string;
   timeZone: string;
   cashierId: string | null;
+  orderBy: PaymentsOrderBy;
+  direction: SortDirection;
   rows: PaymentsReportRow[];
   totals: {
     byStatus: PaymentsReportStatusTotal[];
@@ -87,6 +97,26 @@ export type PaymentsReportResponse = {
   nextCursor: string | null;
   limit: number;
 };
+
+const CURSOR_KINDS: Record<PaymentsOrderBy, CursorValueKind> = {
+  eventAt: 'timestamp',
+  amount: 'number',
+  tip: 'number',
+};
+
+function sortValueOf(
+  record: PaymentReportRecord,
+  orderBy: PaymentsOrderBy,
+): string {
+  switch (orderBy) {
+    case 'amount':
+      return new Prisma.Decimal(record.amount).toFixed(2);
+    case 'tip':
+      return new Prisma.Decimal(record.tip).toFixed(2);
+    default:
+      return record.event_at.toISOString();
+  }
+}
 
 const ZERO = new Prisma.Decimal(0);
 const money = (value: Prisma.Decimal.Value): string =>
@@ -257,7 +287,11 @@ export class GetPaymentsReportService {
     const limit = Math.min(query.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
 
     const [page, totalRecords] = await Promise.all([
-      this.loadPage(filter, decodeCursor(query.cursor), limit),
+      this.loadPage(
+        filter,
+        decodeCursor(query.cursor, CURSOR_KINDS[filter.orderBy]),
+        limit,
+      ),
       this.reportsRepository.findPaymentStatusTotals(filter),
     ]);
 
@@ -266,6 +300,8 @@ export class GetPaymentsReportService {
       to: scope.to,
       timeZone: scope.timeZone,
       cashierId: scope.cashierId,
+      orderBy: filter.orderBy,
+      direction: filter.direction,
       rows: page.rows,
       totals: buildPaymentsReportTotals(totalRecords),
       nextCursor: page.nextCursor,
@@ -293,7 +329,7 @@ export class GetPaymentsReportService {
   }
 
   private async *csvLines(
-    filter: PaymentsReportFilter,
+    filter: PaymentsPageFilter,
     timeZone: string,
   ): AsyncGenerator<CsvCell[]> {
     let cursor: KeysetCursor | null = null;
@@ -305,28 +341,35 @@ export class GetPaymentsReportService {
         yield paymentRowToCsv(row, timeZone);
       }
 
-      cursor = decodeCursor(page.nextCursor ?? undefined);
+      cursor = decodeCursor(
+        page.nextCursor ?? undefined,
+        CURSOR_KINDS[filter.orderBy],
+      );
     } while (cursor !== null);
   }
 
   private toFilter(
     scope: ReportScope,
     query: PaymentsReportQuery,
-  ): PaymentsReportFilter {
+  ): PaymentsPageFilter {
     return {
+      ...scope.filters,
       branchId: scope.branchId,
       start: scope.start,
       end: scope.end,
+      timeZone: scope.timeZone,
       cashierId: scope.cashierId,
       methods: scope.methods,
       kind: query.kind ?? 'all',
       provider: query.provider ?? null,
       status: query.paymentStatus ?? null,
+      orderBy: query.orderBy ?? 'eventAt',
+      direction: query.direction ?? 'desc',
     };
   }
 
   private async loadPage(
-    filter: PaymentsReportFilter,
+    filter: PaymentsPageFilter,
     cursor: KeysetCursor | null,
     limit: number,
   ): Promise<{ rows: PaymentsReportRow[]; nextCursor: string | null }> {
@@ -343,7 +386,10 @@ export class GetPaymentsReportService {
       rows: records.map(buildPaymentsReportRow),
       nextCursor:
         hasMore && last
-          ? encodeCursor({ at: last.event_at, id: last.id })
+          ? encodeCursor({
+              value: sortValueOf(last, filter.orderBy),
+              id: last.id,
+            })
           : null,
     };
   }

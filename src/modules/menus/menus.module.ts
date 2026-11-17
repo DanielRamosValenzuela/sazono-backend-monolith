@@ -8,6 +8,8 @@ import { CreateMenuService } from './application/create-menu.service';
 import { CreateModifierGroupService } from './application/create-modifier-group.service';
 import { CreateModifierOptionService } from './application/create-modifier-option.service';
 import { CreatePreparationStationService } from './application/create-preparation-station.service';
+import { DeleteMenuService } from './application/delete-menu.service';
+import { DuplicateMenuService } from './application/duplicate-menu.service';
 import { GetMenuDetailService } from './application/get-menu-detail.service';
 import { GetPublishedMenuByQrService } from './application/get-published-menu-by-qr.service';
 import { ListMenusService } from './application/list-menus.service';
@@ -19,6 +21,7 @@ import { RemoveMenuItemImageService } from './application/remove-menu-item-image
 import { ReorderMenuCategoriesService } from './application/reorder-menu-categories.service';
 import { ReorderMenuItemsService } from './application/reorder-menu-items.service';
 import { SetMenuItemModifierGroupsService } from './application/set-menu-item-modifier-groups.service';
+import { UpdateMenuService } from './application/update-menu.service';
 import { UpdateMenuCategoryService } from './application/update-menu-category.service';
 import { UpdateMenuItemService } from './application/update-menu-item.service';
 import { UpdateModifierGroupService } from './application/update-modifier-group.service';
@@ -61,6 +64,9 @@ import { QrMenuController } from './presentation/http/qr-menu.controller';
     UpsertMenuCategoryTranslationService,
     UpsertMenuItemTranslationService,
     PublishMenuService,
+    DuplicateMenuService,
+    DeleteMenuService,
+    UpdateMenuService,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],

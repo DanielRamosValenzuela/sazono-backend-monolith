@@ -32,7 +32,7 @@ Primer hito de la especificación de reportería (`docs/11-spec-reporteria-y-ree
 
 Cierre por comanda: una fila por cuenta con estado PAID cuya fecha de cierre cae en el rango y que tiene al menos un pago PAID que cumple los filtros. La fecha de cierre es `bills.closed_at`; si la cuenta está pagada pero la mesa aún no se cierra, se usa la fecha del último pago.
 
-Query: `from`, `to`, `cashierId`, `method`, `cursor`, `limit`, `format=json|csv`. Orden fijo: cierre descendente.
+Query: `from`, `to`, `cashierId`, `method`, `cursor`, `limit`, `format=json|csv`. Orden por defecto: cierre descendente. Desde el doc 30 acepta además filtros libres (mesero, mesa, zona, estado, rango de total, propina, origen, hora, día de la semana, búsqueda, producto y categoría) y `orderBy`/`direction`; también hay un endpoint de detalle de comanda y otro de opciones de filtro.
 
 Cada fila trae comanda (número de ticket de mostrador o últimos 6 caracteres del id), caja, mesa, zona, mesero, cajero, comensales, estado de pago (`Pagado` o `Mixto` si hay más de un medio), total, descuentos (0), a pagar, propina, cantidad de pagos, boleta (vacío), reembolsado (0) y `methods`: arreglo de 9 entradas fijas `{ method, amount }`, una por medio más `SIN_CLASIFICAR`. La columna "Caja" es el nombre de quien cobró, `QR/Online` para pagos web y `Sin asignar` para pagos históricos sin cajero.
 

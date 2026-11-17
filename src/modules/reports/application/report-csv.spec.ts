@@ -43,7 +43,7 @@ describe('report-csv', () => {
 describe('report-cursor', () => {
   it('round-trips a keyset cursor', () => {
     const cursor = {
-      at: new Date('2026-07-16T03:30:00.123Z'),
+      value: '2026-07-16T03:30:00.123Z',
       id: '11111111-1111-4111-8111-111111111111',
     };
 

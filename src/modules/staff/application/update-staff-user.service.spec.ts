@@ -61,8 +61,10 @@ describe('UpdateStaffUserService', () => {
   } as unknown as PrismaService;
 
   const getStaffContextMock = jest.fn();
+  const invalidateStaffMock = jest.fn().mockResolvedValue(undefined);
   const branchAccessService = {
     getStaffContext: getStaffContextMock,
+    invalidateStaff: invalidateStaffMock,
   } as unknown as BranchAccessService;
 
   const getUserByIdMock = jest.fn();
@@ -171,6 +173,7 @@ describe('UpdateStaffUserService', () => {
       },
     });
     expect(branchRoleUpsertMock).toHaveBeenCalledTimes(1);
+    expect(invalidateStaffMock).toHaveBeenCalledWith('staff-1');
     expect(result.email).toBe('ana@sazonodemo.cl');
     expect(result.firstName).toBe('Ana Maria');
     expect(result.branchRoles).toEqual([

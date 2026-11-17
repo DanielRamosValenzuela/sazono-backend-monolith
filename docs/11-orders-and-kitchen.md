@@ -54,6 +54,13 @@ Este slice conecta la carta publicada con la operacion real de la mesa:
 - al avanzar un ticket se sincronizan los `station_ticket_items` y los `order_items`
 - el estado comercial de la orden se recalcula desde sus tickets: todos listos -> `READY`, algunos listos -> `PARTIALLY_READY`, alguno en progreso -> `IN_PREPARATION`
 
+### Visibilidad en el tablero de cocina/barra
+
+- `GET` de tickets de estacion (`list-station-tickets.service.ts`) filtra en la query (WHERE), sin migracion: un ticket `READY` solo se ve hasta `KITCHEN_READY_VISIBLE_MINUTES` (por defecto 10, entero 1..1440) despues de `completedAt`, que se escribe al pasar a `READY`; despues desaparece solo (el tablero hace polling)
+- tickets no `READY` (pendientes, en progreso, cancelados) mas viejos que `KITCHEN_STALE_TICKET_HOURS` (por defecto 12, entero 1..720, medido desde `createdAt`) tambien se ocultan; siguen en la base de datos
+- ordenes `DELIVERED` o `CANCELLED` nunca aparecen; la entrega por pago completo no cambia
+- ambas variables son opcionales y se validan en `validate-environment.ts`
+
 ### Entrega y notificacion de "listo"
 
 - `POST /orders/:orderId/deliver` — marca la orden como `DELIVERED`. Roles permitidos: `ADMIN`, `SUPERVISOR`, `CASHIER`, `WAITER`, `KITCHEN` (`deliver-order.service.ts`; `WAITER`/`KITCHEN` se agregaron en la ronda de doc 17, antes solo administracion/caja podian marcar entrega)

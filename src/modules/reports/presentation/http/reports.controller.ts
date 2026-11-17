@@ -16,6 +16,14 @@ import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
 import {
+  GetFilterOptionsService,
+  type FilterOptionsResponse,
+} from '../../application/get-filter-options.service';
+import {
+  GetOrderDetailService,
+  type OrderDetailResponse,
+} from '../../application/get-order-detail.service';
+import {
   GetPaymentsReportService,
   type PaymentsReportResponse,
 } from '../../application/get-payments-report.service';
@@ -30,8 +38,8 @@ import {
 } from '../../application/get-sales-by-order.service';
 import {
   PaymentsReportQueryDto,
-  ReportRangeQueryDto,
   SalesByHierarchyQueryDto,
+  SalesByOrderQueryDto,
 } from './dto/reports.dto';
 
 function toCsvFile(download: CsvDownload): StreamableFile {
@@ -49,6 +57,8 @@ export class ReportsController {
     private readonly getSalesByOrderService: GetSalesByOrderService,
     private readonly getPaymentsReportService: GetPaymentsReportService,
     private readonly getSalesByHierarchyService: GetSalesByHierarchyService,
+    private readonly getOrderDetailService: GetOrderDetailService,
+    private readonly getFilterOptionsService: GetFilterOptionsService,
   ) {}
 
   @Get('branches/:branchId/sales-by-order')
@@ -61,7 +71,7 @@ export class ReportsController {
   async getSalesByOrder(
     @CurrentAuthUser() authUser: JwtPayload,
     @Param('branchId', ParseUUIDPipe) branchId: string,
-    @Query() query: ReportRangeQueryDto,
+    @Query() query: SalesByOrderQueryDto,
   ): Promise<SalesByOrderResponse | StreamableFile> {
     if (query.format === 'csv') {
       return toCsvFile(
@@ -120,5 +130,34 @@ export class ReportsController {
     }
 
     return this.getPaymentsReportService.execute(authUser, branchId, query);
+  }
+
+  @Get('branches/:branchId/orders/:billId/detail')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Detalle completo de una comanda: cabecera, productos con modificadores y notas, pagos, propinas, conciliacion y banderas de auditoria. ADMIN y SUPERVISOR ven cualquier comanda de la sucursal; CASHIER solo si cobro un pago de esa comanda hoy.',
+  })
+  getOrderDetail(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Param('billId', ParseUUIDPipe) billId: string,
+  ): Promise<OrderDetailResponse> {
+    return this.getOrderDetailService.execute(authUser, branchId, billId);
+  }
+
+  @Get('branches/:branchId/filter-options')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Opciones para construir los filtros de los reportes en una sola llamada: personal, mesas, zonas, medios de pago en uso, categorias y productos vendidos en los ultimos 90 dias. CASHIER solo ve su propio usuario en el personal.',
+  })
+  getFilterOptions(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+  ): Promise<FilterOptionsResponse> {
+    return this.getFilterOptionsService.execute(authUser, branchId);
   }
 }

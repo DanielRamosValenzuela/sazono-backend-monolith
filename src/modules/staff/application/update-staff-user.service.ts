@@ -195,6 +195,8 @@ export class UpdateStaffUserService {
       });
     });
 
+    await this.branchAccessService.invalidateStaff(targetStaffUser.id);
+
     const identity = await this.authProvider.getUserById(
       updatedStaffUser.authUserId,
     );

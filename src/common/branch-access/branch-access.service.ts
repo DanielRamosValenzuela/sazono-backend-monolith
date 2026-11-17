@@ -1,5 +1,7 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { BranchRoleStatus, Role, StaffUserStatus } from '@prisma/client';
+import { CACHE_STORE } from '../cache/cache-store';
+import type { CacheStore } from '../cache/cache-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginProfileType } from '../../modules/auth/dto/login.dto';
 import type { JwtPayload } from '../../modules/auth/interfaces/jwt-payload.interface';
@@ -18,79 +20,47 @@ export type StaffContext = {
   adminBranchIds: Set<string>;
 };
 
+type CachedStaffAccess = {
+  staffUserId: string;
+  restaurantId: string;
+  branchRoles: Array<{ branchId: string; role: Role }>;
+};
+
+export const STAFF_ACCESS_CACHE_TTL_MS = 20_000;
+
+const staffAccessCacheKey = (staffUserId: string) =>
+  `staff-access:${staffUserId}`;
+
 @Injectable()
 export class BranchAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CACHE_STORE) private readonly cache: CacheStore,
+  ) {}
 
-  async ensureAccess(
-    authUser: JwtPayload,
-    branchId: string,
-    allowedRoles: Role[],
-  ): Promise<BranchAccessContext> {
-    if (
-      authUser.profileType !== LoginProfileType.STAFF ||
-      !authUser.restaurantId
-    ) {
-      throw new ForbiddenException(
-        'Solo un staff autenticado puede operar sobre esta sucursal.',
-      );
-    }
-
-    const staffUser = await this.prisma.staffUser.findFirst({
-      where: {
-        id: authUser.profileId,
-        restaurantId: authUser.restaurantId,
-        status: StaffUserStatus.ACTIVE,
-      },
-      include: {
-        branchRoles: {
-          where: {
-            branchId,
-            status: BranchRoleStatus.ACTIVE,
-          },
-          select: {
-            role: true,
-          },
-        },
-      },
-    });
-
-    if (!staffUser) {
-      throw new ForbiddenException(
-        'El perfil staff autenticado no esta disponible para este restaurante.',
-      );
-    }
-
-    const roles = staffUser.branchRoles.map((branchRole) => branchRole.role);
-
-    if (!roles.some((role) => allowedRoles.includes(role))) {
-      throw new ForbiddenException(
-        'No tienes permisos suficientes sobre esta sucursal.',
-      );
-    }
-
-    return {
-      staffUserId: staffUser.id,
-      restaurantId: staffUser.restaurantId,
-      branchId,
-      roles,
-    };
+  invalidateStaff(staffUserId: string): Promise<void> {
+    return this.cache.delete(staffAccessCacheKey(staffUserId));
   }
 
-  async getStaffContext(authUser: JwtPayload): Promise<StaffContext> {
-    if (
-      authUser.profileType !== LoginProfileType.STAFF ||
-      !authUser.restaurantId
-    ) {
-      throw new ForbiddenException(
-        'Solo un staff autenticado puede realizar esta accion.',
-      );
+  private async findActiveStaffAccess(
+    staffUserId: string,
+    restaurantId: string,
+    skipCache: boolean,
+  ): Promise<{ access: CachedStaffAccess | null; fromCache: boolean }> {
+    const key = staffAccessCacheKey(staffUserId);
+
+    if (!skipCache) {
+      const cached = await this.cache.get<CachedStaffAccess>(key);
+
+      if (cached && cached.restaurantId === restaurantId) {
+        return { access: cached, fromCache: true };
+      }
     }
 
     const staffUser = await this.prisma.staffUser.findFirst({
       where: {
-        id: authUser.profileId,
-        restaurantId: authUser.restaurantId,
+        id: staffUserId,
+        restaurantId,
         status: StaffUserStatus.ACTIVE,
       },
       include: {
@@ -107,23 +77,116 @@ export class BranchAccessService {
     });
 
     if (!staffUser) {
+      await this.cache.delete(key);
+      return { access: null, fromCache: false };
+    }
+
+    const access: CachedStaffAccess = {
+      staffUserId: staffUser.id,
+      restaurantId: staffUser.restaurantId,
+      branchRoles: staffUser.branchRoles,
+    };
+
+    await this.cache.set(key, access, STAFF_ACCESS_CACHE_TTL_MS);
+
+    return { access, fromCache: false };
+  }
+
+  async ensureAccess(
+    authUser: JwtPayload,
+    branchId: string,
+    allowedRoles: Role[],
+  ): Promise<BranchAccessContext> {
+    if (
+      authUser.profileType !== LoginProfileType.STAFF ||
+      !authUser.restaurantId
+    ) {
+      throw new ForbiddenException(
+        'Solo un staff autenticado puede operar sobre esta sucursal.',
+      );
+    }
+
+    const rolesOnBranch = (access: CachedStaffAccess | null) =>
+      (access?.branchRoles ?? [])
+        .filter((branchRole) => branchRole.branchId === branchId)
+        .map((branchRole) => branchRole.role);
+
+    const firstLookup = await this.findActiveStaffAccess(
+      authUser.profileId,
+      authUser.restaurantId,
+      false,
+    );
+    let staffUser = firstLookup.access;
+    let roles = rolesOnBranch(staffUser);
+
+    if (
+      firstLookup.fromCache &&
+      !roles.some((role) => allowedRoles.includes(role))
+    ) {
+      staffUser = (
+        await this.findActiveStaffAccess(
+          authUser.profileId,
+          authUser.restaurantId,
+          true,
+        )
+      ).access;
+      roles = rolesOnBranch(staffUser);
+    }
+
+    if (!staffUser) {
+      throw new ForbiddenException(
+        'El perfil staff autenticado no esta disponible para este restaurante.',
+      );
+    }
+
+    if (!roles.some((role) => allowedRoles.includes(role))) {
+      throw new ForbiddenException(
+        'No tienes permisos suficientes sobre esta sucursal.',
+      );
+    }
+
+    return {
+      staffUserId: staffUser.staffUserId,
+      restaurantId: staffUser.restaurantId,
+      branchId,
+      roles,
+    };
+  }
+
+  async getStaffContext(authUser: JwtPayload): Promise<StaffContext> {
+    if (
+      authUser.profileType !== LoginProfileType.STAFF ||
+      !authUser.restaurantId
+    ) {
+      throw new ForbiddenException(
+        'Solo un staff autenticado puede realizar esta accion.',
+      );
+    }
+
+    const { access } = await this.findActiveStaffAccess(
+      authUser.profileId,
+      authUser.restaurantId,
+      false,
+    );
+
+    if (!access) {
       throw new ForbiddenException(
         'El perfil staff autenticado no esta disponible para este restaurante.',
       );
     }
 
     const memberBranchIds = new Set(
-      staffUser.branchRoles.map((branchRole) => branchRole.branchId),
+      access.branchRoles.map((branchRole) => branchRole.branchId),
     );
     const adminBranchIds = new Set(
-      staffUser.branchRoles
+      access.branchRoles
         .filter((branchRole) => branchRole.role === Role.ADMIN)
         .map((branchRole) => branchRole.branchId),
     );
 
     return {
-      staffUserId: staffUser.id,
-      restaurantId: staffUser.restaurantId,
+      staffUserId: access.staffUserId,
+      restaurantId: access.restaurantId,
       memberBranchIds,
       adminBranchIds,
     };

@@ -334,3 +334,127 @@ describe('AuthService.setPin', () => {
     expect(bcrypt.compareSync('1234', updateArgs.data.pinHash)).toBe(true);
   });
 });
+
+describe('AuthService concurrent lookups', () => {
+  const signInWithPasswordMock = jest.fn();
+  const getUserByIdMock = jest.fn();
+  const authProvider = {
+    signInWithPassword: signInWithPasswordMock,
+    getUserById: getUserByIdMock,
+  } as unknown as AuthProvider;
+
+  const restaurantFindUniqueMock = jest.fn();
+  const platformAdminFindManyMock = jest.fn();
+  const staffUserFindManyMock = jest.fn();
+
+  const prisma = {
+    restaurant: { findUnique: restaurantFindUniqueMock },
+    platformAdmin: { findMany: platformAdminFindManyMock },
+    staffUser: { findMany: staffUserFindManyMock },
+  } as unknown as PrismaService;
+
+  const jwtService = {
+    signAsync: jest.fn().mockResolvedValue('signed-jwt'),
+    decode: jest.fn().mockReturnValue({ exp: 1_784_019_600 }),
+  } as unknown as JwtService;
+  const configService = {
+    get: jest.fn().mockReturnValue('8h'),
+  } as unknown as ConfigService;
+
+  const staffUser = {
+    id: 'staff-1',
+    authUserId: 'auth-1',
+    restaurantId: 'restaurant-1',
+    firstName: 'Ana',
+    lastName: 'Diaz',
+    status: StaffUserStatus.ACTIVE,
+    branchRoles: [],
+  };
+
+  let service: AuthService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    platformAdminFindManyMock.mockResolvedValue([]);
+    staffUserFindManyMock.mockResolvedValue([staffUser]);
+    service = new AuthService(prisma, authProvider, jwtService, configService);
+  });
+
+  it('looks up the restaurant slug while the sign in is still pending', async () => {
+    let resolveSignIn: (value: unknown) => void = () => undefined;
+    signInWithPasswordMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSignIn = resolve;
+      }),
+    );
+    restaurantFindUniqueMock.mockResolvedValue({ id: 'restaurant-1' });
+
+    const pending = service.login({
+      email: 'ana@resto.cl',
+      password: 'Password123!',
+      restaurantSlug: 'resto',
+      profileType: LoginProfileType.STAFF,
+    });
+
+    await Promise.resolve();
+    expect(restaurantFindUniqueMock).toHaveBeenCalledTimes(1);
+
+    resolveSignIn({ authUserId: 'auth-1', email: 'ana@resto.cl' });
+    const result = await pending;
+
+    expect(result.user.profileId).toBe('staff-1');
+  });
+
+  it('rejects invalid credentials even when the slug lookup succeeds', async () => {
+    signInWithPasswordMock.mockResolvedValue(null);
+    restaurantFindUniqueMock.mockResolvedValue({ id: 'restaurant-1' });
+
+    await expect(
+      service.login({
+        email: 'ana@resto.cl',
+        password: 'bad',
+        restaurantSlug: 'resto',
+        profileType: LoginProfileType.STAFF,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('loads the profile records while the identity lookup is pending', async () => {
+    let resolveIdentity: (value: unknown) => void = () => undefined;
+    getUserByIdMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveIdentity = resolve;
+      }),
+    );
+
+    const pending = service.getCurrentUser({
+      sub: 'auth-1',
+      profileType: LoginProfileType.STAFF,
+      profileId: 'staff-1',
+      restaurantId: 'restaurant-1',
+    });
+
+    await Promise.resolve();
+    expect(staffUserFindManyMock).toHaveBeenCalledTimes(1);
+    expect(platformAdminFindManyMock).toHaveBeenCalledTimes(1);
+
+    resolveIdentity({ authUserId: 'auth-1', email: 'ana@resto.cl' });
+    const profile = await pending;
+
+    expect(profile.email).toBe('ana@resto.cl');
+    expect(profile.profileId).toBe('staff-1');
+  });
+
+  it('rejects the session when the identity no longer exists', async () => {
+    getUserByIdMock.mockResolvedValue(null);
+
+    await expect(
+      service.getCurrentUser({
+        sub: 'auth-1',
+        profileType: LoginProfileType.STAFF,
+        profileId: 'staff-1',
+        restaurantId: 'restaurant-1',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});

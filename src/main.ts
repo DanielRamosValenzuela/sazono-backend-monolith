@@ -1,5 +1,7 @@
 import 'dotenv/config';
 
+import type { Server } from 'node:http';
+
 import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -7,6 +9,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { startTelemetry } from './common/observability/tracing';
+
+const KEEP_ALIVE_TIMEOUT_MS = 65_000;
 
 async function bootstrap() {
   startTelemetry();
@@ -75,6 +79,11 @@ async function bootstrap() {
   }
 
   await app.listen(port);
+
+  const httpServer = app.getHttpServer() as Server;
+  httpServer.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS;
+  httpServer.headersTimeout = KEEP_ALIVE_TIMEOUT_MS + 1000;
+
   Logger.log(`HTTP server listening on port ${port}`, 'Bootstrap');
 }
 void bootstrap();

@@ -1,16 +1,28 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
-import type { PrismaService } from '../../../common/prisma/prisma.service';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { ReportsPrismaRepository } from '../infrastructure/reports.prisma.repository';
 import { ReportScopeService } from './report-scope.service';
 
 describe('ReportScopeService', () => {
-  const staffFindFirstMock = jest.fn();
-  const branchAccessService = new BranchAccessService({
-    staffUser: { findFirst: staffFindFirstMock },
-  } as unknown as PrismaService);
+  let currentRoles: Role[] = [];
+  const branchAccessService = {
+    ensureAccess: jest.fn(
+      (_authUser: unknown, _branchId: string, allowed: Role[]) => {
+        if (!currentRoles.some((role) => allowed.includes(role))) {
+          return Promise.reject(new ForbiddenException());
+        }
+
+        return Promise.resolve({
+          staffUserId: 'staff-1',
+          restaurantId: 'restaurant-1',
+          branchId: 'branch-1',
+          roles: currentRoles,
+        });
+      },
+    ),
+  } as unknown as BranchAccessService;
   const findBranchTimezoneMock = jest.fn();
   const service = new ReportScopeService(branchAccessService, {
     findBranchTimezone: findBranchTimezoneMock,
@@ -24,11 +36,7 @@ describe('ReportScopeService', () => {
   const html = { forCsv: false };
 
   function mockRoles(...roles: Role[]) {
-    staffFindFirstMock.mockResolvedValue({
-      id: 'staff-1',
-      restaurantId: 'restaurant-1',
-      branchRoles: roles.map((role) => ({ role })),
-    });
+    currentRoles = roles;
   }
 
   beforeEach(() => {

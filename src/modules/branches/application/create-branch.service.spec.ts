@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { Role, StaffUserStatus } from '@prisma/client';
+import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateBranchService } from './create-branch.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
@@ -59,11 +60,16 @@ describe('CreateBranchService', () => {
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
+  const invalidateStaffMock = jest.fn().mockResolvedValue(undefined);
+  const branchAccessService = {
+    invalidateStaff: invalidateStaffMock,
+  } as unknown as BranchAccessService;
+
   let service: CreateBranchService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CreateBranchService(prisma);
+    service = new CreateBranchService(prisma, branchAccessService);
   });
 
   it('creates a branch and assigns admin role during bootstrap state', async () => {
@@ -124,6 +130,7 @@ describe('CreateBranchService', () => {
 
     expect(result.branchId).toBe('branch-1');
     expect(result.assignedRole).toBe(Role.ADMIN);
+    expect(invalidateStaffMock).toHaveBeenCalledWith('staff-1');
   });
 
   it('rejects a staff user without admin rights when branch roles already exist', async () => {

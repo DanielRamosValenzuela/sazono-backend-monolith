@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  Max,
   IsString,
   Min,
   validateSync,
@@ -252,6 +253,18 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   TRANSBANK_RECONCILIATION_MIN_AGE_MINUTES = 10;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  KITCHEN_READY_VISIBLE_MINUTES = 10;
+
+  @Transform(({ value }) => toNumber(value, 12))
+  @IsInt()
+  @Min(1)
+  @Max(720)
+  KITCHEN_STALE_TICKET_HOURS = 12;
 }
 
 const MERCADOPAGO_REQUIRED_VARIABLE_NAMES: Array<keyof EnvironmentVariables> = [

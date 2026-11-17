@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
+import { EMPTY_FILTERS } from '../application/report-types';
 import { ReportsPrismaRepository } from './reports.prisma.repository';
 
 describe('ReportsPrismaRepository.findHierarchyLines', () => {
@@ -13,9 +14,13 @@ describe('ReportsPrismaRepository.findHierarchyLines', () => {
   async function run(includeModifiers: boolean): Promise<Prisma.Sql> {
     queryRawMock.mockResolvedValue([]);
     await repository.findHierarchyLines({
+      ...EMPTY_FILTERS,
       branchId: '11111111-1111-4111-8111-111111111111',
       start,
       end,
+      timeZone: 'America/Santiago',
+      cashierId: null,
+      methods: [],
       includeModifiers,
     });
 

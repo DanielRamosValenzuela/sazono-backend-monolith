@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { BranchRoleStatus, Role, StaffUserStatus } from '@prisma/client';
+import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
@@ -10,7 +11,10 @@ import type {
 
 @Injectable()
 export class CreateBranchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly branchAccessService: BranchAccessService,
+  ) {}
 
   async execute(
     authUser: JwtPayload,
@@ -117,6 +121,8 @@ export class CreateBranchService {
 
       return createdBranch;
     });
+
+    await this.branchAccessService.invalidateStaff(staffUser.id);
 
     return {
       branchId: branch.id,

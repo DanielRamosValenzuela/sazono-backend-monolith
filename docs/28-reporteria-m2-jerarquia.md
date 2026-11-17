@@ -46,7 +46,7 @@ Sí. El resolvedor guarda `priceSnapshot = menuItem.price + suma(priceDelta de l
 
 ## Pendiente fuera de M2
 
-Reembolsos y descuentos (la jerarquía no resta nada), parámetro `depth` para devolver el árbol completo en una llamada, editor de árbol en Menu Studio y pestaña Jerarquía en la UI (trabajo del frontend), y filtrar por cajero o medio de pago.
+Reembolsos y descuentos (la jerarquía no resta nada), parámetro `depth` para devolver el árbol completo en una llamada, editor de árbol en Menu Studio y pestaña Jerarquía en la UI (trabajo del frontend), y (resuelto en el doc 30) filtrar por cajero, mesero, medio, origen, zona, mesa, hora y día. Con filtros a nivel de pago la jerarquía cuenta la cuenta completa si alguno de sus pagos cumple; ver el doc 30 para el detalle de la cuadratura.
 
 ## SQL no ejecutado
 

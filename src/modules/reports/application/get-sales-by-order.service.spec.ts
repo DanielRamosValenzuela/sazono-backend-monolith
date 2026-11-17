@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type {
+  BillPageRecord,
   BillPaymentRecord,
   BillRowRecord,
   MethodTotalRecord,
@@ -14,7 +15,7 @@ import {
 } from './get-sales-by-order.service';
 import { decodeCursor } from './report-cursor';
 import type { ReportScopeService } from './report-scope.service';
-import type { ReportScope } from './report-types';
+import { EMPTY_FILTERS, type ReportScope } from './report-types';
 
 const BOM = String.fromCharCode(0xfeff);
 
@@ -35,6 +36,7 @@ const scope: ReportScope = {
   cashierId: null,
   methods: [],
   cashierScoped: false,
+  filters: EMPTY_FILTERS,
 };
 
 const BILL_A = '11111111-1111-4111-8111-111111111111';
@@ -208,18 +210,40 @@ describe('buildSalesByOrderTotals', () => {
   });
 });
 
+function page(
+  id: string,
+  closedAt: string,
+  payments: BillPaymentRecord[],
+  extra: Partial<BillRowRecord> = {},
+): BillPageRecord {
+  const base = bill(id, closedAt, extra);
+  const total = payments.reduce(
+    (sum, entry) =>
+      sum.add(new Prisma.Decimal(entry.amount).sub(entry.tip_amount)),
+    new Prisma.Decimal(0),
+  );
+  const tip = payments.reduce(
+    (sum, entry) => sum.add(entry.tip_amount),
+    new Prisma.Decimal(0),
+  );
+
+  return {
+    ...base,
+    bill_total: total,
+    bill_tip: tip,
+    order_key: id.slice(-6).toUpperCase(),
+    payments,
+  };
+}
+
 describe('GetSalesByOrderService', () => {
   const resolveMock = jest.fn();
   const findBillPageMock = jest.fn();
-  const findPaymentsForBillsMock = jest.fn();
-  const countBillsMock = jest.fn();
   const findMethodTotalsMock = jest.fn();
   const service = new GetSalesByOrderService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findBillPage: findBillPageMock,
-      findPaymentsForBills: findPaymentsForBillsMock,
-      countBills: countBillsMock,
       findMethodTotals: findMethodTotalsMock,
     } as unknown as ReportsPrismaRepository,
   );
@@ -227,23 +251,28 @@ describe('GetSalesByOrderService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resolveMock.mockResolvedValue(scope);
-    countBillsMock.mockResolvedValue(3);
     findMethodTotalsMock.mockResolvedValue([
-      { method: 'CASH', payments: 2, consumption: 12000, tip: 1000 },
-      { method: 'CREDIT_CARD', payments: 1, consumption: 5000, tip: 0 },
+      { method: 'CASH', payments: 2, consumption: 12000, tip: 1000, bills: 3 },
+      {
+        method: 'CREDIT_CARD',
+        payments: 1,
+        consumption: 5000,
+        tip: 0,
+        bills: 3,
+      },
     ]);
   });
 
   it('returns rows, whole-filter totals and a keyset cursor when there are more rows', async () => {
     findBillPageMock.mockResolvedValue([
-      bill(BILL_A, '2026-07-16T03:30:00.000Z'),
-      bill(BILL_B, '2026-07-15T20:00:00.000Z'),
-      bill(BILL_C, '2026-07-15T18:00:00.000Z'),
-    ]);
-    findPaymentsForBillsMock.mockResolvedValue([
-      payment('p1', BILL_A, 11000, 1000, 'CASH'),
-      payment('p2', BILL_B, 1000, 0, 'CASH'),
-      payment('p3', BILL_B, 5000, 0, 'CREDIT_CARD'),
+      page(BILL_A, '2026-07-16T03:30:00.000Z', [
+        payment('p1', BILL_A, 11000, 1000, 'CASH'),
+      ]),
+      page(BILL_B, '2026-07-15T20:00:00.000Z', [
+        payment('p2', BILL_B, 1000, 0, 'CASH'),
+        payment('p3', BILL_B, 5000, 0, 'CREDIT_CARD'),
+      ]),
+      page(BILL_C, '2026-07-15T18:00:00.000Z', []),
     ]);
 
     const result = await service.execute(authUser, 'branch-1', {
@@ -257,30 +286,32 @@ describe('GetSalesByOrderService', () => {
         branchId: 'branch-1',
         start: scope.start,
         end: scope.end,
+        timeZone: 'America/Santiago',
+        orderBy: 'closedAt',
+        direction: 'desc',
       }),
       null,
       3,
     );
     expect(result.rows.map((row) => row.billId)).toEqual([BILL_A, BILL_B]);
+    expect(result.rows[1].paymentStatus).toBe('Mixto');
     expect(decodeCursor(result.nextCursor ?? undefined)).toEqual({
-      at: new Date('2026-07-15T20:00:00.000Z'),
+      value: '2026-07-15T20:00:00.000Z',
       id: BILL_B,
     });
+    expect(result.totals.bills).toBe(3);
     expect(result.totals.total).toBe('17000');
     expect(result.totals.tip).toBe('1000');
     expect(result.limit).toBe(2);
-    expect(findPaymentsForBillsMock).toHaveBeenCalledWith(
-      [BILL_A, BILL_B],
-      expect.anything(),
-    );
+    expect(result.orderBy).toBe('closedAt');
+    expect(result.direction).toBe('desc');
   });
 
   it('returns no cursor on the last page and caps the limit at 200', async () => {
     findBillPageMock.mockResolvedValue([
-      bill(BILL_A, '2026-07-15T18:00:00.000Z'),
-    ]);
-    findPaymentsForBillsMock.mockResolvedValue([
-      payment('p1', BILL_A, 1000, 0, 'CASH'),
+      page(BILL_A, '2026-07-15T18:00:00.000Z', [
+        payment('p1', BILL_A, 1000, 0, 'CASH'),
+      ]),
     ]);
 
     const result = await service.execute(authUser, 'branch-1', {
@@ -292,14 +323,26 @@ describe('GetSalesByOrderService', () => {
     expect(findBillPageMock.mock.calls[0][2]).toBe(201);
   });
 
+  it('reports zero bills when no method group comes back', async () => {
+    findBillPageMock.mockResolvedValue([]);
+    findMethodTotalsMock.mockResolvedValue([]);
+
+    const result = await service.execute(authUser, 'branch-1', {});
+
+    expect(result.totals.bills).toBe(0);
+    expect(result.totals.total).toBe('0');
+  });
+
   it('passes the decoded cursor to the repository', async () => {
     findBillPageMock.mockResolvedValue([]);
-    findPaymentsForBillsMock.mockResolvedValue([]);
-    const firstPage = [
-      bill(BILL_A, '2026-07-16T03:30:00.000Z'),
-      bill(BILL_B, '2026-07-15T20:00:00.000Z'),
-    ];
-    findBillPageMock.mockResolvedValueOnce(firstPage);
+    findBillPageMock.mockResolvedValueOnce([
+      page(BILL_A, '2026-07-16T03:30:00.000Z', [
+        payment('p1', BILL_A, 1000, 0, 'CASH'),
+      ]),
+      page(BILL_B, '2026-07-15T20:00:00.000Z', [
+        payment('p2', BILL_B, 1000, 0, 'CASH'),
+      ]),
+    ]);
 
     const first = await service.execute(authUser, 'branch-1', { limit: 1 });
     await service.execute(authUser, 'branch-1', {
@@ -308,25 +351,159 @@ describe('GetSalesByOrderService', () => {
     });
 
     expect(findBillPageMock.mock.calls[1][1]).toEqual({
-      at: new Date('2026-07-16T03:30:00.000Z'),
+      value: '2026-07-16T03:30:00.000Z',
       id: BILL_A,
     });
   });
 
-  it('keeps the invariant: sum of method columns across rows equals the totals row', async () => {
-    const rowsPayments = [
-      payment('p1', BILL_A, 11000, 1000, 'CASH'),
-      payment('p2', BILL_B, 1000, 0, 'CASH'),
-      payment('p3', BILL_B, 4000, 0, 'CREDIT_CARD'),
+  describe('ordering and cursors', () => {
+    const rows = [
+      page(BILL_A, '2026-07-16T03:30:00.000Z', [
+        payment('p1', BILL_A, 11000, 1000, 'CASH'),
+      ]),
+      page(BILL_B, '2026-07-15T20:00:00.000Z', [
+        payment('p2', BILL_B, 5000, 0, 'CASH'),
+      ]),
     ];
+
+    it.each([
+      ['closedAt', '2026-07-16T03:30:00.000Z'],
+      ['total', '10000.00'],
+      ['tip', '1000.00'],
+      ['orderNumber', '111111'],
+    ] as const)(
+      'builds the cursor of a %s ordering from the last row and decodes it back',
+      async (orderBy, expected) => {
+        findBillPageMock.mockResolvedValue(rows);
+
+        const first = await service.execute(authUser, 'branch-1', {
+          orderBy,
+          direction: 'asc',
+          limit: 1,
+        });
+        const kind =
+          orderBy === 'closedAt'
+            ? 'timestamp'
+            : orderBy === 'orderNumber'
+              ? 'text'
+              : 'number';
+
+        expect(findBillPageMock.mock.calls[0][0]).toMatchObject({
+          orderBy,
+          direction: 'asc',
+        });
+        expect(decodeCursor(first.nextCursor ?? undefined, kind)).toEqual({
+          value: expected,
+          id: BILL_A,
+        });
+
+        await service.execute(authUser, 'branch-1', {
+          orderBy,
+          direction: 'asc',
+          limit: 1,
+          cursor: first.nextCursor ?? undefined,
+        });
+
+        expect(findBillPageMock.mock.calls[1][1]).toEqual({
+          value: expected,
+          id: BILL_A,
+        });
+      },
+    );
+
+    it.each([
+      ['total', '2026-07-16T03:30:00.000Z'],
+      ['orderNumber', '10000.50'],
+      ['closedAt', 'ABC123'],
+    ] as const)(
+      'rejects a cursor whose value does not fit the %s ordering',
+      async (orderBy, value) => {
+        const cursor = Buffer.from(`${value}|${BILL_A}`).toString('base64url');
+
+        await expect(
+          service.execute(authUser, 'branch-1', { orderBy, cursor }),
+        ).rejects.toThrow('cursor');
+      },
+    );
+  });
+
+  it('maps minTotal and maxTotal to the shared amount filter and forwards every new filter through the scope', async () => {
+    findBillPageMock.mockResolvedValue([]);
+
+    await service.execute(authUser, 'branch-1', {
+      minTotal: 1000,
+      maxTotal: 9000,
+      waiterId: BILL_A,
+      q: 'caro',
+      status: 'MIXED',
+    });
+
+    expect(resolveMock).toHaveBeenCalledWith(
+      authUser,
+      'branch-1',
+      expect.objectContaining({
+        minAmount: 1000,
+        maxAmount: 9000,
+        waiterId: BILL_A,
+        q: 'caro',
+        status: 'MIXED',
+      }),
+      { forCsv: false },
+    );
+  });
+
+  it('applies the very same filter to the page, the totals and the CSV', async () => {
+    const filters = {
+      ...EMPTY_FILTERS,
+      waiterId: BILL_A,
+      sources: ['WEB_QR' as const],
+      q: 'ana',
+    };
+
+    resolveMock.mockResolvedValue({ ...scope, filters });
+    findBillPageMock.mockResolvedValue([]);
+
+    await service.execute(authUser, 'branch-1', {});
+    const download = await service.executeCsv(authUser, 'branch-1', {});
+
+    for await (const chunk of download.stream) {
+      void chunk;
+    }
+
+    const pageFilter = findBillPageMock.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+
+    expect(pageFilter).toMatchObject({
+      waiterId: BILL_A,
+      sources: ['WEB_QR'],
+      q: 'ana',
+    });
+    expect(findMethodTotalsMock.mock.calls[0][0]).toEqual(pageFilter);
+    expect(findBillPageMock.mock.calls[1][0]).toEqual(pageFilter);
+    expect(findMethodTotalsMock.mock.calls[1][0]).toEqual(pageFilter);
+  });
+
+  it('keeps the invariant: sum of method columns across rows equals the totals row', async () => {
     findBillPageMock.mockResolvedValue([
-      bill(BILL_A, '2026-07-16T03:30:00.000Z'),
-      bill(BILL_B, '2026-07-15T20:00:00.000Z'),
+      page(BILL_A, '2026-07-16T03:30:00.000Z', [
+        payment('p1', BILL_A, 11000, 1000, 'CASH'),
+      ]),
+      page(BILL_B, '2026-07-15T20:00:00.000Z', [
+        payment('p2', BILL_B, 1000, 0, 'CASH'),
+        payment('p3', BILL_B, 4000, 0, 'CREDIT_CARD'),
+      ]),
     ]);
-    findPaymentsForBillsMock.mockResolvedValue(rowsPayments);
     findMethodTotalsMock.mockResolvedValue([
-      { method: 'CASH', payments: 2, consumption: 11000, tip: 1000 },
-      { method: 'CREDIT_CARD', payments: 1, consumption: 4000, tip: 0 },
+      { method: 'CASH', payments: 2, consumption: 11000, tip: 1000, bills: 2 },
+      {
+        method: 'CREDIT_CARD',
+        payments: 1,
+        consumption: 4000,
+        tip: 0,
+        bills: 2,
+      },
     ]);
 
     const result = await service.execute(authUser, 'branch-1', {});
@@ -354,10 +531,12 @@ describe('GetSalesByOrderService', () => {
 
   it('streams a CSV with BOM, ; separator, Spanish headers, dd-MM-yyyy HH:mm dates and a TOTAL row', async () => {
     findBillPageMock.mockResolvedValueOnce([
-      bill(BILL_A, '2026-07-16T03:30:00.000Z', { waiter_name: '=Peligro' }),
-    ]);
-    findPaymentsForBillsMock.mockResolvedValue([
-      payment('p1', BILL_A, 11000, 1000, 'CASH'),
+      page(
+        BILL_A,
+        '2026-07-16T03:30:00.000Z',
+        [payment('p1', BILL_A, 11000, 1000, 'CASH')],
+        { waiter_name: '=Peligro' },
+      ),
     ]);
 
     const download = await service.executeCsv(authUser, 'branch-1', {
@@ -398,5 +577,28 @@ describe('GetSalesByOrderService', () => {
     expect(lines[0].split(';')).toHaveLength(
       lines[lines.length - 1].split(';').length,
     );
+  });
+
+  it('streams the CSV with the requested ordering and a full batch size', async () => {
+    findBillPageMock.mockResolvedValueOnce([
+      page(BILL_A, '2026-07-16T03:30:00.000Z', [
+        payment('p1', BILL_A, 3000, 0, 'CASH'),
+      ]),
+    ]);
+
+    const download = await service.executeCsv(authUser, 'branch-1', {
+      orderBy: 'total',
+      direction: 'asc',
+    });
+
+    for await (const chunk of download.stream) {
+      void chunk;
+    }
+
+    expect(findBillPageMock.mock.calls[0][0]).toMatchObject({
+      orderBy: 'total',
+      direction: 'asc',
+    });
+    expect(findBillPageMock.mock.calls[0][2]).toBe(2001);
   });
 });
