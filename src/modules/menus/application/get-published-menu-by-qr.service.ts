@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { keepReachableCategories } from './menu-category-tree';
 import { groupTranslationsByEntity, mapMenuDetail } from './menu-mapper';
+import { MODIFIER_GROUP_TREE_INCLUDE } from './modifier-group-include';
 import type { QrMenuResponseDto } from '../presentation/http/dto/menus.dto';
 
 @Injectable()
@@ -67,13 +68,7 @@ export class GetPublishedMenuByQrService {
                 modifierGroups: {
                   orderBy: { sortOrder: 'asc' },
                   include: {
-                    modifierGroup: {
-                      include: {
-                        options: {
-                          orderBy: { sortOrder: 'asc' },
-                        },
-                      },
-                    },
+                    modifierGroup: { include: MODIFIER_GROUP_TREE_INCLUDE },
                   },
                 },
               },
@@ -91,7 +86,10 @@ export class GetPublishedMenuByQrService {
     };
 
     if (!locale || locale === menu.defaultLanguage) {
-      return { ...mapMenuDetail(menu, true), qrOrderingEnabled };
+      return {
+        ...mapMenuDetail(menu, true, undefined, true),
+        qrOrderingEnabled,
+      };
     }
 
     const categoryIds = menu.categories.map((category) => category.id);
@@ -116,7 +114,7 @@ export class GetPublishedMenuByQrService {
     });
 
     const translationsByEntity = groupTranslationsByEntity(translations);
-    const detail = mapMenuDetail(menu, true, translationsByEntity);
+    const detail = mapMenuDetail(menu, true, translationsByEntity, true);
 
     return {
       ...detail,

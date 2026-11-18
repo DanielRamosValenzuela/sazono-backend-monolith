@@ -559,21 +559,24 @@ model MenuItemMedia {
 }
 
 model ModifierGroup {
-  id            String                  @id @default(uuid()) @db.Uuid
-  branchId      String                  @map("branch_id") @db.Uuid
-  name          String
-  selectionType ModifierSelectionType   @map("selection_type")
-  minSelect     Int                     @default(0) @map("min_select")
-  maxSelect     Int?                    @map("max_select")
-  isRequired    Boolean                 @default(false) @map("is_required")
-  sortOrder     Int                     @default(0) @map("sort_order")
-  branch        Branch                  @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  options       ModifierOption[]
-  menuItems     MenuItemModifierGroup[]
-  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id             String                  @id @default(uuid()) @db.Uuid
+  branchId       String                  @map("branch_id") @db.Uuid
+  parentOptionId String?                 @map("parent_option_id") @db.Uuid
+  name           String
+  selectionType  ModifierSelectionType   @map("selection_type")
+  minSelect      Int                     @default(0) @map("min_select")
+  maxSelect      Int?                    @map("max_select")
+  isRequired     Boolean                 @default(false) @map("is_required")
+  sortOrder      Int                     @default(0) @map("sort_order")
+  branch         Branch                  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  parentOption   ModifierOption?         @relation("ModifierOptionChildGroups", fields: [parentOptionId], references: [id], onDelete: Cascade)
+  options        ModifierOption[]
+  menuItems      MenuItemModifierGroup[]
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([branchId])
+  @@index([parentOptionId])
   @@map("modifier_groups")
 }
 
@@ -586,6 +589,7 @@ model ModifierOption {
   sortOrder          Int                 @default(0) @map("sort_order")
   imageUrl           String?             @map("image_url")
   modifierGroup      ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  childGroups        ModifierGroup[]     @relation("ModifierOptionChildGroups")
   orderItemModifiers OrderItemModifier[]
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -714,17 +718,23 @@ model OrderItem {
 }
 
 model OrderItemModifier {
-  id                 String          @id @default(uuid()) @db.Uuid
-  orderItemId        String          @map("order_item_id") @db.Uuid
-  modifierOptionId   String?         @map("modifier_option_id") @db.Uuid
-  nameSnapshot       String          @map("name_snapshot")
-  priceDeltaSnapshot Decimal         @map("price_delta_snapshot") @db.Decimal(12, 2)
-  orderItem          OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  modifierOption     ModifierOption? @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
-  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                        String              @id @default(uuid()) @db.Uuid
+  orderItemId               String              @map("order_item_id") @db.Uuid
+  modifierOptionId          String?             @map("modifier_option_id") @db.Uuid
+  parentOrderItemModifierId String?             @map("parent_order_item_modifier_id") @db.Uuid
+  depth                     Int                 @default(1)
+  pathSnapshot              String[]            @default([]) @map("path_snapshot")
+  nameSnapshot              String              @map("name_snapshot")
+  priceDeltaSnapshot        Decimal             @map("price_delta_snapshot") @db.Decimal(12, 2)
+  orderItem                 OrderItem           @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierOption            ModifierOption?     @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
+  parent                    OrderItemModifier?  @relation("OrderItemModifierTree", fields: [parentOrderItemModifierId], references: [id], onDelete: SetNull)
+  children                  OrderItemModifier[] @relation("OrderItemModifierTree")
+  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([orderItemId])
+  @@index([parentOrderItemModifierId])
   @@map("order_item_modifiers")
 }
 

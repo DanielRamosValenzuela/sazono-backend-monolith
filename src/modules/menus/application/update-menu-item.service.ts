@@ -8,6 +8,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { mapMenuItemModifierGroups } from './menu-mapper';
+import { MODIFIER_GROUP_TREE_INCLUDE } from './modifier-group-include';
 import type {
   MenuItemResponseDto,
   UpdateMenuItemDto,
@@ -104,13 +105,7 @@ export class UpdateMenuItemService {
         modifierGroups: {
           orderBy: { sortOrder: 'asc' },
           include: {
-            modifierGroup: {
-              include: {
-                options: {
-                  orderBy: { sortOrder: 'asc' },
-                },
-              },
-            },
+            modifierGroup: { include: MODIFIER_GROUP_TREE_INCLUDE },
           },
         },
       },

@@ -203,6 +203,11 @@ export type HierarchyFilter = BillFilter & {
   includeModifiers: boolean;
 };
 
+export type CollectedBillLineRecord = HierarchyLineRecord & {
+  bill_id: string;
+  collected: Prisma.Decimal.Value;
+};
+
 export type HierarchyLineRecord = {
   category_path: string[] | null;
   item_name: string;
@@ -258,7 +263,12 @@ export type OrderDetailItemRecord = {
   notes: string | null;
   station_name: string;
   menu_item_id: string | null;
-  modifiers: { name: string; price_delta: string }[];
+  modifiers: {
+    name: string;
+    price_delta: string;
+    path: string[] | null;
+    depth: number | null;
+  }[];
   discount_amount?: Prisma.Decimal.Value;
 };
 
@@ -675,6 +685,40 @@ export class ReportsPrismaRepository {
     `);
   }
 
+  findCollectedBillLines(
+    filter: HierarchyFilter,
+  ): Promise<CollectedBillLineRecord[]> {
+    const unitPrice = filter.includeModifiers
+      ? Prisma.sql`oi.price_snapshot`
+      : Prisma.sql`(oi.price_snapshot - mods.delta)`;
+    const sold = Prisma.sql`(oi.status::text <> 'CANCELLED' AND o.status::text IN (${Prisma.join(SOLD_ORDER_STATUSES)}))`;
+
+    return this.prisma.$queryRaw<CollectedBillLineRecord[]>(Prisma.sql`
+      SELECT
+        e.id::text AS bill_id,
+        e.total AS collected,
+        oi.category_path_snapshot AS category_path,
+        oi.name_snapshot AS item_name,
+        ps.name AS station_name,
+        COALESCE(SUM(${unitPrice} * oi.quantity - COALESCE(bi.discount_amount, 0)), 0) AS amount,
+        COALESCE(SUM(oi.quantity), 0)::int AS quantity,
+        0 AS cancelled_quantity
+      FROM (${eligibleBillsSql(filter)}) e
+      JOIN orders o ON o.bill_id = e.id
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN preparation_stations ps ON ps.id = oi.preparation_station_id
+      LEFT JOIN bill_items bi
+        ON bi.order_item_id = oi.id AND bi.bill_id = e.id AND bi.status::text = 'OPEN'
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(m.price_delta_snapshot), 0) AS delta
+        FROM order_item_modifiers m
+        WHERE m.order_item_id = oi.id
+      ) mods ON TRUE
+      WHERE ${sold}
+      GROUP BY e.id, e.total, oi.category_path_snapshot, oi.name_snapshot, ps.name
+    `);
+  }
+
   findPaymentsPage(
     filter: PaymentsPageFilter,
     cursor: KeysetCursor | null,
@@ -807,8 +851,8 @@ export class ReportsPrismaRepository {
           ), 0) AS discount_amount,
           COALESCE(
             json_agg(
-              json_build_object('name', m.name_snapshot, 'price_delta', m.price_delta_snapshot::text)
-              ORDER BY m.created_at ASC, m.id ASC
+              json_build_object('name', m.name_snapshot, 'price_delta', m.price_delta_snapshot::text, 'path', m.path_snapshot, 'depth', m.depth)
+              ORDER BY m.depth ASC, m.created_at ASC, m.id ASC
             ) FILTER (WHERE m.id IS NOT NULL),
             '[]'::json
           ) AS modifiers

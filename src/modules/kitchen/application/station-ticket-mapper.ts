@@ -6,6 +6,7 @@ import type {
   StationTicketStatus,
 } from '@prisma/client';
 import { COUNTER_TABLE_CODE } from '../../floor/domain/counter-table';
+import { formatModifierLines } from '../../orders/domain/modifier-lines';
 import type { StationTicketResponseDto } from '../presentation/http/dto/kitchen.dto';
 
 export type StationTicketWithRelations = {
@@ -42,6 +43,10 @@ export type StationTicketWithRelations = {
       nameSnapshot: string;
       notes: string | null;
       modifiers: Array<{
+        id: string;
+        parentOrderItemModifierId: string | null;
+        depth: number;
+        pathSnapshot: string[];
         nameSnapshot: string;
       }>;
     };
@@ -64,7 +69,13 @@ export const STATION_TICKET_INCLUDE = {
     include: {
       orderItem: {
         include: {
-          modifiers: true,
+          modifiers: {
+            orderBy: [
+              { depth: 'asc' as const },
+              { createdAt: 'asc' as const },
+              { id: 'asc' as const },
+            ],
+          },
         },
       },
     },
@@ -99,8 +110,6 @@ export const mapStationTicket = (
     quantity: item.quantity,
     status: item.status,
     notes: item.orderItem.notes,
-    modifiers: item.orderItem.modifiers.map(
-      (modifier) => modifier.nameSnapshot,
-    ),
+    modifiers: formatModifierLines(item.orderItem.modifiers),
   })),
 });

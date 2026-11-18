@@ -42,6 +42,13 @@ export class ModifierOptionResponseDto {
 
   @ApiProperty({ type: String, nullable: true })
   imageUrl!: string | null;
+
+  @ApiProperty({
+    type: () => [ModifierGroupResponseDto],
+    description:
+      'Sub-grupos que se abren al elegir esta opcion. Vacio si no tiene.',
+  })
+  childGroups!: ModifierGroupResponseDto[];
 }
 
 export class ModifierGroupResponseDto {
@@ -50,6 +57,16 @@ export class ModifierGroupResponseDto {
 
   @ApiProperty({ format: 'uuid' })
   branchId!: string;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    description: 'Opcion que abre este grupo. Null en grupos raiz.',
+  })
+  parentOptionId!: string | null;
+
+  @ApiProperty({ example: 1, description: 'Nivel del grupo, de 1 a 3.' })
+  depth!: number;
 
   @ApiProperty()
   name!: string;
@@ -80,6 +97,15 @@ export class CreateModifierGroupDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
   branchId!: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Opcion padre. Crea un sub-grupo (maximo 3 niveles). No se puede cambiar despues.',
+  })
+  @IsOptional()
+  @IsUUID()
+  parentOptionId?: string;
 
   @ApiProperty({ example: 'Elige tu acompañamiento' })
   @IsString()
@@ -474,6 +500,22 @@ export class MenuDetailResponseDto {
 
   @ApiProperty({ type: [MenuCategoryDetailResponseDto] })
   categories!: MenuCategoryDetailResponseDto[];
+}
+
+export class MenuPublishWarningDto {
+  @ApiProperty({ example: 'OPTION_REQUIRED_SUBGROUP_UNAVAILABLE' })
+  code!: 'OPTION_REQUIRED_SUBGROUP_UNAVAILABLE';
+
+  @ApiProperty()
+  optionName!: string;
+
+  @ApiProperty()
+  groupName!: string;
+}
+
+export class PublishMenuResponseDto extends MenuDetailResponseDto {
+  @ApiProperty({ type: [MenuPublishWarningDto] })
+  warnings!: MenuPublishWarningDto[];
 }
 
 export class QrMenuResponseDto extends MenuDetailResponseDto {

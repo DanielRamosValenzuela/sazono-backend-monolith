@@ -135,6 +135,18 @@ describe('DuplicateMenuService', () => {
     );
   });
 
+  it('only re-links root modifier groups, so nested sub-groups travel with their parent option', async () => {
+    findUniqueMock.mockResolvedValue(sourceMenu(MenuStatus.DRAFT));
+
+    await service.execute(authUser, 'menu-1', {});
+
+    const linked = (
+      modifierCreateManyMock.mock.calls[0] as [CreateManyArgs]
+    )[0].data.map((link) => link.modifierGroupId);
+    expect(linked).toEqual(['group-1']);
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+  });
+
   it('copies the whole tree into a new draft with remapped ids in one transaction', async () => {
     findUniqueMock.mockResolvedValue(sourceMenu(MenuStatus.PUBLISHED));
 

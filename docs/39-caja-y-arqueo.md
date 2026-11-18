@@ -35,11 +35,17 @@ Signos: CASH_IN positivo; CASH_OUT, REFUND_OUT y TIP_PAYOUT negativos; ADJUSTMEN
 
 El cierre toma `SELECT ... FOR UPDATE` de la sesion y recalcula el esperado dentro de la transaccion; un cobro concurrente toma `FOR SHARE` (`find-open-cash-session.ts`) y o entra al cierre o cae al camino sin sesion.
 
+Un movimiento cuyo cajero tenia caja abierta al iniciar la peticion pero la perdio por un cierre concurrente responde 409 `CASH_SESSION_ALREADY_CLOSED` (tambien si se indica un `cashSessionId` cerrado). Solo queda sin sesion el movimiento de un cajero que nunca tuvo caja abierta y con `requireOpenCashSession` apagado.
+
+`denominations` se valida al cerrar: si viene con filas, la suma de valor por cantidad debe igualar `countedCash` (400 `CASH_DENOMINATIONS_MISMATCH`, con `denominationsTotal`). La UI calcula el efectivo contado desde el conteo por billetes y monedas y bloquea la edicion manual mientras se usa.
+
 Cerrar con cuentas abiertas se permite y devuelve advertencias. Sesion olvidada: `force-close`. No hay cierre automatico.
 
 ## Z diario
 
 `cashClosing.sessions` lista las sesiones abiertas en el dia con apertura, ventas en efectivo, movimientos, esperado, contado y diferencia. `cashClosing.rows` sigue calculandose por fecha para los dias sin sesiones.
+
+`byCategory` cuadra con `sales.total`: cada cuenta del periodo reparte lo efectivamente cobrado (consumo neto de descuentos) entre sus lineas vendidas en proporcion a su monto, con el resto de redondeo en la linea mayor. Las cuentas parciales o abandonadas aportan solo lo cobrado, las sin cobro no aportan. Invariante: suma de `byCategory.amount` = `sales.total`. Las unidades (`quantity`) cuentan todas las lineas vendidas de esas cuentas.
 
 ## Auditoria
 

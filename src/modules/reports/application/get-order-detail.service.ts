@@ -42,7 +42,12 @@ export type OrderDetailItem = {
   quantity: number;
   unitPrice: string;
   baseUnitPrice: string;
-  modifiers: { name: string; priceDelta: string }[];
+  modifiers: {
+    name: string;
+    priceDelta: string;
+    path: string[];
+    depth: number;
+  }[];
   modifiersTotal: string;
   lineTotal: string;
   discount: string;
@@ -204,6 +209,11 @@ function buildItem(record: OrderDetailItemRecord): OrderDetailItem {
     modifiers: record.modifiers.map((modifier) => ({
       name: modifier.name,
       priceDelta: money(modifier.price_delta),
+      path:
+        modifier.path && modifier.path.length > 0
+          ? modifier.path
+          : [modifier.name],
+      depth: modifier.depth ?? 1,
     })),
     modifiersTotal: money(modifiersTotal),
     lineTotal: money(unitPrice.mul(record.quantity)),

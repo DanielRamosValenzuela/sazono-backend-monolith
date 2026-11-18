@@ -7,9 +7,10 @@ import { Role, MenuStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { hasPublishableContent } from './menu-category-tree';
-import { mapMenuDetail } from './menu-mapper';
+import { collectModifierWarnings, mapMenuDetail } from './menu-mapper';
+import { MODIFIER_GROUP_TREE_INCLUDE } from './modifier-group-include';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
-import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
+import type { PublishMenuResponseDto } from '../presentation/http/dto/menus.dto';
 
 @Injectable()
 export class PublishMenuService {
@@ -21,7 +22,7 @@ export class PublishMenuService {
   async execute(
     authUser: JwtPayload,
     menuId: string,
-  ): Promise<MenuDetailResponseDto> {
+  ): Promise<PublishMenuResponseDto> {
     const menu = await this.prisma.menu.findUnique({
       where: {
         id: menuId,
@@ -116,13 +117,7 @@ export class PublishMenuService {
                   modifierGroups: {
                     orderBy: { sortOrder: 'asc' },
                     include: {
-                      modifierGroup: {
-                        include: {
-                          options: {
-                            orderBy: { sortOrder: 'asc' },
-                          },
-                        },
-                      },
+                      modifierGroup: { include: MODIFIER_GROUP_TREE_INCLUDE },
                     },
                   },
                 },
@@ -133,6 +128,14 @@ export class PublishMenuService {
       });
     });
 
-    return mapMenuDetail(publishedMenu, true);
+    const warnings = collectModifierWarnings(
+      publishedMenu.categories.flatMap((category) =>
+        category.items.flatMap((item) =>
+          item.modifierGroups.map((link) => link.modifierGroup),
+        ),
+      ),
+    );
+
+    return { ...mapMenuDetail(publishedMenu, true), warnings };
   }
 }

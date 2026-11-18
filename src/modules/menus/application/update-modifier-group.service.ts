@@ -3,6 +3,11 @@ import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { modifierGroupDepth } from '../domain/modifier-tree';
+import {
+  MODIFIER_GROUP_ANCESTRY_INCLUDE,
+  MODIFIER_GROUP_TREE_INCLUDE,
+} from './modifier-group-include';
 import { mapModifierGroup } from './menu-mapper';
 import type {
   ModifierGroupResponseDto,
@@ -23,6 +28,7 @@ export class UpdateModifierGroupService {
   ): Promise<ModifierGroupResponseDto> {
     const group = await this.prisma.modifierGroup.findUnique({
       where: { id: modifierGroupId },
+      include: MODIFIER_GROUP_ANCESTRY_INCLUDE,
     });
 
     if (!group) {
@@ -57,13 +63,9 @@ export class UpdateModifierGroupService {
         ...(dto.isRequired !== undefined ? { isRequired: dto.isRequired } : {}),
         ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       },
-      include: {
-        options: {
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
+      include: MODIFIER_GROUP_TREE_INCLUDE,
     });
 
-    return mapModifierGroup(updated);
+    return mapModifierGroup(updated, modifierGroupDepth(group));
   }
 }

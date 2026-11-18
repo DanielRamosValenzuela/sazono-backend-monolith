@@ -145,4 +145,102 @@ describe('OrderableMenuItemResolverService', () => {
 
     expect(resolved.price).toEqual(new Prisma.Decimal(13400));
   });
+
+  const nestedItem = (papasDelta: number) => [
+    {
+      id: 'lomo',
+      name: 'Lomo saltado',
+      price: new Prisma.Decimal(1000),
+      isAvailable: true,
+      menuCategoryId: 'fondos',
+      preparationStationId: 'station-1',
+      menuCategory: {
+        id: 'fondos',
+        name: 'Fondos',
+        status: 'ACTIVE',
+        parent: null,
+      },
+      preparationStation: { status: 'ACTIVE' },
+      modifierGroups: [
+        {
+          modifierGroup: {
+            id: 'side',
+            name: 'Acompanamiento',
+            minSelect: 0,
+            maxSelect: null,
+            isRequired: false,
+            options: [
+              {
+                id: 'papas',
+                name: 'Papas',
+                priceDelta: new Prisma.Decimal(papasDelta),
+                isAvailable: true,
+                childGroups: [
+                  {
+                    id: 'papas-type',
+                    name: 'Tipo de papas',
+                    minSelect: 0,
+                    maxSelect: 1,
+                    isRequired: true,
+                    options: [
+                      {
+                        id: 'duquesa',
+                        name: 'Duquesa',
+                        priceDelta: new Prisma.Decimal(800),
+                        isAvailable: true,
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  ];
+
+  it('prices every selected node and exposes the tree metadata', async () => {
+    menuItemFindManyMock.mockResolvedValue(nestedItem(1500));
+
+    const [resolved] = await service.resolve('branch-1', [
+      {
+        menuItemId: 'lomo',
+        quantity: 1,
+        modifierOptionIds: ['duquesa', 'papas'],
+      },
+    ]);
+
+    expect(resolved.price).toEqual(new Prisma.Decimal(3300));
+    expect(
+      resolved.modifiers.map((m) => [m.modifierOptionId, m.depth]),
+    ).toEqual([
+      ['papas', 1],
+      ['duquesa', 2],
+    ]);
+    expect(resolved.modifiers[1]).toMatchObject({
+      parentModifierOptionId: 'papas',
+      path: ['Papas', 'Duquesa'],
+    });
+  });
+
+  it('requires the sub-choice when the parent option is picked and rejects negative totals', async () => {
+    menuItemFindManyMock.mockResolvedValue(nestedItem(1500));
+    await expect(
+      service.resolve('branch-1', [
+        { menuItemId: 'lomo', quantity: 1, modifierOptionIds: ['papas'] },
+      ]),
+    ).rejects.toThrow('Tipo de papas');
+
+    menuItemFindManyMock.mockResolvedValue(nestedItem(-5000));
+    await expect(
+      service.resolve('branch-1', [
+        {
+          menuItemId: 'lomo',
+          quantity: 1,
+          modifierOptionIds: ['papas', 'duquesa'],
+        },
+      ]),
+    ).rejects.toThrow('bajo cero');
+  });
 });

@@ -15,6 +15,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ACTIVE_TABLE_SESSION_STATUSES } from '../../floor/domain/active-table-session-statuses';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
 import { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
+import { buildOrderItemModifierRows } from './order-item-modifier-rows';
 import type {
   CreateQrOrderDto,
   OrderResponseDto,
@@ -146,11 +147,7 @@ export class CreateQrOrderService {
             quantity: item.quantity,
             notes: item.notes,
             modifiers: {
-              create: item.modifiers.map((modifier) => ({
-                modifierOptionId: modifier.modifierOptionId,
-                nameSnapshot: modifier.name,
-                priceDeltaSnapshot: modifier.priceDelta,
-              })),
+              createMany: { data: buildOrderItemModifierRows(item.modifiers) },
             },
           },
         });

@@ -78,7 +78,14 @@ function item(
     notes: 'sin azucar',
     station_name: 'Barra',
     menu_item_id: 'menu-1',
-    modifiers: [{ name: 'Leche de almendra', price_delta: '500.00' }],
+    modifiers: [
+      {
+        name: 'Leche de almendra',
+        price_delta: '500.00',
+        path: ['Leche de almendra'],
+        depth: 1,
+      },
+    ],
     ...extra,
   };
 }
@@ -172,7 +179,14 @@ describe('buildOrderDetail', () => {
       quantity: 2,
       unitPrice: '3000',
       baseUnitPrice: '2500',
-      modifiers: [{ name: 'Leche de almendra', priceDelta: '500' }],
+      modifiers: [
+        {
+          name: 'Leche de almendra',
+          priceDelta: '500',
+          path: ['Leche de almendra'],
+          depth: 1,
+        },
+      ],
       modifiersTotal: '500',
       lineTotal: '6000',
       notes: 'sin azucar',

@@ -122,6 +122,14 @@ export class ApprovalPinService {
       return approverRole.staffUser.id;
     }
 
+    if (result === 'LOCKED') {
+      throw new ForbiddenException({
+        message:
+          'PIN bloqueado temporalmente por demasiados intentos fallidos.',
+        code: `${options.codePrefix}_PIN_LOCKED`,
+      });
+    }
+
     await this.auditService.record(null, {
       restaurantId: context.restaurantId,
       branchId,
@@ -135,17 +143,9 @@ export class ApprovalPinService {
       userAgent: requestMeta.userAgent,
     });
 
-    throw new ForbiddenException(
-      result === 'LOCKED'
-        ? {
-            message:
-              'PIN bloqueado temporalmente por demasiados intentos fallidos.',
-            code: `${options.codePrefix}_PIN_LOCKED`,
-          }
-        : {
-            message: 'PIN invalido.',
-            code: `${options.codePrefix}_PIN_INVALID`,
-          },
-    );
+    throw new ForbiddenException({
+      message: 'PIN invalido.',
+      code: `${options.codePrefix}_PIN_INVALID`,
+    });
   }
 }

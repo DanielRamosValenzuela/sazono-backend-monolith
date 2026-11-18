@@ -17,6 +17,7 @@ import {
 } from '../infrastructure/reports-insights.prisma.repository';
 import {
   ReportsPrismaRepository,
+  type CollectedBillLineRecord,
   type HierarchyLineRecord,
 } from '../infrastructure/reports.prisma.repository';
 import { buildCashSessionRows, type CashSessionRow } from './cash-session-rows';
@@ -202,6 +203,52 @@ export function buildDailyZMethods(
       collected: money(amount.add(tip)),
     };
   });
+}
+
+export function allocateCollectedLines(
+  lines: CollectedBillLineRecord[],
+): HierarchyLineRecord[] {
+  const byBill = new Map<string, CollectedBillLineRecord[]>();
+
+  for (const line of lines) {
+    byBill.set(line.bill_id, [...(byBill.get(line.bill_id) ?? []), line]);
+  }
+
+  const result: HierarchyLineRecord[] = [];
+
+  for (const billLines of byBill.values()) {
+    const collected = new Prisma.Decimal(billLines[0].collected);
+    const billTotal = sum(billLines.map((line) => line.amount));
+
+    if (billTotal.lte(0) || collected.lte(0)) {
+      continue;
+    }
+
+    const shares = billLines.map((line) =>
+      new Prisma.Decimal(line.amount)
+        .mul(collected)
+        .div(billTotal)
+        .toDecimalPlaces(0),
+    );
+    const largest = shares.reduce(
+      (best, share, index) => (share.gt(shares[best]) ? index : best),
+      0,
+    );
+
+    shares[largest] = shares[largest].add(collected.sub(sum(shares)));
+    billLines.forEach((line, index) =>
+      result.push({
+        category_path: line.category_path,
+        item_name: line.item_name,
+        station_name: line.station_name,
+        amount: shares[index],
+        quantity: line.quantity,
+        cancelled_quantity: 0,
+      }),
+    );
+  }
+
+  return result;
 }
 
 export function buildDailyZCategories(
@@ -409,7 +456,7 @@ export class GetDailyZService {
           scope.start,
           scope.end,
         ),
-        this.reportsRepository.findSoldHierarchyLines({
+        this.reportsRepository.findCollectedBillLines({
           ...filter,
           includeModifiers: true,
         }),
@@ -424,7 +471,7 @@ export class GetDailyZService {
       refunds,
       afterRefunds: buildDailyZAfterRefunds(sales, refunds),
       byMethod: buildDailyZMethods(methods),
-      byCategory: buildDailyZCategories(lines),
+      byCategory: buildDailyZCategories(allocateCollectedLines(lines)),
       cashClosing,
     };
   }

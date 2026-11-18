@@ -6,6 +6,12 @@ import type {
   PreparationStationStatus,
   PreparationStationType,
 } from '@prisma/client';
+import {
+  findUnsatisfiedChildGroup,
+  isOptionEffectivelyAvailable,
+  type ModifierTreeGroup,
+  type ModifierTreeOption,
+} from '../domain/modifier-tree';
 import type {
   MenuDetailResponseDto,
   MenuListItemResponseDto,
@@ -21,11 +27,13 @@ type ModifierOptionRecord = {
   isAvailable: boolean;
   sortOrder: number;
   imageUrl: string | null;
+  childGroups?: ModifierGroupRecord[];
 };
 
 type ModifierGroupRecord = {
   id: string;
   branchId: string;
+  parentOptionId?: string | null;
   name: string;
   selectionType: ModifierSelectionType;
   minSelect: number;
@@ -35,37 +43,105 @@ type ModifierGroupRecord = {
   options: ModifierOptionRecord[];
 };
 
+const toTreeGroup = (group: ModifierGroupRecord): ModifierTreeGroup => ({
+  ...group,
+  options: group.options.map(toTreeOption),
+});
+
+const toTreeOption = (option: ModifierOptionRecord): ModifierTreeOption => ({
+  ...option,
+  priceDelta: option.priceDelta as ModifierTreeOption['priceDelta'],
+  childGroups: (option.childGroups ?? []).map(toTreeGroup),
+});
+
 export const mapModifierOption = (
   option: ModifierOptionRecord,
-): ModifierOptionResponseDto => ({
-  modifierOptionId: option.id,
-  name: option.name,
-  priceDelta: option.priceDelta.toString(),
-  isAvailable: option.isAvailable,
-  sortOrder: option.sortOrder,
-  imageUrl: option.imageUrl,
-});
+  depth = 1,
+  publicView = false,
+): ModifierOptionResponseDto => {
+  const available = publicView
+    ? isOptionEffectivelyAvailable(toTreeOption(option))
+    : option.isAvailable;
+
+  return {
+    modifierOptionId: option.id,
+    name: option.name,
+    priceDelta: option.priceDelta.toString(),
+    isAvailable: available,
+    sortOrder: option.sortOrder,
+    imageUrl: option.imageUrl,
+    childGroups:
+      publicView && !available
+        ? []
+        : (option.childGroups ?? []).map((group) =>
+            mapModifierGroup(group, depth + 1, publicView),
+          ),
+  };
+};
 
 export const mapModifierGroup = (
   group: ModifierGroupRecord,
+  depth = 1,
+  publicView = false,
 ): ModifierGroupResponseDto => ({
   modifierGroupId: group.id,
   branchId: group.branchId,
+  parentOptionId: group.parentOptionId ?? null,
+  depth,
   name: group.name,
   selectionType: group.selectionType,
   minSelect: group.minSelect,
   maxSelect: group.maxSelect,
   isRequired: group.isRequired,
   sortOrder: group.sortOrder,
-  options: group.options.map(mapModifierOption),
+  options: group.options.map((option) =>
+    mapModifierOption(option, depth, publicView),
+  ),
 });
+
+export type MenuPublishWarning = {
+  code: 'OPTION_REQUIRED_SUBGROUP_UNAVAILABLE';
+  optionName: string;
+  groupName: string;
+};
+
+export const collectModifierWarnings = (
+  groups: ModifierGroupRecord[],
+): MenuPublishWarning[] => {
+  const seen = new Set<string>();
+  const warnings: MenuPublishWarning[] = [];
+
+  const visit = (group: ModifierTreeGroup): void => {
+    for (const option of group.options) {
+      const blocking = option.isAvailable
+        ? findUnsatisfiedChildGroup(option)
+        : undefined;
+
+      if (blocking && !seen.has(option.id)) {
+        seen.add(option.id);
+        warnings.push({
+          code: 'OPTION_REQUIRED_SUBGROUP_UNAVAILABLE',
+          optionName: option.name,
+          groupName: blocking.name,
+        });
+      }
+
+      (option.childGroups ?? []).forEach(visit);
+    }
+  };
+
+  groups.map(toTreeGroup).forEach(visit);
+
+  return warnings;
+};
 
 export const mapMenuItemModifierGroups = (
   links: Array<{ sortOrder: number; modifierGroup: ModifierGroupRecord }>,
+  publicView = false,
 ): ModifierGroupResponseDto[] =>
   [...links]
     .sort((left, right) => left.sortOrder - right.sortOrder)
-    .map((link) => mapModifierGroup(link.modifierGroup));
+    .map((link) => mapModifierGroup(link.modifierGroup, 1, publicView));
 
 export type TranslationEntry = {
   locale: string;
@@ -222,6 +298,7 @@ export const mapMenuDetail = (
   menu: MenuDetailWithRelations,
   isDefaultMenu: boolean,
   translationsByEntity: Map<string, TranslationEntry[]> = new Map(),
+  publicView = false,
 ): MenuDetailResponseDto => ({
   menuId: menu.id,
   branchId: menu.branchId,
@@ -255,7 +332,10 @@ export const mapMenuDetail = (
         stationType: item.preparationStation.stationType,
         status: item.preparationStation.status,
       },
-      modifierGroups: mapMenuItemModifierGroups(item.modifierGroups),
+      modifierGroups: mapMenuItemModifierGroups(
+        item.modifierGroups,
+        publicView,
+      ),
     })),
   })),
 });

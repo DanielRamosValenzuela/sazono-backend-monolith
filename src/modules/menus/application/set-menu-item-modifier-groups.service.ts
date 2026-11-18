@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { MODIFIER_GROUP_TREE_INCLUDE } from './modifier-group-include';
 import { mapModifierGroup } from './menu-mapper';
 import type {
   ModifierGroupResponseDto,
@@ -49,12 +50,14 @@ export class SetMenuItemModifierGroupsService {
         id: { in: uniqueGroupIds },
         branchId,
       },
-      include: {
-        options: {
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
+      include: MODIFIER_GROUP_TREE_INCLUDE,
     });
+
+    if (groups.some((group) => group.parentOptionId !== null)) {
+      throw new BadRequestException(
+        'Un sub-grupo se asocia desde su opcion, no desde el item.',
+      );
+    }
 
     if (groups.length !== uniqueGroupIds.length) {
       throw new BadRequestException(

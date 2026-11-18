@@ -1135,9 +1135,7 @@ describe('RefundPaymentService', () => {
       );
 
       expect(code).toBe('REFUND_PIN_LOCKED');
-      expect(ctx.auditCreates[0].data.after).toMatchObject({
-        reason: 'LOCKED',
-      });
+      expect(ctx.auditCreates).toHaveLength(0);
     });
 
     it('blocks the requester after five failed approvals in 15 minutes before checking the PIN', async () => {

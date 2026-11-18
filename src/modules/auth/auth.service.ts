@@ -53,6 +53,7 @@ const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = '30d' as StringValue;
 const PIN_SALT_ROUNDS = 10;
 const PIN_MAX_FAILED_ATTEMPTS = 5;
 const PIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+export const APPROVAL_PIN_GLOBAL_MAX_FAILED_ATTEMPTS = 20;
 
 export type StaffPinSubject = {
   id: string;
@@ -308,10 +309,15 @@ export class AuthService {
       scope === 'LOGIN' ? 'pin_locked_until' : 'approval_pin_locked_until',
     );
 
+    const maxAttempts =
+      scope === 'LOGIN'
+        ? PIN_MAX_FAILED_ATTEMPTS
+        : APPROVAL_PIN_GLOBAL_MAX_FAILED_ATTEMPTS;
+
     const reserved = await this.prisma.$executeRaw(Prisma.sql`
       UPDATE staff_users SET
-        ${attempts} = CASE WHEN ${attempts} + 1 >= ${PIN_MAX_FAILED_ATTEMPTS}::int THEN 0 ELSE ${attempts} + 1 END,
-        ${lockedUntil} = CASE WHEN ${attempts} + 1 >= ${PIN_MAX_FAILED_ATTEMPTS}::int THEN now() + (${PIN_LOCKOUT_DURATION_MS}::int * interval '1 millisecond') ELSE ${lockedUntil} END,
+        ${attempts} = CASE WHEN ${attempts} + 1 >= ${maxAttempts}::int THEN 0 ELSE ${attempts} + 1 END,
+        ${lockedUntil} = CASE WHEN ${attempts} + 1 >= ${maxAttempts}::int THEN now() + (${PIN_LOCKOUT_DURATION_MS}::int * interval '1 millisecond') ELSE ${lockedUntil} END,
         updated_at = now()
       WHERE id = ${staffUserId}::uuid
         AND (${lockedUntil} IS NULL OR ${lockedUntil} <= now())

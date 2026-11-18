@@ -15,6 +15,7 @@ import { ORDER_CREATED_EVENT } from '../domain/order-events';
 import type { OrderCreatedEvent } from '../domain/order-events';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
 import { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
+import { buildOrderItemModifierRows } from './order-item-modifier-rows';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { routeOrderToStations } from './route-order-to-stations';
 import type {
@@ -115,11 +116,7 @@ export class CreateWaiterOrderService {
             quantity: item.quantity,
             notes: item.notes,
             modifiers: {
-              create: item.modifiers.map((modifier) => ({
-                modifierOptionId: modifier.modifierOptionId,
-                nameSnapshot: modifier.name,
-                priceDeltaSnapshot: modifier.priceDelta,
-              })),
+              createMany: { data: buildOrderItemModifierRows(item.modifiers) },
             },
           },
         });

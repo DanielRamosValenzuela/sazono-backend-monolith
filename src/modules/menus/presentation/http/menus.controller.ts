@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -69,6 +70,7 @@ import {
   ListPreparationStationsQueryDto,
   MenuCategoryResponseDto,
   MenuDetailResponseDto,
+  PublishMenuResponseDto,
   MenuItemResponseDto,
   MenuListItemResponseDto,
   ModifierGroupResponseDto,
@@ -158,7 +160,7 @@ export class MenusController {
   })
   updatePreparationStation(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('preparationStationId') preparationStationId: string,
+    @Param('preparationStationId', ParseUUIDPipe) preparationStationId: string,
     @Body() dto: UpdatePreparationStationDto,
   ): Promise<PreparationStationResponseDto> {
     return this.updatePreparationStationService.execute(
@@ -215,7 +217,7 @@ export class MenusController {
   })
   getMenuDetail(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
+    @Param('menuId', ParseUUIDPipe) menuId: string,
   ): Promise<MenuDetailResponseDto> {
     return this.getMenuDetailService.execute(authUser, menuId);
   }
@@ -228,7 +230,7 @@ export class MenusController {
   })
   createMenuCategory(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
+    @Param('menuId', ParseUUIDPipe) menuId: string,
     @Body() dto: CreateMenuCategoryDto,
   ): Promise<MenuCategoryResponseDto> {
     return this.createMenuCategoryService.execute(authUser, menuId, dto);
@@ -243,7 +245,7 @@ export class MenusController {
   })
   updateMenuCategory(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuCategoryId') menuCategoryId: string,
+    @Param('menuCategoryId', ParseUUIDPipe) menuCategoryId: string,
     @Body() dto: UpdateMenuCategoryDto,
   ): Promise<MenuCategoryResponseDto> {
     return this.updateMenuCategoryService.execute(
@@ -262,7 +264,7 @@ export class MenusController {
   })
   upsertMenuCategoryTranslation(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuCategoryId') menuCategoryId: string,
+    @Param('menuCategoryId', ParseUUIDPipe) menuCategoryId: string,
     @Param('locale') locale: string,
     @Body() dto: UpsertCategoryTranslationDto,
   ): Promise<{ locale: string; name: string; description: string | null }> {
@@ -283,7 +285,7 @@ export class MenusController {
   })
   reorderMenuCategories(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
+    @Param('menuId', ParseUUIDPipe) menuId: string,
     @Body() dto: ReorderMenuCategoriesDto,
   ): Promise<{ reorderedCount: number }> {
     return this.reorderMenuCategoriesService.execute(authUser, menuId, dto);
@@ -297,7 +299,7 @@ export class MenusController {
   })
   createMenuItem(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuCategoryId') menuCategoryId: string,
+    @Param('menuCategoryId', ParseUUIDPipe) menuCategoryId: string,
     @Body() dto: CreateMenuItemDto,
   ): Promise<MenuItemResponseDto> {
     return this.createMenuItemService.execute(authUser, menuCategoryId, dto);
@@ -312,7 +314,7 @@ export class MenusController {
   })
   updateMenuItem(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuItemId') menuItemId: string,
+    @Param('menuItemId', ParseUUIDPipe) menuItemId: string,
     @Body() dto: UpdateMenuItemDto,
   ): Promise<MenuItemResponseDto> {
     return this.updateMenuItemService.execute(authUser, menuItemId, dto);
@@ -341,7 +343,7 @@ export class MenusController {
   })
   updateModifierGroup(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('modifierGroupId') modifierGroupId: string,
+    @Param('modifierGroupId', ParseUUIDPipe) modifierGroupId: string,
     @Body() dto: UpdateModifierGroupDto,
   ): Promise<ModifierGroupResponseDto> {
     return this.updateModifierGroupService.execute(
@@ -359,7 +361,7 @@ export class MenusController {
   })
   createModifierOption(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('modifierGroupId') modifierGroupId: string,
+    @Param('modifierGroupId', ParseUUIDPipe) modifierGroupId: string,
     @Body() dto: CreateModifierOptionDto,
   ): Promise<ModifierOptionResponseDto> {
     return this.createModifierOptionService.execute(
@@ -378,7 +380,7 @@ export class MenusController {
   })
   updateModifierOption(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('modifierOptionId') modifierOptionId: string,
+    @Param('modifierOptionId', ParseUUIDPipe) modifierOptionId: string,
     @Body() dto: UpdateModifierOptionDto,
   ): Promise<ModifierOptionResponseDto> {
     return this.updateModifierOptionService.execute(
@@ -399,7 +401,7 @@ export class MenusController {
   })
   uploadModifierOptionImage(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('modifierOptionId') modifierOptionId: string,
+    @Param('modifierOptionId', ParseUUIDPipe) modifierOptionId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ): Promise<ModifierOptionResponseDto> {
     return this.uploadModifierOptionImageService.execute(
@@ -417,7 +419,7 @@ export class MenusController {
   })
   removeModifierOptionImage(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('modifierOptionId') modifierOptionId: string,
+    @Param('modifierOptionId', ParseUUIDPipe) modifierOptionId: string,
   ): Promise<ModifierOptionResponseDto> {
     return this.removeModifierOptionImageService.execute(
       authUser,
@@ -434,7 +436,7 @@ export class MenusController {
   })
   setMenuItemModifierGroups(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuItemId') menuItemId: string,
+    @Param('menuItemId', ParseUUIDPipe) menuItemId: string,
     @Body() dto: SetMenuItemModifierGroupsDto,
   ): Promise<ModifierGroupResponseDto[]> {
     return this.setMenuItemModifierGroupsService.execute(
@@ -453,7 +455,7 @@ export class MenusController {
   })
   upsertMenuItemTranslation(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuItemId') menuItemId: string,
+    @Param('menuItemId', ParseUUIDPipe) menuItemId: string,
     @Param('locale') locale: string,
     @Body() dto: UpsertItemTranslationDto,
   ): Promise<{ locale: string; name: string; description: string | null }> {
@@ -476,7 +478,7 @@ export class MenusController {
   })
   uploadMenuItemImage(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuItemId') menuItemId: string,
+    @Param('menuItemId', ParseUUIDPipe) menuItemId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ): Promise<MenuItemResponseDto> {
     return this.uploadMenuItemImageService.execute(authUser, menuItemId, file);
@@ -490,7 +492,7 @@ export class MenusController {
   })
   removeMenuItemImage(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuItemId') menuItemId: string,
+    @Param('menuItemId', ParseUUIDPipe) menuItemId: string,
   ): Promise<MenuItemResponseDto> {
     return this.removeMenuItemImageService.execute(authUser, menuItemId);
   }
@@ -504,7 +506,7 @@ export class MenusController {
   })
   reorderMenuItems(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuCategoryId') menuCategoryId: string,
+    @Param('menuCategoryId', ParseUUIDPipe) menuCategoryId: string,
     @Body() dto: ReorderMenuItemsDto,
   ): Promise<{ reorderedCount: number }> {
     return this.reorderMenuItemsService.execute(authUser, menuCategoryId, dto);
@@ -519,8 +521,8 @@ export class MenusController {
   })
   publishMenu(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
-  ): Promise<MenuDetailResponseDto> {
+    @Param('menuId', ParseUUIDPipe) menuId: string,
+  ): Promise<PublishMenuResponseDto> {
     return this.publishMenuService.execute(authUser, menuId);
   }
 
@@ -533,7 +535,7 @@ export class MenusController {
   })
   duplicateMenu(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
+    @Param('menuId', ParseUUIDPipe) menuId: string,
     @Body() dto: DuplicateMenuDto,
   ): Promise<MenuDetailResponseDto> {
     return this.duplicateMenuService.execute(authUser, menuId, dto);
@@ -547,7 +549,7 @@ export class MenusController {
   })
   updateMenu(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
+    @Param('menuId', ParseUUIDPipe) menuId: string,
     @Body() dto: UpdateMenuDto,
   ): Promise<MenuListItemResponseDto> {
     return this.updateMenuService.execute(authUser, menuId, dto);
@@ -563,7 +565,7 @@ export class MenusController {
   })
   deleteMenu(
     @CurrentAuthUser() authUser: JwtPayload,
-    @Param('menuId') menuId: string,
+    @Param('menuId', ParseUUIDPipe) menuId: string,
   ): Promise<void> {
     return this.deleteMenuService.execute(authUser, menuId);
   }

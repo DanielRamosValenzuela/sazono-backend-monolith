@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { MODIFIER_GROUP_TREE_INCLUDE } from './modifier-group-include';
 import { mapModifierGroup } from './menu-mapper';
 import type {
   ListModifierGroupsQueryDto,
@@ -25,15 +26,11 @@ export class ListModifierGroupsService {
     ]);
 
     const groups = await this.prisma.modifierGroup.findMany({
-      where: { branchId: query.branchId },
+      where: { branchId: query.branchId, parentOptionId: null },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      include: {
-        options: {
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
+      include: MODIFIER_GROUP_TREE_INCLUDE,
     });
 
-    return groups.map(mapModifierGroup);
+    return groups.map((group) => mapModifierGroup(group));
   }
 }

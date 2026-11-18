@@ -285,8 +285,30 @@ describe('CashSessionsService', () => {
   });
 });
 
+describe('CashSessionsService denominations', () => {
+  it('rejects denominations that do not add up to the counted cash', async () => {
+    const { service } = build();
+
+    await expect(
+      service.close(
+        authUser,
+        'b1',
+        'cs1',
+        { countedCash: '65000', denominations: { '20000': 2, '10000': 2 } },
+        meta,
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'CASH_DENOMINATIONS_MISMATCH' },
+    });
+  });
+});
+
 describe('CashMovementsService', () => {
-  function buildMovements(options: { session?: boolean; require?: boolean }) {
+  function buildMovements(options: {
+    session?: boolean;
+    require?: boolean;
+    hadSession?: boolean;
+  }) {
     const created = {
       id: 'm1',
       type: CashMovementType.CASH_OUT,
@@ -311,6 +333,15 @@ describe('CashMovementsService', () => {
     };
     const prisma = {
       cashMovement: { findFirst: jest.fn().mockResolvedValue(null) },
+      cashSession: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue(
+            (options.hadSession ?? options.session !== false)
+              ? { id: 'cs1' }
+              : null,
+          ),
+      },
       $transaction: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
     };
     const access = {
@@ -391,6 +422,26 @@ describe('CashMovementsService', () => {
         data: expect.objectContaining({ cashSessionId: null }),
       }),
     );
+  });
+
+  it('rejects a movement whose session closed during the request', async () => {
+    const { service, tx } = buildMovements({
+      session: false,
+      hadSession: true,
+    });
+
+    await expect(
+      service.create(
+        authUser,
+        'b1',
+        'key-12345678',
+        { type: 'CASH_OUT', amount: '5000', reason: 'Hielo' },
+        meta,
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'CASH_SESSION_ALREADY_CLOSED' },
+    });
+    expect(tx.cashMovement.create).not.toHaveBeenCalled();
   });
 
   it('requires an open session when the branch demands it', async () => {

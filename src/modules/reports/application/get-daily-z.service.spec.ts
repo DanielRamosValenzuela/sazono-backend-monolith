@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import {
   GetDailyZService,
+  allocateCollectedLines,
   buildDailyZAfterRefunds,
   buildDailyZCash,
   buildDailyZCategories,
@@ -111,6 +112,44 @@ describe('daily Z builders', () => {
     expect(rows).toHaveLength(2);
   });
 
+  it('reconciles categories with collected sales across paid, partial and abandoned bills', () => {
+    const line = (
+      bill_id: string,
+      collected: number,
+      category: string,
+      amount: number,
+    ) => ({
+      bill_id,
+      collected,
+      category_path: [category],
+      item_name: category,
+      station_name: 's',
+      amount,
+      quantity: 1,
+      cancelled_quantity: 0,
+    });
+    const rows = buildDailyZCategories(
+      allocateCollectedLines([
+        line('paid', 10000, 'Cafe', 6000),
+        line('paid', 10000, 'Postres', 4000),
+        line('partial', 5000, 'Cafe', 10000),
+        line('partial', 5000, 'Postres', 10000),
+        line('abandoned', 3333, 'Cafe', 5000),
+        line('abandoned', 3333, 'Postres', 5000),
+        line('abandoned', 3333, 'Otros', 5000),
+        line('unpaid', 0, 'Cafe', 9000),
+      ]),
+    );
+    const total = rows.reduce((acc, row) => acc + Number(row.amount), 0);
+    const sales = buildDailyZSales(
+      [{ ...methods[0], amount: 18333, tip: 0 }],
+      range,
+    );
+
+    expect(total).toBe(Number(sales.total));
+    expect(rows.find((row) => row.category === 'Cafe')?.amount).toBe('9611');
+  });
+
   it('computes expected cash per cashier with signed movements', () => {
     const cash = buildDailyZCash(
       [{ staff_id: 's1', name: 'Ana', amount: 20000, tip: 1000 }],
@@ -183,7 +222,7 @@ describe('GetDailyZService', () => {
     const insights = {
       findMethodBreakdown: jest.fn().mockResolvedValue(methods),
     };
-    const reports = { findSoldHierarchyLines: jest.fn().mockResolvedValue([]) };
+    const reports = { findCollectedBillLines: jest.fn().mockResolvedValue([]) };
     const service = new GetDailyZService(
       scopeService as never,
       reports as never,

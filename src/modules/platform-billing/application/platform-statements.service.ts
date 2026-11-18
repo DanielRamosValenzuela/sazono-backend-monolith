@@ -568,17 +568,19 @@ export class PlatformStatementsService {
                  COALESCE(SUM(b.discount_amount), 0) AS discounts
           FROM bills b
           JOIN branches br ON br.id = b.branch_id
+          CROSS JOIN LATERAL (
+            SELECT COALESCE(
+              MAX(p.paid_at) FILTER (WHERE p.status = 'PAID'),
+              CASE WHEN COUNT(p.id) = 0 THEN b.updated_at END
+            ) AS effective_at
+            FROM payments p
+            WHERE p.bill_id = b.id
+          ) eff
           WHERE b.status = 'PAID'
             AND b.discount_amount > 0
             AND br.restaurant_id = ANY(${ids}::uuid[])
-            AND (
-              SELECT MAX(p.paid_at) FROM payments p
-              WHERE p.bill_id = b.id AND p.status = 'PAID'
-            ) >= ${start}
-            AND (
-              SELECT MAX(p.paid_at) FROM payments p
-              WHERE p.bill_id = b.id AND p.status = 'PAID'
-            ) < ${end}
+            AND eff.effective_at >= ${start}
+            AND eff.effective_at < ${end}
           GROUP BY b.branch_id
         `,
       );

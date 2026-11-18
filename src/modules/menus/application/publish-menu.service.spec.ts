@@ -165,6 +165,7 @@ describe('PublishMenuService', () => {
 
     expect(result.status).toBe(MenuStatus.PUBLISHED);
     expect(result.isDefaultMenu).toBe(true);
+    expect(result.warnings).toEqual([]);
     expect(updateBranchSettingsMock).toHaveBeenCalled();
   });
 
@@ -255,6 +256,117 @@ describe('PublishMenuService', () => {
     ).toEqual([
       ['cafe', null],
       ['calientes', 'cafe'],
+    ]);
+  });
+
+  it('returns advisory warnings for options whose required sub-group is unavailable', async () => {
+    const opt = (id: string, isAvailable: boolean, childGroups: unknown[]) => ({
+      id,
+      name: id,
+      priceDelta: { toString: () => '0' },
+      isAvailable,
+      sortOrder: 0,
+      imageUrl: null,
+      childGroups,
+    });
+    const grp = (id: string, options: unknown[], isRequired: boolean) => ({
+      id,
+      branchId: 'branch-1',
+      name: id,
+      selectionType: 'ONE',
+      minSelect: 0,
+      maxSelect: 1,
+      isRequired,
+      sortOrder: 0,
+      options,
+    });
+    const categories = [
+      {
+        id: 'c1',
+        name: 'Fondos',
+        sortOrder: 0,
+        status: MenuCategoryStatus.ACTIVE,
+        parentId: null,
+        items: [
+          {
+            id: 'item-1',
+            name: 'Hamburguesa',
+            description: null,
+            price: { toString: () => '8000' },
+            sku: null,
+            itemType: 'FOOD',
+            isAvailable: true,
+            sortOrder: 0,
+            media: [],
+            preparationStation: {
+              id: 'station-1',
+              name: 'Cocina',
+              stationType: PreparationStationType.KITCHEN,
+              status: PreparationStationStatus.ACTIVE,
+            },
+            modifierGroups: [
+              {
+                sortOrder: 0,
+                modifierGroup: grp(
+                  'acomp',
+                  [
+                    opt('Papas', true, [
+                      grp('Tipo', [opt('Fritas', false, [])], true),
+                    ]),
+                  ],
+                  false,
+                ),
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    findUniqueMock.mockResolvedValue({
+      id: 'menu-1',
+      branchId: 'branch-1',
+      status: MenuStatus.DRAFT,
+      categories,
+    });
+    ensureAccessMock.mockResolvedValue({});
+    transactionMock.mockImplementation(
+      (callback: (transactionClient: TransactionClient) => Promise<unknown>) =>
+        callback({
+          menu: {
+            updateMany: jest.fn().mockResolvedValue({}),
+            update: jest.fn().mockResolvedValue({}),
+            findUniqueOrThrow: jest.fn().mockResolvedValue({
+              id: 'menu-1',
+              branchId: 'branch-1',
+              name: 'Carta',
+              status: MenuStatus.PUBLISHED,
+              version: 1,
+              defaultLanguage: 'es',
+              publishedAt: new Date('2026-07-07T12:00:00.000Z'),
+              categories,
+            }),
+          },
+          branchSettings: { update: jest.fn().mockResolvedValue({}) },
+        }),
+    );
+
+    const result = await service.execute(
+      {
+        sub: 'auth-1',
+        profileType: LoginProfileType.STAFF,
+        profileId: 'staff-1',
+        restaurantId: 'restaurant-1',
+      },
+      'menu-1',
+    );
+
+    expect(result.warnings).toEqual([
+      {
+        code: 'OPTION_REQUIRED_SUBGROUP_UNAVAILABLE',
+        optionName: 'Papas',
+        groupName: 'Tipo',
+      },
     ]);
   });
 

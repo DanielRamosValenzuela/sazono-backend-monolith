@@ -43,7 +43,7 @@ export class CreateOrderItemDto {
   @ApiPropertyOptional({ type: [String], format: 'uuid' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(30)
   @IsUUID('4', { each: true })
   modifierOptionIds?: string[];
 }
@@ -157,7 +157,16 @@ class OrderItemModifierResponseDto {
   @ApiProperty({ format: 'uuid', nullable: true })
   modifierOptionId!: string | null;
 
-  @ApiProperty({ example: 'Papas fritas' })
+  @ApiProperty({ format: 'uuid', nullable: true })
+  parentModifierOptionId!: string | null;
+
+  @ApiProperty({ example: 2, description: 'Nivel de anidacion, de 1 a 3.' })
+  depth!: number;
+
+  @ApiProperty({ type: [String], example: ['Papas', 'Duquesa'] })
+  path!: string[];
+
+  @ApiProperty({ example: 'Duquesa' })
   name!: string;
 
   @ApiProperty({ example: '1500' })

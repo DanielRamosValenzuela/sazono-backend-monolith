@@ -252,8 +252,19 @@ describe('CreateWaiterOrderService', () => {
         modifiers: [
           {
             modifierOptionId: 'option-1',
+            parentModifierOptionId: null,
+            depth: 1,
+            path: ['Papas fritas'],
             name: 'Papas fritas',
             priceDelta: new Prisma.Decimal(1500),
+          },
+          {
+            modifierOptionId: 'option-2',
+            parentModifierOptionId: 'option-1',
+            depth: 2,
+            path: ['Papas fritas', 'Duquesa'],
+            name: 'Duquesa',
+            priceDelta: new Prisma.Decimal(800),
           },
         ],
       },
@@ -331,7 +342,7 @@ describe('CreateWaiterOrderService', () => {
         menuCategoryId: string;
         categoryPathSnapshot: string[];
         priceSnapshot: Prisma.Decimal;
-        modifiers: { create: Array<Record<string, unknown>> };
+        modifiers: { createMany: { data: Array<Record<string, unknown>> } };
       };
     };
     expect(orderItemCreateArgs.data.menuCategoryId).toBe('category-latte');
@@ -343,11 +354,27 @@ describe('CreateWaiterOrderService', () => {
     expect(orderItemCreateArgs.data.priceSnapshot).toEqual(
       new Prisma.Decimal(13400),
     );
-    expect(orderItemCreateArgs.data.modifiers.create).toEqual([
+    const rows = orderItemCreateArgs.data.modifiers.createMany.data;
+    expect(rows).toEqual([
       {
+        id: expect.any(String),
         modifierOptionId: 'option-1',
+        parentOrderItemModifierId: null,
+        depth: 1,
+        pathSnapshot: ['Papas fritas'],
         nameSnapshot: 'Papas fritas',
         priceDeltaSnapshot: new Prisma.Decimal(1500),
+        createdAt: expect.any(Date),
+      },
+      {
+        id: expect.any(String),
+        modifierOptionId: 'option-2',
+        parentOrderItemModifierId: rows[0].id,
+        depth: 2,
+        pathSnapshot: ['Papas fritas', 'Duquesa'],
+        nameSnapshot: 'Duquesa',
+        priceDeltaSnapshot: new Prisma.Decimal(800),
+        createdAt: expect.any(Date),
       },
     ]);
   });

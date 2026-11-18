@@ -369,6 +369,23 @@ export class CashSessionsService {
 
     const denominations = this.parseDenominations(dto.denominations);
 
+    if (denominations && Object.keys(denominations).length > 0) {
+      const denominationsTotal = Object.entries(denominations).reduce(
+        (total, [value, count]) =>
+          total.add(new Prisma.Decimal(value).mul(Number(count))),
+        new Prisma.Decimal(0),
+      );
+
+      if (!denominationsTotal.equals(counted)) {
+        throw new BadRequestException({
+          message:
+            'El conteo por denominacion no coincide con el efectivo contado.',
+          code: 'CASH_DENOMINATIONS_MISMATCH',
+          denominationsTotal: denominationsTotal.toFixed(0),
+        });
+      }
+    }
+
     const closed = await this.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<{ id: string }[]>(
         Prisma.sql`SELECT id::text AS id FROM cash_sessions WHERE id = ${sessionId}::uuid AND branch_id = ${branchId}::uuid FOR UPDATE`,

@@ -185,6 +185,17 @@ export class CashMovementsService {
       return existing;
     }
 
+    const hadSession =
+      !explicitSessionId &&
+      (await this.prisma.cashSession.findFirst({
+        where: {
+          branchId,
+          cashierStaffUserId: context.staffUserId,
+          status: 'OPEN',
+        },
+        select: { id: true },
+      })) !== null;
+
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const sessionId = await this.resolveSession(
@@ -192,6 +203,7 @@ export class CashMovementsService {
           branchId,
           context.staffUserId,
           explicitSessionId,
+          hadSession,
         );
 
         const movement = await tx.cashMovement.create({
@@ -253,6 +265,7 @@ export class CashMovementsService {
     branchId: string,
     staffUserId: string,
     explicitSessionId: string | undefined,
+    hadSession: boolean,
   ): Promise<string | null> {
     if (explicitSessionId) {
       const locked = await tx.$queryRaw<{ id: string }[]>(
@@ -285,6 +298,13 @@ export class CashMovementsService {
 
     if (own) {
       return own;
+    }
+
+    if (hadSession) {
+      throw new ConflictException({
+        message: 'La sesion de caja ya esta cerrada.',
+        code: 'CASH_SESSION_ALREADY_CLOSED',
+      });
     }
 
     const settings = await tx.branchSettings.findUnique({

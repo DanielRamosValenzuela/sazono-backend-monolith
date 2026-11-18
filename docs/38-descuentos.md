@@ -49,7 +49,7 @@ Errores con `code`: `DISCOUNT_BILL_NOT_PAYABLE`, `DISCOUNT_BILL_HAS_REFUNDS`, `D
 ## Aprobacion
 
 - Roles ADMIN no necesitan PIN. Para el resto, el descuento acumulado de la cuenta exige PIN de un ADMIN distinto del actor si supera `BranchSettings.discountApprovalPercent` (default 10 %, null = sin umbral) o `discountApprovalAmount` (null = sin umbral), o si deja el consumo en 0 (cortesia total, siempre).
-- Servicio compartido `common/approval/approval-pin.service.ts` (`listApprovers`, `verify`). El bloqueo cuenta cualquier accion `*_APPROVAL_FAILED` del actor (5 en 15 minutos). `RefundPaymentService` conserva su propia implementacion (sin cambios de comportamiento); migrarlo al servicio compartido queda pendiente.
+- Servicio compartido `common/approval/approval-pin.service.ts` (`listApprovers`, `verify`). El bloqueo cuenta cualquier accion `*_APPROVAL_FAILED` del actor (5 en 15 minutos); es el control principal contra fuerza bruta. El bloqueo global del PIN del aprobador solo se activa tras 20 fallos acumulados de todos los actores (`APPROVAL_PIN_GLOBAL_MAX_FAILED_ATTEMPTS`, 15 minutos), asi un solo cajero no puede bloquear al aprobador para los demas. Los intentos rechazados por aprobador bloqueado (`DISCOUNT_PIN_LOCKED`) no escriben fila `*_APPROVAL_FAILED`. `RefundPaymentService` conserva su propia implementacion (sin cambios de comportamiento); migrarlo al servicio compartido queda pendiente.
 - Configuracion: `PATCH /branches/:branchId` con `settings.discountApprovalPercent` (0-100, 2 decimales, null) y `settings.discountApprovalAmount` (entero >= 0, null). Auditoria `BRANCH_DISCOUNT_SETTINGS_CHANGED`. La respuesta de sucursales expone ambos como string o null.
 
 ## Reglas de estado
@@ -69,11 +69,11 @@ Errores con `code`: `DISCOUNT_BILL_NOT_PAYABLE`, `DISCOUNT_BILL_HAS_REFUNDS`, `D
 
 - Ventas, medios, cajeros, horas y KPIs salen de `payments` y ya son netos de descuento. El descuento nunca se resta de nuevo.
 - Ventas por orden: `discounts = bills.discount_amount` solo con cuenta PAID, `payable` = consumo cobrado, `total = payable + discounts`.
-- Jerarquia: resta `bill_items.discount_amount` por linea (la parte de reembolso por item es M8c).
-- Z diario: `sales.discounts`, `discountCount`, `discountsByReason`, `discountsByApprover`.
+- Jerarquia: resta `bill_items.discount_amount` por linea (la parte de reembolso por item es M8c). Sigue contando las lineas completas de cuentas parciales o abandonadas (no se reparte lo cobrado como en el Z), por lo que puede superar el total de ventas; es una vista de producto, no de conciliacion.
+- Z diario: `sales.discounts`, `discountCount`, `discountsByReason`, `discountsByApprover`; `byCategory` se reparte sobre lo cobrado y cuadra con `sales.total`.
 - Cuentas abiertas: columna `discount`.
 - Detalle de orden: `items[].discount`, `discounts[]`, `totals.discount`, `totals.consumption`; `reconciled` compara `items - descuento` contra lo pagado.
-- Estado de cuenta de plataforma: `discounts` es informativo (suma de descuentos de cuentas PAID cerradas en el mes). `computeFee` ya no lo resta (`netSales = gross - refunds + carryOverIn`). Estados ISSUED no cambian.
+- Estado de cuenta de plataforma: `discounts` es informativo (suma de descuentos de cuentas PAID cerradas en el mes, incluidas las cortesias sin pagos, fechadas por `updated_at` igual que el Z). `computeFee` ya no lo resta (`netSales = gross - refunds + carryOverIn`). Estados ISSUED no cambian.
 - Cuentas y QR (`current-bill`, `open-bills`, `qr bill`, resultado de pago, sesiones de mostrador) exponen `discountAmount` y, donde aplica, `consumptionAmount`.
 
 ## No incluido

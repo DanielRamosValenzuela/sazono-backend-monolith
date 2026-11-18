@@ -108,6 +108,25 @@ describe('PlatformStatementsService', () => {
     expect(result.totals.feeAmount).toBe('8000.00');
   });
 
+  it('counts discounts of paid bills without payments (courtesy)', async () => {
+    const { service, prisma } = build({
+      payments: [{ key: 'branch-1', gross: '1000000', tips: '0' }],
+    });
+    prisma.$queryRaw
+      .mockReset()
+      .mockResolvedValueOnce([{ key: 'branch-1', gross: '1000000', tips: '0' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ key: 'branch-1', discounts: '7000' }])
+      .mockResolvedValue([]);
+
+    const result = await service.list('2026-10');
+    const sql = (prisma.$queryRaw.mock.calls[2][0] as Prisma.Sql).sql;
+
+    expect(sql).toContain('COUNT(p.id) = 0');
+    expect(sql).toContain('b.updated_at');
+    expect(result.rows[0].discounts).toBe('7000.00');
+  });
+
   it('carries a negative previous month (live) into this month', async () => {
     const { service, prisma } = build({
       payments: [{ key: 'branch-1', gross: '100000', tips: '0' }],

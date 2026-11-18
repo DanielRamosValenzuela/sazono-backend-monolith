@@ -7,10 +7,18 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { categoryPathOf } from '../../menus/application/menu-category-tree';
+import {
+  resolveModifierSelection,
+  type ModifierTreeGroup,
+} from '../../menus/domain/modifier-tree';
+import { MODIFIER_GROUP_TREE_INCLUDE } from '../../menus/application/modifier-group-include';
 import type { CreateOrderItemDto } from '../presentation/http/dto/orders.dto';
 
 export type OrderableModifier = {
   modifierOptionId: string;
+  parentModifierOptionId: string | null;
+  depth: number;
+  path: string[];
   name: string;
   priceDelta: Prisma.Decimal;
 };
@@ -76,9 +84,7 @@ export class OrderableMenuItemResolverService {
         modifierGroups: {
           include: {
             modifierGroup: {
-              include: {
-                options: true,
-              },
+              include: MODIFIER_GROUP_TREE_INCLUDE,
             },
           },
         },
@@ -125,11 +131,18 @@ export class OrderableMenuItemResolverService {
         (total, modifier) => total.add(modifier.priceDelta),
         new Prisma.Decimal(0),
       );
+      const unitPrice = menuItem.price.add(modifiersDelta);
+
+      if (unitPrice.isNegative()) {
+        throw new BadRequestException(
+          `Los modificadores seleccionados dejan el precio de "${menuItem.name}" bajo cero.`,
+        );
+      }
 
       return {
         menuItemId: menuItem.id,
         name: menuItem.name,
-        price: menuItem.price.add(modifiersDelta),
+        price: unitPrice,
         menuCategoryId: menuItem.menuCategoryId,
         categoryPath: categoryPathOf(menuItem.menuCategory),
         preparationStationId: menuItem.preparationStationId,
@@ -143,86 +156,21 @@ export class OrderableMenuItemResolverService {
   private resolveModifiers(
     menuItem: {
       name: string;
-      modifierGroups: Array<{
-        modifierGroup: {
-          id: string;
-          name: string;
-          minSelect: number;
-          maxSelect: number | null;
-          isRequired: boolean;
-          options: Array<{
-            id: string;
-            name: string;
-            priceDelta: Prisma.Decimal;
-            isAvailable: boolean;
-          }>;
-        };
-      }>;
+      modifierGroups: Array<{ modifierGroup: ModifierTreeGroup }>;
     },
     itemDto: CreateOrderItemDto,
   ): OrderableModifier[] {
-    const selectedOptionIds = itemDto.modifierOptionIds ?? [];
-
-    const optionToGroup = new Map<
-      string,
-      {
-        group: (typeof menuItem.modifierGroups)[number]['modifierGroup'];
-        option: (typeof menuItem.modifierGroups)[number]['modifierGroup']['options'][number];
-      }
-    >();
-
-    for (const link of menuItem.modifierGroups) {
-      for (const option of link.modifierGroup.options) {
-        optionToGroup.set(option.id, { group: link.modifierGroup, option });
-      }
-    }
-
-    const selectedByGroupId = new Map<string, OrderableModifier[]>();
-
-    for (const optionId of selectedOptionIds) {
-      const resolved = optionToGroup.get(optionId);
-
-      if (!resolved) {
-        throw new BadRequestException(
-          `Uno de los modificadores seleccionados no pertenece al item "${menuItem.name}".`,
-        );
-      }
-
-      if (!resolved.option.isAvailable) {
-        throw new BadRequestException(
-          `El modificador "${resolved.option.name}" no esta disponible.`,
-        );
-      }
-
-      const groupSelections = selectedByGroupId.get(resolved.group.id) ?? [];
-      groupSelections.push({
-        modifierOptionId: resolved.option.id,
-        name: resolved.option.name,
-        priceDelta: resolved.option.priceDelta,
-      });
-      selectedByGroupId.set(resolved.group.id, groupSelections);
-    }
-
-    for (const link of menuItem.modifierGroups) {
-      const group = link.modifierGroup;
-      const selectedCount = selectedByGroupId.get(group.id)?.length ?? 0;
-      const effectiveMin = group.isRequired
-        ? Math.max(group.minSelect, 1)
-        : group.minSelect;
-
-      if (selectedCount < effectiveMin) {
-        throw new BadRequestException(
-          `Debes seleccionar al menos ${effectiveMin} opcion(es) de "${group.name}" para "${menuItem.name}".`,
-        );
-      }
-
-      if (group.maxSelect !== null && selectedCount > group.maxSelect) {
-        throw new BadRequestException(
-          `Puedes seleccionar como maximo ${group.maxSelect} opcion(es) de "${group.name}" para "${menuItem.name}".`,
-        );
-      }
-    }
-
-    return [...selectedByGroupId.values()].flat();
+    return resolveModifierSelection(
+      menuItem.modifierGroups.map((link) => link.modifierGroup),
+      itemDto.modifierOptionIds ?? [],
+      menuItem.name,
+    ).map(({ option, parentOptionId, depth, path }) => ({
+      modifierOptionId: option.id,
+      parentModifierOptionId: parentOptionId,
+      depth,
+      path,
+      name: option.name,
+      priceDelta: option.priceDelta,
+    }));
   }
 }

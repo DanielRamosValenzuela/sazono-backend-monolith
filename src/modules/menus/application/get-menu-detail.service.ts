@@ -3,6 +3,7 @@ import { Role, TranslationEntityType } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { groupTranslationsByEntity, mapMenuDetail } from './menu-mapper';
+import { MODIFIER_GROUP_TREE_INCLUDE } from './modifier-group-include';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { MenuDetailResponseDto } from '../presentation/http/dto/menus.dto';
 
@@ -35,13 +36,7 @@ export class GetMenuDetailService {
                 modifierGroups: {
                   orderBy: { sortOrder: 'asc' },
                   include: {
-                    modifierGroup: {
-                      include: {
-                        options: {
-                          orderBy: { sortOrder: 'asc' },
-                        },
-                      },
-                    },
+                    modifierGroup: { include: MODIFIER_GROUP_TREE_INCLUDE },
                   },
                 },
               },
