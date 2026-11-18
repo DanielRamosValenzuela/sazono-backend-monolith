@@ -67,7 +67,7 @@ elige el de mayor `displayPriority` para cobrar.
   36 caracteres y no cabe tal cual. Llama `create(buyOrder, buyOrder, TRANSBANK_RETURN_URL, [TransactionDetail])`
   con el monto validado como entero CLP (`infrastructure/transbank/transbank-amount.ts`)
   y devuelve `{ kind: 'REDIRECT', providerReference: token, redirectUrl: url,
-  method: 'POST', fields: { token_ws: token }, expiresAt }`. El
+method: 'POST', fields: { token_ws: token }, expiresAt }`. El
   `providerReference` (el `token` de Transbank) es lo unico que permite
   correlacionar despues con el `PaymentAttempt`, ya que el `buyOrder` no es
   reversible al `attemptId` original.

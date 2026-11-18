@@ -163,12 +163,14 @@ describe('AuthService PIN login', () => {
 
   const staffUserFindUniqueMock = jest.fn();
   const staffUserUpdateMock = jest.fn().mockResolvedValue({});
+  const executeRawMock = jest.fn().mockResolvedValue(1);
 
   const prisma = {
     staffUser: {
       findUnique: staffUserFindUniqueMock,
       update: staffUserUpdateMock,
     },
+    $executeRaw: executeRawMock,
   } as unknown as PrismaService;
 
   const signAsyncMock = jest.fn().mockResolvedValue('signed-jwt');
@@ -194,8 +196,13 @@ describe('AuthService PIN login', () => {
     pinHash: basePinHash,
     pinFailedAttempts: 0,
     pinLockedUntil: null as Date | null,
+    approvalPinFailedAttempts: 0,
+    approvalPinLockedUntil: null as Date | null,
     branchRoles: [],
   };
+
+  const sqlText = (call: unknown[]) =>
+    (call[0] as { strings: string[] }).strings.join('?');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -225,7 +232,7 @@ describe('AuthService PIN login', () => {
     });
   });
 
-  it('rejects an incorrect PIN and increments the failed-attempts counter', async () => {
+  it('rejects an incorrect PIN with one atomic increment statement', async () => {
     staffUserFindUniqueMock.mockResolvedValue({
       ...baseStaffUser,
       pinFailedAttempts: 2,
@@ -235,27 +242,30 @@ describe('AuthService PIN login', () => {
       service.loginWithPin({ staffUserId: 'staff-1', pin: '0000' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
-    expect(staffUserUpdateMock).toHaveBeenCalledWith({
-      where: { id: 'staff-1' },
-      data: { pinFailedAttempts: 3 },
-    });
+    expect(executeRawMock).toHaveBeenCalledTimes(1);
+    const sql = sqlText(executeRawMock.mock.calls[0] as unknown[]);
+    expect(sql).toContain('UPDATE staff_users SET');
+    expect(sql).toContain('pin_failed_attempts + 1');
+    expect(sql).not.toContain('approval_pin');
+    expect(staffUserUpdateMock).not.toHaveBeenCalled();
   });
 
-  it('locks the PIN after reaching the max failed attempts', async () => {
+  it('emits one incremental statement per failure regardless of the value read', async () => {
     staffUserFindUniqueMock.mockResolvedValue({
       ...baseStaffUser,
       pinFailedAttempts: 4,
     });
 
-    await expect(
-      service.loginWithPin({ staffUserId: 'staff-1', pin: '0000' }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(
+        service.loginWithPin({ staffUserId: 'staff-1', pin: '0000' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    }
 
-    const updateArgs = staffUserUpdateMock.mock.calls[0][0] as {
-      data: { pinFailedAttempts: number; pinLockedUntil?: Date };
-    };
-    expect(updateArgs.data.pinFailedAttempts).toBe(0);
-    expect(updateArgs.data.pinLockedUntil).toBeInstanceOf(Date);
+    expect(executeRawMock).toHaveBeenCalledTimes(3);
+    for (const call of executeRawMock.mock.calls) {
+      expect(sqlText(call as unknown[])).toContain('pin_failed_attempts + 1');
+    }
   });
 
   it('rejects while the PIN is locked, without checking the PIN itself', async () => {
@@ -269,6 +279,7 @@ describe('AuthService PIN login', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(staffUserUpdateMock).not.toHaveBeenCalled();
+    expect(executeRawMock).not.toHaveBeenCalled();
   });
 
   it('rejects when the staff user has no PIN configured yet', async () => {
@@ -280,6 +291,144 @@ describe('AuthService PIN login', () => {
     await expect(
       service.loginWithPin({ staffUserId: 'staff-1', pin: '1234' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});
+
+describe('AuthService.verifyStaffPin', () => {
+  const staffUserUpdateMock = jest.fn().mockResolvedValue({});
+  const executeRawMock = jest.fn().mockResolvedValue(1);
+  const prisma = {
+    staffUser: { update: staffUserUpdateMock },
+    $executeRaw: executeRawMock,
+  } as unknown as PrismaService;
+  const service = new AuthService(
+    prisma,
+    {} as unknown as AuthProvider,
+    {} as unknown as JwtService,
+    {} as unknown as ConfigService,
+  );
+  const subject = {
+    id: 'staff-1',
+    pinHash: bcrypt.hashSync('1234', 10),
+    pinFailedAttempts: 0,
+    pinLockedUntil: null as Date | null,
+    approvalPinFailedAttempts: 0,
+    approvalPinLockedUntil: null as Date | null,
+  };
+  const sqlText = (call: unknown[]) =>
+    (call[0] as { strings: string[] }).strings.join('?');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('resets only the approval counters on a correct approval PIN', async () => {
+    await expect(
+      service.verifyStaffPin(subject, '1234', 'APPROVAL'),
+    ).resolves.toBe('OK');
+
+    expect(staffUserUpdateMock).toHaveBeenCalledWith({
+      where: { id: 'staff-1' },
+      data: { approvalPinFailedAttempts: 0, approvalPinLockedUntil: null },
+    });
+  });
+
+  it('resets only the login counters on a correct login PIN', async () => {
+    await expect(
+      service.verifyStaffPin(subject, '1234', 'LOGIN'),
+    ).resolves.toBe('OK');
+
+    expect(staffUserUpdateMock).toHaveBeenCalledWith({
+      where: { id: 'staff-1' },
+      data: { pinFailedAttempts: 0, pinLockedUntil: null },
+    });
+  });
+
+  it('counts a wrong approval PIN on the approval columns only', async () => {
+    await expect(
+      service.verifyStaffPin(subject, '0000', 'APPROVAL'),
+    ).resolves.toBe('INVALID');
+
+    const sql = sqlText(executeRawMock.mock.calls[0] as unknown[]);
+    expect(sql).toContain('approval_pin_failed_attempts + 1');
+    expect(sql).toContain('approval_pin_locked_until');
+    expect(sql).not.toMatch(/(?<!approval_)pin_failed_attempts/);
+  });
+
+  it('issues N increments for N parallel failures that read the same state', async () => {
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        service.verifyStaffPin(subject, '0000', 'APPROVAL'),
+      ),
+    );
+
+    expect(executeRawMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('is locked per scope without comparing the PIN', async () => {
+    const future = new Date(Date.now() + 60_000);
+
+    await expect(
+      service.verifyStaffPin(
+        { ...subject, approvalPinLockedUntil: future },
+        '1234',
+        'APPROVAL',
+      ),
+    ).resolves.toBe('LOCKED');
+    await expect(
+      service.verifyStaffPin(
+        { ...subject, approvalPinLockedUntil: future },
+        '1234',
+        'LOGIN',
+      ),
+    ).resolves.toBe('OK');
+    expect(executeRawMock).toHaveBeenCalledTimes(1);
+    expect(sqlText(executeRawMock.mock.calls[0] as unknown[])).not.toContain(
+      'approval_pin',
+    );
+  });
+
+  it('reserves the attempt atomically and refuses when the database row is already locked', async () => {
+    executeRawMock.mockResolvedValueOnce(0);
+
+    await expect(
+      service.verifyStaffPin(subject, '1234', 'APPROVAL'),
+    ).resolves.toBe('LOCKED');
+
+    const sql = sqlText(executeRawMock.mock.calls[0] as unknown[]);
+    expect(sql).toContain(
+      'approval_pin_locked_until IS NULL OR approval_pin_locked_until <= now()',
+    );
+    expect(staffUserUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('tests at most the allowed attempts when a burst reads the same stale state', async () => {
+    let remaining = 5;
+    executeRawMock.mockImplementation(() => {
+      if (remaining === 0) {
+        return Promise.resolve(0);
+      }
+
+      remaining -= 1;
+      return Promise.resolve(1);
+    });
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        service.verifyStaffPin(subject, '0000', 'APPROVAL'),
+      ),
+    );
+
+    expect(results.filter((result) => result === 'INVALID')).toHaveLength(5);
+    expect(results.filter((result) => result === 'LOCKED')).toHaveLength(15);
+    executeRawMock.mockResolvedValue(1);
+  });
+
+  it('is invalid when the user has no PIN', async () => {
+    await expect(
+      service.verifyStaffPin({ ...subject, pinHash: null }, '1234', 'APPROVAL'),
+    ).resolves.toBe('INVALID');
+    expect(executeRawMock).not.toHaveBeenCalled();
   });
 });
 

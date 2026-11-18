@@ -33,6 +33,8 @@
 29. [29 Versiones de carta: duplicar, renombrar y eliminar](29-versiones-de-carta.md)
 30. [30 Reportería: filtros libres, detalle de comanda y opciones de filtro](30-reporteria-filtros.md)
 31. [31 Estudio de velocidad del backend: mediciones, diagnóstico y plan](31-estudio-de-velocidad.md)
+32. [32 Reembolsos (M4): contrato de API, reglas y efectos en los reportes](32-reembolsos.md)
+33. [33 Reportería M3: ventas por medio, mesero, hora, propinas, cuentas abiertas y KPIs](33-reporteria-m3.md)
 
 Nota: dentro del bloque de pagos (12, 13, 21, 22, 23), lee primero el doc 24
 aunque quede numerado al final — es el mapa completo (flujos de dinero, por

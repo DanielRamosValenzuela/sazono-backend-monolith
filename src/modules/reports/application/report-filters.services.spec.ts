@@ -160,16 +160,19 @@ describe('GetPaymentsReportService filters', () => {
 describe('GetSalesByHierarchyService filters', () => {
   const resolveMock = jest.fn();
   const findHierarchyLinesMock = jest.fn();
+  const findPeriodRefundTotalsMock = jest.fn();
   const service = new GetSalesByHierarchyService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findHierarchyLines: findHierarchyLinesMock,
+      findPeriodRefundTotals: findPeriodRefundTotalsMock,
     } as unknown as ReportsPrismaRepository,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     findHierarchyLinesMock.mockResolvedValue([]);
+    findPeriodRefundTotalsMock.mockResolvedValue({ consumption: 0, tip: 0 });
   });
 
   it('applies the cashier, method and bill level filters of the scope to the lines query', async () => {

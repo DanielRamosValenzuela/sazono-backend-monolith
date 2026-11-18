@@ -28,6 +28,10 @@ import {
   type PaymentsReportResponse,
 } from '../../application/get-payments-report.service';
 import {
+  GetRefundsReportService,
+  type RefundsReportResponse,
+} from '../../application/get-refunds-report.service';
+import {
   GetSalesByHierarchyService,
   type SalesByHierarchyResponse,
 } from '../../application/get-sales-by-hierarchy.service';
@@ -38,6 +42,7 @@ import {
 } from '../../application/get-sales-by-order.service';
 import {
   PaymentsReportQueryDto,
+  RefundsReportQueryDto,
   SalesByHierarchyQueryDto,
   SalesByOrderQueryDto,
 } from './dto/reports.dto';
@@ -59,6 +64,7 @@ export class ReportsController {
     private readonly getSalesByHierarchyService: GetSalesByHierarchyService,
     private readonly getOrderDetailService: GetOrderDetailService,
     private readonly getFilterOptionsService: GetFilterOptionsService,
+    private readonly getRefundsReportService: GetRefundsReportService,
   ) {}
 
   @Get('branches/:branchId/sales-by-order')
@@ -130,6 +136,31 @@ export class ReportsController {
     }
 
     return this.getPaymentsReportService.execute(authUser, branchId, query);
+  }
+
+  @Get('branches/:branchId/refunds')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Reembolsos registrados en el rango (por fecha del reembolso, hora del restaurante) con totales por medio, motivo y quien los registro. format=csv descarga el reporte completo. ADMIN y SUPERVISOR ven todo; CASHIER solo los que el registro hoy.',
+  })
+  async getRefunds(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Query() query: RefundsReportQueryDto,
+  ): Promise<RefundsReportResponse | StreamableFile> {
+    if (query.format === 'csv') {
+      return toCsvFile(
+        await this.getRefundsReportService.executeCsv(
+          authUser,
+          branchId,
+          query,
+        ),
+      );
+    }
+
+    return this.getRefundsReportService.execute(authUser, branchId, query);
   }
 
   @Get('branches/:branchId/orders/:billId/detail')

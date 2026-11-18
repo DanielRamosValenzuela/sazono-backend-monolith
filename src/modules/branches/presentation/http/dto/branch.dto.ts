@@ -8,6 +8,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -57,6 +58,28 @@ class UpdateBranchSettingsDto {
   @IsOptional()
   @IsBoolean()
   tableAssignmentEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 20000,
+    description:
+      'Tope diario en pesos por cajero para reembolsos en efectivo sin aprobacion de un administrador. Null desactiva el tope.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(9999999999)
+  cashierRefundLimit?: number | null;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Valor inicial de Reembolsar propina cuando el reembolso no lo indica.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  refundTipDefault?: boolean;
 }
 
 export class UpdateBranchDto {
@@ -108,6 +131,12 @@ class BranchSettingsResponseDto {
 
   @ApiProperty()
   tableAssignmentEnabled!: boolean;
+
+  @ApiProperty({ nullable: true, required: false })
+  cashierRefundLimit!: string | null;
+
+  @ApiProperty()
+  refundTipDefault!: boolean;
 }
 
 export class BranchResponseDto {

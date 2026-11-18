@@ -78,6 +78,7 @@ describe('hierarchyToCsvRows', () => {
         null,
       ).nodes,
       totals: { amount: '100', quantity: 1 },
+      refunds: { consumption: '0', tip: '0' },
     });
 
     expect(csvLine(rows[0])).toBe(
@@ -89,15 +90,18 @@ describe('hierarchyToCsvRows', () => {
 describe('GetSalesByHierarchyService', () => {
   const resolveMock = jest.fn();
   const findHierarchyLinesMock = jest.fn();
+  const findPeriodRefundTotalsMock = jest.fn();
   const service = new GetSalesByHierarchyService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findHierarchyLines: findHierarchyLinesMock,
+      findPeriodRefundTotals: findPeriodRefundTotalsMock,
     } as unknown as ReportsPrismaRepository,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    findPeriodRefundTotalsMock.mockResolvedValue({ consumption: 0, tip: 0 });
     resolveMock.mockResolvedValue(scope);
     findHierarchyLinesMock.mockResolvedValue([
       record(['Cafe', 'Bebidas Calientes'], 'Latte', 7000, 2),
@@ -281,6 +285,55 @@ describe('GetSalesByHierarchyService', () => {
     expect(lines[2]).toBe(
       '"Cafe > =HYPERLINK(""x"")";Producto;2;1000;1;12,50;2;1000',
     );
-    expect(lines[lines.length - 1]).toBe('TOTAL;;;8000;3;;2;');
+    expect(lines[lines.length - 2]).toBe('TOTAL;;;8000;3;;2;');
+    expect(lines[lines.length - 1]).toBe(
+      'REEMBOLSOS (no asignados a productos);;;0;;;;',
+    );
+  });
+
+  describe('refunds', () => {
+    const totals = { consumption: 3500, tip: 273 };
+
+    it('adds the refunded consumption and tip of the same eligible set as a separate block', async () => {
+      findPeriodRefundTotalsMock.mockResolvedValue(totals);
+
+      const response = await service.execute(authUser, 'branch-1', {
+        from: '2026-07-14',
+        to: '2026-07-15',
+      });
+
+      expect(response.refunds).toEqual({ consumption: '3500', tip: '273' });
+      expect(findPeriodRefundTotalsMock.mock.calls[0][0]).toMatchObject({
+        branchId: 'branch-1',
+        start: scope.start,
+        end: scope.end,
+      });
+    });
+
+    it('keeps nodes and totals identical with and without refunds', async () => {
+      const query = { from: '2026-07-14', to: '2026-07-15' };
+      const without = await service.execute(authUser, 'branch-1', query);
+      findPeriodRefundTotalsMock.mockResolvedValue(totals);
+      const withRefunds = await service.execute(authUser, 'branch-1', query);
+
+      expect(withRefunds.nodes).toEqual(without.nodes);
+      expect(withRefunds.totals).toEqual(without.totals);
+      expect(without.refunds).toEqual({ consumption: '0', tip: '0' });
+    });
+
+    it('adds the unassigned refunds row after TOTAL in the CSV', async () => {
+      findPeriodRefundTotalsMock.mockResolvedValue(totals);
+
+      const response = await service.execute(authUser, 'branch-1', {
+        from: '2026-07-14',
+        to: '2026-07-15',
+      });
+      const rows = hierarchyToCsvRows(response);
+      const last = rows[rows.length - 1];
+
+      expect(last[0]).toBe('REEMBOLSOS (no asignados a productos)');
+      expect(last[3]).toBe(3500);
+      expect(rows[rows.length - 2][0]).toBe('TOTAL');
+    });
   });
 });

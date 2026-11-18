@@ -54,6 +54,17 @@ const PIN_SALT_ROUNDS = 10;
 const PIN_MAX_FAILED_ATTEMPTS = 5;
 const PIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
+export type StaffPinSubject = {
+  id: string;
+  pinHash: string | null;
+  pinFailedAttempts: number;
+  pinLockedUntil: Date | null;
+  approvalPinFailedAttempts: number;
+  approvalPinLockedUntil: Date | null;
+};
+
+export type PinScope = 'LOGIN' | 'APPROVAL';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -199,32 +210,17 @@ export class AuthService {
       throw new UnauthorizedException('PIN invalido.');
     }
 
-    if (staffUser.pinLockedUntil && staffUser.pinLockedUntil > new Date()) {
+    const pinResult = await this.verifyStaffPin(staffUser, dto.pin, 'LOGIN');
+
+    if (pinResult === 'LOCKED') {
       throw new UnauthorizedException(
         'PIN bloqueado temporalmente por demasiados intentos fallidos. Intenta mas tarde o entra con tu contrasena.',
       );
     }
 
-    const isValidPin = await bcrypt.compare(dto.pin, staffUser.pinHash);
-
-    if (!isValidPin) {
-      await this.registerFailedPinAttempt(
-        staffUser.id,
-        staffUser.pinFailedAttempts,
-      );
-
+    if (pinResult === 'INVALID') {
       throw new UnauthorizedException('PIN invalido.');
     }
-
-    await this.prisma.staffUser.update({
-      where: {
-        id: staffUser.id,
-      },
-      data: {
-        pinFailedAttempts: 0,
-        pinLockedUntil: null,
-      },
-    });
 
     const authenticatedIdentity = await this.authProvider.getUserById(
       staffUser.authUserId,
@@ -260,24 +256,68 @@ export class AuthService {
     };
   }
 
-  private async registerFailedPinAttempt(
-    staffUserId: string,
-    currentFailedAttempts: number,
-  ): Promise<void> {
-    const nextFailedAttempts = currentFailedAttempts + 1;
-    const shouldLock = nextFailedAttempts >= PIN_MAX_FAILED_ATTEMPTS;
+  async verifyStaffPin(
+    staffUser: StaffPinSubject,
+    pin: string,
+    scope: PinScope,
+  ): Promise<'OK' | 'INVALID' | 'LOCKED'> {
+    if (!staffUser.pinHash) {
+      return 'INVALID';
+    }
+
+    const lockedUntil =
+      scope === 'LOGIN'
+        ? staffUser.pinLockedUntil
+        : staffUser.approvalPinLockedUntil;
+
+    if (lockedUntil && lockedUntil > new Date()) {
+      return 'LOCKED';
+    }
+
+    if (!(await this.reservePinAttempt(staffUser.id, scope))) {
+      return 'LOCKED';
+    }
+
+    const isValidPin = await bcrypt.compare(pin, staffUser.pinHash);
+
+    if (!isValidPin) {
+      return 'INVALID';
+    }
 
     await this.prisma.staffUser.update({
-      where: {
-        id: staffUserId,
-      },
-      data: {
-        pinFailedAttempts: shouldLock ? 0 : nextFailedAttempts,
-        ...(shouldLock
-          ? { pinLockedUntil: new Date(Date.now() + PIN_LOCKOUT_DURATION_MS) }
-          : {}),
-      },
+      where: { id: staffUser.id },
+      data:
+        scope === 'LOGIN'
+          ? { pinFailedAttempts: 0, pinLockedUntil: null }
+          : { approvalPinFailedAttempts: 0, approvalPinLockedUntil: null },
     });
+
+    return 'OK';
+  }
+
+  private async reservePinAttempt(
+    staffUserId: string,
+    scope: PinScope,
+  ): Promise<boolean> {
+    const attempts = Prisma.raw(
+      scope === 'LOGIN'
+        ? 'pin_failed_attempts'
+        : 'approval_pin_failed_attempts',
+    );
+    const lockedUntil = Prisma.raw(
+      scope === 'LOGIN' ? 'pin_locked_until' : 'approval_pin_locked_until',
+    );
+
+    const reserved = await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE staff_users SET
+        ${attempts} = CASE WHEN ${attempts} + 1 >= ${PIN_MAX_FAILED_ATTEMPTS}::int THEN 0 ELSE ${attempts} + 1 END,
+        ${lockedUntil} = CASE WHEN ${attempts} + 1 >= ${PIN_MAX_FAILED_ATTEMPTS}::int THEN now() + (${PIN_LOCKOUT_DURATION_MS}::int * interval '1 millisecond') ELSE ${lockedUntil} END,
+        updated_at = now()
+      WHERE id = ${staffUserId}::uuid
+        AND (${lockedUntil} IS NULL OR ${lockedUntil} <= now())
+    `);
+
+    return reserved > 0;
   }
 
   private async signTokens(payload: JwtPayload): Promise<SignedTokens> {

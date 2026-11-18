@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import { UNCATEGORIZED_LABEL } from '../application/hierarchy-tree';
 import { escapeLike } from '../application/report-filters';
 import {
+  ACTIVE_ORDER_STATUS_NAMES,
+  hasClosureFilters,
   SOLD_ORDER_STATUSES,
   UNCLASSIFIED_METHOD,
   type PaymentSqlFilter,
@@ -33,6 +35,59 @@ export type PaymentsReportFilter = PaymentSqlFilter &
     provider: string | null;
     status: string | null;
   };
+
+export type RefundsReportFilter = {
+  branchId: string;
+  start: Date;
+  end: Date;
+  timeZone: string;
+  scopedToStaffUserId: string | null;
+  cashierId: string | null;
+  requestedById: string | null;
+  methods: PaymentSqlFilter['methods'];
+  sources: PaymentSqlFilter['sources'];
+  reasonCodes: string[];
+  refundStatuses: string[];
+  refundMethods: string[];
+  waiterId: string | null;
+  tableId: string | null;
+  zoneId: string | null;
+  minAmount: number | null;
+  maxAmount: number | null;
+  hasTip: boolean | null;
+  minTip: number | null;
+  timeFromMinute: number | null;
+  timeToMinute: number | null;
+  weekdays: number[];
+  q: string | null;
+};
+
+export type RefundsByMethodFilter = PaymentSqlFilter &
+  Pick<ReportFilters, 'waiterId' | 'tableId' | 'zoneId'> & {
+    branchId: string;
+    start: Date;
+    end: Date;
+    provider?: string | null;
+  };
+
+export function refundJoinSql(
+  range: { start: Date; end: Date },
+  payment = 'p',
+  alias = 'rf',
+): Prisma.Sql {
+  const paymentId = Prisma.raw(`${payment}.id`);
+
+  return Prisma.sql`LEFT JOIN LATERAL (
+    SELECT
+      COALESCE(SUM(rr.amount - rr.tip_amount), 0) AS consumption,
+      COALESCE(SUM(rr.tip_amount), 0) AS tip
+    FROM refunds rr
+    WHERE rr.payment_id = ${paymentId}
+      AND rr.status = 'SUCCEEDED'
+      AND rr.completed_at >= ${range.start}
+      AND rr.completed_at < ${range.end}
+  ) ${Prisma.raw(alias)} ON TRUE`;
+}
 
 export function joinAnd(conditions: Prisma.Sql[]): Prisma.Sql {
   return Prisma.join(conditions, ' AND ');
@@ -283,6 +338,8 @@ export function eligibleBillsSql(filter: BillFilter): Prisma.Sql {
       eff.closed_at,
       agg.total,
       agg.tip,
+      agg.refunded,
+      agg.tip_refunded,
       agg.method_count,
       COALESCE(LPAD(ts.ticket_number::text, 10, '0'), UPPER(RIGHT(b.id::text, 6))) COLLATE "C" AS order_key,
       ts.ticket_number,
@@ -305,8 +362,11 @@ export function eligibleBillsSql(filter: BillFilter): Prisma.Sql {
         COUNT(*)::int AS payments_count,
         SUM(p.amount - p.tip_amount) AS total,
         SUM(p.tip_amount) AS tip,
+        COALESCE(SUM(rf.consumption), 0) AS refunded,
+        COALESCE(SUM(rf.tip), 0) AS tip_refunded,
         COUNT(DISTINCT COALESCE(p.method::text, ${UNCLASSIFIED_METHOD}::text))::int AS method_count
       FROM payments p
+      ${refundJoinSql(filter)}
       WHERE p.bill_id = b.id AND ${paidPaymentConditionSql(filter)}
     ) agg
     WHERE b.branch_id = ${filter.branchId}::uuid
@@ -370,9 +430,17 @@ export function paymentsFilteredSql(filter: PaymentsReportFilter): Prisma.Sql {
       p.amount - p.tip_amount AS amount,
       p.tip_amount AS tip,
       p.staff_user_id,
-      p.source
+      p.source,
+      COALESCE(rf.consumption, 0) AS refunded,
+      COALESCE(rf.tip, 0) AS refunded_tip,
+      CASE
+        WHEN p.refunded_amount <= 0 THEN 'NONE'
+        WHEN p.refunded_amount >= p.amount THEN 'FULL'
+        ELSE 'PARTIAL'
+      END AS refund_status
     FROM payments p
     JOIN bills b ON b.id = p.bill_id
+    ${refundJoinSql(filter)}
     WHERE ${joinAnd(paymentConditions)}
   `;
 
@@ -394,7 +462,10 @@ export function paymentsFilteredSql(filter: PaymentsReportFilter): Prisma.Sql {
       COALESCE(a.amount, 0) - COALESCE(a.tip_amount, 0) AS amount,
       COALESCE(a.tip_amount, 0) AS tip,
       NULL::uuid AS staff_user_id,
-      NULL::text AS source
+      NULL::text AS source,
+      0::numeric AS refunded,
+      0::numeric AS refunded_tip,
+      'NONE'::text AS refund_status
     FROM payment_attempts a
     JOIN bills b ON b.id = a.bill_id
     WHERE b.branch_id = ${filter.branchId}::uuid
@@ -489,6 +560,9 @@ export function paymentsFilteredSql(filter: PaymentsReportFilter): Prisma.Sql {
       u.amount,
       u.tip,
       u.source,
+      u.refunded,
+      u.refunded_tip,
+      u.refund_status,
       NULLIF(TRIM(CONCAT(su.first_name, ' ', su.last_name)), '') AS staff_name
     FROM (${Prisma.join(selects, ' UNION ALL ')}) u
     JOIN bills b ON b.id = u.bill_id
@@ -497,5 +571,215 @@ export function paymentsFilteredSql(filter: PaymentsReportFilter): Prisma.Sql {
     LEFT JOIN staff_users su ON su.id = u.staff_user_id
     LEFT JOIN staff_users wu ON wu.id = ts.assigned_staff_user_id
     WHERE ${joinAnd(outerConditions)}
+  `;
+}
+
+function periodRefundConditionsSql(
+  filter: RefundsByMethodFilter,
+): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`r.branch_id = ${filter.branchId}::uuid`,
+    Prisma.sql`r.status = 'SUCCEEDED'`,
+    Prisma.sql`r.completed_at >= ${filter.start}`,
+    Prisma.sql`r.completed_at < ${filter.end}`,
+    paidPaymentConditionSql(filter),
+  ];
+
+  if (filter.provider) {
+    conditions.push(Prisma.sql`p.provider = ${filter.provider}`);
+  }
+
+  if (filter.waiterId) {
+    conditions.push(
+      Prisma.sql`ts.assigned_staff_user_id = ${filter.waiterId}::uuid`,
+    );
+  }
+
+  if (filter.tableId) {
+    conditions.push(Prisma.sql`t.id = ${filter.tableId}::uuid`);
+  }
+
+  if (filter.zoneId) {
+    conditions.push(Prisma.sql`t.zone_id = ${filter.zoneId}::uuid`);
+  }
+
+  return conditions;
+}
+
+export function refundsByMethodSql(filter: RefundsByMethodFilter): Prisma.Sql {
+  return Prisma.sql`
+    SELECT
+      COALESCE(p.method::text, ${UNCLASSIFIED_METHOD}::text) AS method,
+      COUNT(*)::int AS refunds,
+      COALESCE(SUM(r.amount - r.tip_amount), 0) AS consumption,
+      COALESCE(SUM(r.tip_amount), 0) AS tip
+    FROM refunds r
+    JOIN payments p ON p.id = r.payment_id
+    JOIN bills b ON b.id = p.bill_id
+    JOIN table_sessions ts ON ts.id = b.table_session_id
+    JOIN tables t ON t.id = ts.table_id
+    WHERE ${joinAnd(periodRefundConditionsSql(filter))}
+    GROUP BY 1
+  `;
+}
+
+export function periodRefundsSql(filter: BillFilter): Prisma.Sql {
+  const conditions = periodRefundConditionsSql(filter);
+
+  if (hasClosureFilters(filter)) {
+    conditions.push(
+      Prisma.sql`b.id IN (SELECT ce.id FROM (${eligibleBillsSql(filter)}) ce)`,
+    );
+  }
+
+  return Prisma.sql`
+    SELECT
+      (r.amount - r.tip_amount) AS consumption,
+      r.tip_amount AS tip,
+      r.completed_at,
+      p.method::text AS method,
+      p.staff_user_id::text AS cashier_id,
+      (p.staff_user_id IS NULL AND p.source = 'WEB_QR') AS online,
+      COALESCE(ts.assigned_staff_user_id, ts.opened_by_staff_user_id, oc.staff_id)::text AS waiter_id
+    FROM refunds r
+    JOIN payments p ON p.id = r.payment_id
+    JOIN bills b ON b.id = p.bill_id
+    JOIN table_sessions ts ON ts.id = b.table_session_id
+    JOIN tables t ON t.id = ts.table_id
+    LEFT JOIN LATERAL (
+      SELECT o.created_by_staff_user_id AS staff_id
+      FROM orders o
+      WHERE o.bill_id = b.id AND o.created_by_staff_user_id IS NOT NULL
+      ORDER BY o.created_at ASC, o.id ASC
+      LIMIT 1
+    ) oc ON TRUE
+    WHERE ${joinAnd(conditions)}
+  `;
+}
+
+export function refundsFilteredSql(filter: RefundsReportFilter): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`r.branch_id = ${filter.branchId}::uuid`,
+    Prisma.sql`r.completed_at >= ${filter.start}`,
+    Prisma.sql`r.completed_at < ${filter.end}`,
+  ];
+
+  if (filter.scopedToStaffUserId) {
+    conditions.push(
+      Prisma.sql`r.requested_by_staff_user_id = ${filter.scopedToStaffUserId}::uuid`,
+    );
+  }
+
+  if (filter.refundStatuses.length > 0) {
+    conditions.push(
+      Prisma.sql`r.status::text IN (${Prisma.join(filter.refundStatuses)})`,
+    );
+  }
+
+  if (filter.reasonCodes.length > 0) {
+    conditions.push(
+      Prisma.sql`r.reason_code::text IN (${Prisma.join(filter.reasonCodes)})`,
+    );
+  }
+
+  if (filter.refundMethods.length > 0) {
+    conditions.push(
+      Prisma.sql`r.method::text IN (${Prisma.join(filter.refundMethods)})`,
+    );
+  }
+
+  if (filter.requestedById) {
+    conditions.push(
+      Prisma.sql`r.requested_by_staff_user_id = ${filter.requestedById}::uuid`,
+    );
+  }
+
+  if (filter.cashierId) {
+    conditions.push(Prisma.sql`p.staff_user_id = ${filter.cashierId}::uuid`);
+  }
+
+  if (filter.methods.length > 0) {
+    conditions.push(methodConditionSql(filter.methods, Prisma.sql`p.method`));
+  }
+
+  if (filter.sources.length > 0) {
+    conditions.push(Prisma.sql`p.source IN (${Prisma.join(filter.sources)})`);
+  }
+
+  if (filter.waiterId) {
+    conditions.push(
+      Prisma.sql`ts.assigned_staff_user_id = ${filter.waiterId}::uuid`,
+    );
+  }
+
+  if (filter.tableId) {
+    conditions.push(Prisma.sql`t.id = ${filter.tableId}::uuid`);
+  }
+
+  if (filter.zoneId) {
+    conditions.push(Prisma.sql`t.zone_id = ${filter.zoneId}::uuid`);
+  }
+
+  conditions.push(
+    ...amountConditionsSql(Prisma.sql`r.amount`, filter),
+    ...tipConditionsSql(Prisma.sql`r.tip_amount`, filter),
+    ...timeConditionsSql(Prisma.sql`r.completed_at`, filter, filter.timeZone),
+  );
+
+  if (filter.q) {
+    const pattern = searchPattern(filter.q);
+
+    conditions.push(Prisma.sql`(
+      ${ilike(Prisma.sql`COALESCE(ts.ticket_number::text, UPPER(RIGHT(b.id::text, 6)))`, pattern)}
+      OR ${ilike(Prisma.sql`t.name`, pattern)}
+      OR ${ilike(Prisma.sql`ts.customer_label`, pattern)}
+      OR ${ilike(Prisma.sql`CONCAT(cu.first_name, ' ', cu.last_name)`, pattern)}
+      OR ${ilike(Prisma.sql`CONCAT(wu.first_name, ' ', wu.last_name)`, pattern)}
+      OR ${ilike(Prisma.sql`CONCAT(ru.first_name, ' ', ru.last_name)`, pattern)}
+      OR ${ilike(Prisma.sql`r.reason_text`, pattern)}
+    )`);
+  }
+
+  return Prisma.sql`
+    SELECT
+      r.id,
+      r.completed_at,
+      r.amount,
+      r.tip_amount,
+      r.net_amount,
+      r.vat_amount,
+      r.status::text AS status,
+      r.method::text AS refund_method,
+      r.reason_code::text AS reason_code,
+      r.reason_text,
+      r.requested_by_staff_user_id,
+      r.requested_by_role::text AS requested_by_role,
+      r.credit_note_status,
+      r.credit_note_folio,
+      r.bill_id,
+      r.payment_id,
+      p.method::text AS payment_method,
+      p.provider,
+      COALESCE(ts.ticket_number::text, UPPER(RIGHT(b.id::text, 6))) AS order_number,
+      t.name AS table_name,
+      NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), '') AS cashier_name,
+      NULLIF(TRIM(CONCAT(ru.first_name, ' ', ru.last_name)), '') AS requested_by_name,
+      NULLIF(TRIM(CONCAT(au.first_name, ' ', au.last_name)), '') AS approved_by_name,
+      EXISTS (
+        SELECT 1
+        FROM orders ao
+        WHERE ao.bill_id = b.id
+          AND ao.status::text IN (${Prisma.join(ACTIVE_ORDER_STATUS_NAMES)})
+      ) AS bill_has_active_orders
+    FROM refunds r
+    JOIN payments p ON p.id = r.payment_id
+    JOIN bills b ON b.id = r.bill_id
+    JOIN table_sessions ts ON ts.id = b.table_session_id
+    JOIN tables t ON t.id = ts.table_id
+    LEFT JOIN staff_users cu ON cu.id = p.staff_user_id
+    LEFT JOIN staff_users wu ON wu.id = ts.assigned_staff_user_id
+    LEFT JOIN staff_users ru ON ru.id = r.requested_by_staff_user_id
+    LEFT JOIN staff_users au ON au.id = r.approved_by_staff_user_id
+    WHERE ${joinAnd(conditions)}
   `;
 }

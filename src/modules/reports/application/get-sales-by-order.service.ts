@@ -10,6 +10,7 @@ import {
   type BillPaymentRecord,
   type BillRowRecord,
   type MethodTotalRecord,
+  type RefundsByMethodRecord,
 } from '../infrastructure/reports.prisma.repository';
 import { csvStream, type CsvCell } from './report-csv';
 import {
@@ -26,6 +27,7 @@ import {
   CAJA_UNASSIGNED_LABEL,
   CSV_BATCH_SIZE,
   DEFAULT_PAGE_LIMIT,
+  hasClosureFilters,
   MAX_PAGE_LIMIT,
   METHOD_KEYS,
   METHOD_LABELS,
@@ -73,6 +75,9 @@ export type SalesByOrderRow = {
   receipt: string | null;
   receiptNumber: string | null;
   refunded: string;
+  tipRefunded: string;
+  net: string;
+  refundStatus: 'NONE' | 'PARTIAL' | 'FULL';
   methods: MethodAmount[];
 };
 
@@ -84,7 +89,15 @@ export type SalesByOrderTotals = {
   payable: string;
   tip: string;
   refunded: string;
+  tipRefunded: string;
+  net: string;
   methods: MethodAmount[];
+  otherPeriod: {
+    included: boolean;
+    refunded: string;
+    tipRefunded: string;
+    methods: MethodAmount[];
+  };
 };
 
 export type SalesByOrderResponse = {
@@ -164,16 +177,27 @@ export function buildSalesByOrderRow(
   const sums = emptyMethodSums();
   let total = ZERO;
   let tip = ZERO;
+  let refunded = ZERO;
+  let tipRefunded = ZERO;
 
   for (const payment of payments) {
     const paymentTip = new Prisma.Decimal(payment.tip_amount);
     const consumption = new Prisma.Decimal(payment.amount).sub(paymentTip);
+    const paymentRefunded = new Prisma.Decimal(payment.refunded ?? 0);
     const key = methodKeyOf(payment.method);
 
-    sums[key] = sums[key].add(consumption);
+    sums[key] = sums[key].add(consumption.sub(paymentRefunded));
     total = total.add(consumption);
     tip = tip.add(paymentTip);
+    refunded = refunded.add(paymentRefunded);
+    tipRefunded = tipRefunded.add(payment.refunded_tip ?? 0);
   }
+
+  const refundStatus = refunded.add(tipRefunded).isZero()
+    ? 'NONE'
+    : total.gt(0) && refunded.gte(total)
+      ? 'FULL'
+      : 'PARTIAL';
 
   const cashiers = [
     ...new Set(
@@ -205,7 +229,10 @@ export function buildSalesByOrderRow(
     paymentsCount: payments.length,
     receipt: null,
     receiptNumber: null,
-    refunded: '0',
+    refunded: money(refunded),
+    tipRefunded: money(tipRefunded),
+    net: money(total.sub(refunded)),
+    refundStatus,
     methods: toMethodAmounts(sums),
   };
 }
@@ -213,21 +240,59 @@ export function buildSalesByOrderRow(
 export function buildSalesByOrderTotals(
   billCount: number,
   methodTotals: MethodTotalRecord[],
+  allRefundsByMethod: RefundsByMethodRecord[] | null = null,
 ): SalesByOrderTotals {
   const sums = emptyMethodSums();
+  const rowRefunds = emptyMethodSums();
+  const otherSums = emptyMethodSums();
   let total = ZERO;
   let tip = ZERO;
+  let rowsRefunded = ZERO;
+  let rowsTipRefunded = ZERO;
   let paymentsCount = 0;
 
   for (const record of methodTotals) {
     const key = methodKeyOf(record.method);
     const consumption = new Prisma.Decimal(record.consumption);
+    const refunded = new Prisma.Decimal(record.refunded ?? 0);
 
-    sums[key] = sums[key].add(consumption);
+    sums[key] = sums[key].add(consumption.sub(refunded));
+    rowRefunds[key] = rowRefunds[key].add(refunded);
     total = total.add(consumption);
     tip = tip.add(record.tip);
+    rowsRefunded = rowsRefunded.add(refunded);
+    rowsTipRefunded = rowsTipRefunded.add(record.refunded_tip ?? 0);
     paymentsCount += record.payments;
   }
+
+  let otherRefunded = ZERO;
+  let otherTipRefunded = ZERO;
+
+  if (allRefundsByMethod) {
+    const allTips = emptyMethodSums();
+
+    for (const record of allRefundsByMethod) {
+      const key = methodKeyOf(record.method);
+
+      otherSums[key] = otherSums[key].add(record.consumption);
+      allTips[key] = allTips[key].add(record.tip);
+    }
+
+    let rowsTipByMethod = ZERO;
+
+    for (const method of METHOD_KEYS) {
+      const other = otherSums[method].sub(rowRefunds[method]);
+
+      otherSums[method] = other;
+      sums[method] = sums[method].sub(other);
+      otherRefunded = otherRefunded.add(other);
+      rowsTipByMethod = rowsTipByMethod.add(allTips[method]);
+    }
+
+    otherTipRefunded = rowsTipByMethod.sub(rowsTipRefunded);
+  }
+
+  const refunded = rowsRefunded.add(otherRefunded);
 
   return {
     bills: billCount,
@@ -236,8 +301,16 @@ export function buildSalesByOrderTotals(
     discounts: '0',
     payable: money(total),
     tip: money(tip),
-    refunded: '0',
+    refunded: money(refunded),
+    tipRefunded: money(rowsTipRefunded.add(otherTipRefunded)),
+    net: money(total.sub(refunded)),
     methods: toMethodAmounts(sums),
+    otherPeriod: {
+      included: allRefundsByMethod !== null,
+      refunded: money(otherRefunded),
+      tipRefunded: money(otherTipRefunded),
+      methods: toMethodAmounts(otherSums),
+    },
   };
 }
 
@@ -259,6 +332,8 @@ export const SALES_BY_ORDER_CSV_HEADERS = [
   'Boleta',
   'N° boleta',
   'Reembolsado',
+  'Propina reembolsada',
+  'Neto',
   ...METHOD_KEYS.map((method) => METHOD_LABELS[method]),
 ];
 
@@ -281,7 +356,45 @@ function salesRowToCsv(row: SalesByOrderRow, timeZone: string): CsvCell[] {
     row.receipt,
     row.receiptNumber,
     Number(row.refunded),
+    Number(row.tipRefunded),
+    Number(row.net),
     ...row.methods.map((entry) => Number(entry.amount)),
+  ];
+}
+
+const OTHER_PERIOD_LABEL = 'REEMBOLSOS DE OTROS PERIODOS';
+
+function salesOtherPeriodToCsv(totals: SalesByOrderTotals): CsvCell[] | null {
+  const other = totals.otherPeriod;
+
+  if (
+    !other.included ||
+    (Number(other.refunded) === 0 && Number(other.tipRefunded) === 0)
+  ) {
+    return null;
+  }
+
+  return [
+    OTHER_PERIOD_LABEL,
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    null,
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    Number(other.refunded),
+    Number(other.tipRefunded),
+    -Number(other.refunded),
+    ...other.methods.map((entry) => -Number(entry.amount)),
   ];
 }
 
@@ -304,6 +417,8 @@ function salesTotalsToCsv(totals: SalesByOrderTotals): CsvCell[] {
     '',
     '',
     Number(totals.refunded),
+    Number(totals.tipRefunded),
+    Number(totals.net),
     ...totals.methods.map((entry) => Number(entry.amount)),
   ];
 }
@@ -324,13 +439,14 @@ export class GetSalesByOrderService {
     const filter = this.toFilter(scope, query);
     const limit = Math.min(query.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
 
-    const [page, methodTotals] = await Promise.all([
+    const [page, methodTotals, otherPeriod] = await Promise.all([
       this.loadPage(
         filter,
         decodeCursor(query.cursor, CURSOR_KINDS[filter.orderBy]),
         limit,
       ),
       this.reportsRepository.findMethodTotals(filter),
+      this.loadAllRefunds(filter),
     ]);
 
     return {
@@ -344,6 +460,7 @@ export class GetSalesByOrderService {
       totals: buildSalesByOrderTotals(
         methodTotals[0]?.bills ?? 0,
         methodTotals,
+        otherPeriod,
       ),
       nextCursor: page.nextCursor,
       limit,
@@ -357,10 +474,14 @@ export class GetSalesByOrderService {
   ): Promise<CsvDownload> {
     const scope = await this.resolveScope(authUser, branchId, query, true);
     const filter = this.toFilter(scope, query);
-    const methodTotals = await this.reportsRepository.findMethodTotals(filter);
+    const [methodTotals, otherPeriod] = await Promise.all([
+      this.reportsRepository.findMethodTotals(filter),
+      this.loadAllRefunds(filter),
+    ]);
     const totals = buildSalesByOrderTotals(
       methodTotals[0]?.bills ?? 0,
       methodTotals,
+      otherPeriod,
     );
 
     return {
@@ -370,6 +491,14 @@ export class GetSalesByOrderService {
         this.csvLines(filter, scope.timeZone, totals),
       ),
     };
+  }
+
+  private loadAllRefunds(
+    filter: BillPageFilter,
+  ): Promise<RefundsByMethodRecord[] | null> {
+    return hasClosureFilters(filter)
+      ? Promise.resolve(null)
+      : this.reportsRepository.findRefundsByMethod(filter);
   }
 
   private resolveScope(
@@ -409,6 +538,12 @@ export class GetSalesByOrderService {
         CURSOR_KINDS[filter.orderBy],
       );
     } while (cursor !== null);
+
+    const otherPeriodRow = salesOtherPeriodToCsv(totals);
+
+    if (otherPeriodRow) {
+      yield otherPeriodRow;
+    }
 
     yield salesTotalsToCsv(totals);
   }

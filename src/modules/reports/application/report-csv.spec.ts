@@ -16,6 +16,12 @@ describe('report-csv', () => {
     expect(csvLine([null, undefined, 12000, 'ok'])).toBe(';;12000;ok\r\n');
   });
 
+  it('writes fractional numbers with a decimal comma for es-CL spreadsheets', () => {
+    expect(csvLine(['Efectivo', 33.87, -0.05, 6])).toBe(
+      'Efectivo;33,87;-0,05;6\r\n',
+    );
+  });
+
   it('neutralises spreadsheet formulas', () => {
     expect(csvCell('=SUM(A1)')).toBe("'=SUM(A1)");
     expect(csvCell('@cmd')).toBe("'@cmd");

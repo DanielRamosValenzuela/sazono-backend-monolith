@@ -6,6 +6,7 @@ import {
   type OrderDetailHeaderRecord,
   type OrderDetailItemRecord,
   type OrderDetailPaymentRecord,
+  type OrderDetailRefundRecord,
 } from '../infrastructure/reports.prisma.repository';
 import { UNCATEGORIZED_LABEL } from './hierarchy-tree';
 import {
@@ -69,6 +70,27 @@ export type OrderDetailPayment = {
   source: string | null;
   paidAt: string | null;
   createdAt: string;
+  refunded: string;
+  refundedTip: string;
+  refundable: { total: string; consumption: string; tip: string };
+};
+
+export type OrderDetailRefund = {
+  id: string;
+  paymentId: string;
+  amount: string;
+  tip: string;
+  net: string;
+  vat: string;
+  method: string;
+  status: string;
+  reasonCode: string;
+  reasonText: string;
+  requestedBy: string | null;
+  requestedById: string | null;
+  approvedBy: string | null;
+  completedAt: string | null;
+  creditNoteStatus: string;
 };
 
 export type OrderDetailResponse = {
@@ -93,6 +115,7 @@ export type OrderDetailResponse = {
   orders: OrderDetailOrder[];
   items: OrderDetailItem[];
   payments: OrderDetailPayment[];
+  refunds: OrderDetailRefund[];
   totals: {
     itemsCount: number;
     itemsTotal: string;
@@ -105,6 +128,9 @@ export type OrderDetailResponse = {
     difference: string;
     paidPaymentsCount: number;
     refunded: string;
+    refundedTip: string;
+    refundedTotal: string;
+    net: string;
     reconciled: boolean;
   };
   flags: {
@@ -167,6 +193,9 @@ function buildPayment(record: OrderDetailPaymentRecord): OrderDetailPayment {
   const tip = new Prisma.Decimal(record.tip_amount);
   const amount = new Prisma.Decimal(record.amount).sub(tip);
   const method = (record.method ?? UNCLASSIFIED_METHOD) as MethodKey;
+  const refundedTotal = new Prisma.Decimal(record.refunded_amount ?? 0);
+  const refundedTip = new Prisma.Decimal(record.refunded_tip_amount ?? 0);
+  const refundable = record.status === 'PAID';
 
   return {
     id: record.id,
@@ -186,6 +215,35 @@ function buildPayment(record: OrderDetailPaymentRecord): OrderDetailPayment {
     source: record.source,
     paidAt: record.paid_at?.toISOString() ?? null,
     createdAt: record.created_at.toISOString(),
+    refunded: money(refundedTotal.sub(refundedTip)),
+    refundedTip: money(refundedTip),
+    refundable: {
+      total: money(refundable ? amount.add(tip).sub(refundedTotal) : 0),
+      consumption: money(
+        refundable ? amount.sub(refundedTotal.sub(refundedTip)) : 0,
+      ),
+      tip: money(refundable ? tip.sub(refundedTip) : 0),
+    },
+  };
+}
+
+function buildRefund(record: OrderDetailRefundRecord): OrderDetailRefund {
+  return {
+    id: record.id,
+    paymentId: record.payment_id,
+    amount: money(record.amount),
+    tip: money(record.tip_amount),
+    net: money(record.net_amount),
+    vat: money(record.vat_amount),
+    method: record.method,
+    status: record.status,
+    reasonCode: record.reason_code,
+    reasonText: record.reason_text,
+    requestedBy: record.requested_by_name,
+    requestedById: record.requested_by_staff_user_id,
+    approvedBy: record.approved_by_name,
+    completedAt: record.completed_at?.toISOString() ?? null,
+    creditNoteStatus: record.credit_note_status,
   };
 }
 
@@ -208,12 +266,16 @@ export function buildOrderDetail(
   itemRecords: OrderDetailItemRecord[],
   paymentRecords: OrderDetailPaymentRecord[],
   timeZone: string,
+  refundRecords: OrderDetailRefundRecord[] = [],
 ): OrderDetailResponse {
   const items = itemRecords.map(buildItem);
   const payments = paymentRecords.map(buildPayment);
   const paid = payments.filter((payment) => payment.status === 'PAID');
   const sum = (values: string[]): Prisma.Decimal =>
     values.reduce((total, value) => total.add(value), ZERO);
+  const refundedConsumption = sum(paid.map((payment) => payment.refunded));
+  const refundedTip = sum(paid.map((payment) => payment.refundedTip));
+  const refundedTotal = new Prisma.Decimal(header.refunded_amount ?? 0);
   const paidAmount = sum(paid.map((payment) => payment.amount));
   const paidTip = sum(paid.map((payment) => payment.tip));
   const itemsTotal = sum(
@@ -273,6 +335,7 @@ export function buildOrderDetail(
     orders: [...orders.values()],
     items,
     payments,
+    refunds: refundRecords.map(buildRefund),
     totals: {
       itemsCount: items
         .filter((item) => item.counted)
@@ -286,7 +349,10 @@ export function buildOrderDetail(
       collected: money(paidAmount.add(paidTip)),
       difference: money(difference),
       paidPaymentsCount: paid.length,
-      refunded: '0',
+      refunded: money(refundedConsumption),
+      refundedTip: money(refundedTip),
+      refundedTotal: money(refundedTotal),
+      net: money(paidAmount.sub(refundedConsumption)),
       reconciled: difference.isZero(),
     },
     flags: {
@@ -300,9 +366,9 @@ export function buildOrderDetail(
       hasUnclassifiedPayments: paid.some(
         (payment) => payment.method === UNCLASSIFIED_METHOD,
       ),
-      hasRefundedPayments: payments.some(
-        (payment) => payment.status === 'REFUNDED',
-      ),
+      hasRefundedPayments:
+        refundedTotal.gt(0) ||
+        payments.some((payment) => payment.status === 'REFUNDED'),
       hasOpenPayments: payments.some((payment) =>
         OPEN_PAYMENT_STATUSES.has(payment.status),
       ),
@@ -327,6 +393,7 @@ export class GetOrderDetailService {
     const records = await this.reportsRepository.findOrderDetail(
       branchId,
       billId,
+      access.cashierScoped ? access.staffUserId : null,
     );
 
     if (
@@ -343,6 +410,7 @@ export class GetOrderDetailService {
       records.items,
       records.payments,
       access.timeZone,
+      records.refunds,
     );
   }
 }

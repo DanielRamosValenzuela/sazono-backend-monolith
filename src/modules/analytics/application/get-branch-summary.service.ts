@@ -2,7 +2,12 @@
 import { Prisma, Role } from '@prisma/client';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAnalyticsPrismaRepository } from '../infrastructure/prisma/branch-analytics.prisma.repository';
-import type { PaidPaymentRecord } from '../infrastructure/prisma/branch-analytics.prisma.repository';
+import { EMPTY_FILTERS } from '../../reports/application/report-types';
+import {
+  ReportsInsightsPrismaRepository,
+  type PeriodBucketRecord,
+} from '../../reports/infrastructure/reports-insights.prisma.repository';
+import type { BillFilter } from '../../reports/infrastructure/report-sql';
 import type {
   BranchSummaryResponseDto,
   DailyPaymentsMetricDto,
@@ -31,6 +36,7 @@ export class GetBranchSummaryService {
   constructor(
     private readonly branchAccessService: BranchAccessService,
     private readonly branchAnalyticsRepository: BranchAnalyticsPrismaRepository,
+    private readonly insightsRepository: ReportsInsightsPrismaRepository,
   ) {}
 
   async execute(
@@ -67,28 +73,32 @@ export class GetBranchSummaryService {
         timeZone,
       );
 
+    const seriesCoversToday =
+      zonedDateKey(seriesRange.start, timeZone) <= todayKey &&
+      todayKey <= zonedDateKey(seriesRange.end, timeZone);
+
     const [
       totalTables,
       occupiedTables,
       openSessions,
-      todayPayments,
-      seriesPayments,
+      seriesBuckets,
+      todayBuckets,
       orderGroups,
       topItems,
     ] = await Promise.all([
       this.branchAnalyticsRepository.countTables(branchId),
       this.branchAnalyticsRepository.countOccupiedTables(branchId),
       this.branchAnalyticsRepository.countOpenSessions(branchId),
-      this.branchAnalyticsRepository.findPaidPaymentsInRange(
-        branchId,
-        todayRange.start,
-        todayRange.end,
+      this.insightsRepository.findPeriodBuckets(
+        this.billFilter(branchId, seriesRange, timeZone),
+        'day',
       ),
-      this.branchAnalyticsRepository.findPaidPaymentsInRange(
-        branchId,
-        seriesRange.start,
-        seriesRange.end,
-      ),
+      seriesCoversToday
+        ? Promise.resolve<PeriodBucketRecord[] | null>(null)
+        : this.insightsRepository.findPeriodBuckets(
+            this.billFilter(branchId, todayRange, timeZone),
+            'day',
+          ),
       this.branchAnalyticsRepository.groupOrdersByStatusInRange(
         branchId,
         ordersByStatusRange.start,
@@ -101,14 +111,17 @@ export class GetBranchSummaryService {
       ),
     ]);
 
-    const todayAmount = todayPayments.reduce(
-      (total, payment) => total.add(payment.amount.minus(payment.tipAmount)),
-      new Prisma.Decimal(0),
+    const todayBucket = (todayBuckets ?? seriesBuckets).find(
+      (bucket) => bucket.bucket === todayKey,
     );
+    const todayGross = new Prisma.Decimal(todayBucket?.amount ?? 0);
+    const todayRefunded = new Prisma.Decimal(todayBucket?.refunded ?? 0);
+    const todayAmount = todayGross.minus(todayRefunded);
+    const todayBills = todayBucket?.bills ?? 0;
     const averageTicket =
-      todayPayments.length > 0
-        ? todayAmount.dividedBy(todayPayments.length).toFixed(2)
-        : new Prisma.Decimal(0).toFixed(2);
+      todayBills > 0 && todayAmount.gt(0)
+        ? todayAmount.dividedBy(todayBills)
+        : new Prisma.Decimal(0);
 
     return {
       branchId,
@@ -116,15 +129,32 @@ export class GetBranchSummaryService {
       occupiedTables,
       openSessions,
       todayRevenue: todayAmount.toFixed(2),
-      todayPaymentsCount: todayPayments.length,
-      averageTicket,
-      dailySeries: this.buildDailySeries(seriesRange, seriesPayments, timeZone),
+      todayRefunded: todayRefunded.toFixed(2),
+      todayPaymentsCount: todayBills,
+      averageTicket: averageTicket.toFixed(2),
+      dailySeries: this.buildDailySeries(seriesRange, seriesBuckets, timeZone),
       ordersByStatus: orderGroups.sort((a, b) => b.count - a.count),
       topItems: topItems.map((item) => ({
         name: item.name,
         quantity: item.quantity,
         amount: (item.amount ?? new Prisma.Decimal(0)).toFixed(2),
       })),
+    };
+  }
+
+  private billFilter(
+    branchId: string,
+    range: ResolvedRange,
+    timeZone: string,
+  ): BillFilter {
+    return {
+      ...EMPTY_FILTERS,
+      branchId,
+      start: range.start,
+      end: new Date(range.end.getTime() + ONE_MILLISECOND),
+      timeZone,
+      cashierId: null,
+      methods: [],
     };
   }
 
@@ -180,30 +210,10 @@ export class GetBranchSummaryService {
 
   private buildDailySeries(
     range: ResolvedRange,
-    payments: PaidPaymentRecord[],
+    buckets: PeriodBucketRecord[],
     timeZone: string,
   ): DailyPaymentsMetricDto[] {
-    const totalsByDate = new Map<
-      string,
-      { amount: Prisma.Decimal; count: number }
-    >();
-
-    for (const payment of payments) {
-      const dateKey = zonedDateKey(
-        payment.paidAt ?? payment.createdAt,
-        timeZone,
-      );
-      const current = totalsByDate.get(dateKey) ?? {
-        amount: new Prisma.Decimal(0),
-        count: 0,
-      };
-
-      totalsByDate.set(dateKey, {
-        amount: current.amount.plus(payment.amount.minus(payment.tipAmount)),
-        count: current.count + 1,
-      });
-    }
-
+    const byDate = new Map(buckets.map((bucket) => [bucket.bucket, bucket]));
     const series: DailyPaymentsMetricDto[] = [];
     const lastKey = zonedDateKey(range.end, timeZone);
 
@@ -212,12 +222,16 @@ export class GetBranchSummaryService {
       dateKey <= lastKey;
       dateKey = addDaysToDateKey(dateKey, 1)
     ) {
-      const totals = totalsByDate.get(dateKey);
+      const bucket = byDate.get(dateKey);
+      const refunded = new Prisma.Decimal(bucket?.refunded ?? 0);
 
       series.push({
         date: dateKey,
-        amount: (totals?.amount ?? new Prisma.Decimal(0)).toFixed(2),
-        count: totals?.count ?? 0,
+        amount: new Prisma.Decimal(bucket?.amount ?? 0)
+          .minus(refunded)
+          .toFixed(2),
+        count: bucket?.bills ?? 0,
+        refunded: refunded.toFixed(2),
       });
     }
 

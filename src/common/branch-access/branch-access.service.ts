@@ -96,6 +96,7 @@ export class BranchAccessService {
     authUser: JwtPayload,
     branchId: string,
     allowedRoles: Role[],
+    options?: { fresh?: boolean },
   ): Promise<BranchAccessContext> {
     if (
       authUser.profileType !== LoginProfileType.STAFF ||
@@ -114,7 +115,7 @@ export class BranchAccessService {
     const firstLookup = await this.findActiveStaffAccess(
       authUser.profileId,
       authUser.restaurantId,
-      false,
+      options?.fresh === true,
     );
     let staffUser = firstLookup.access;
     let roles = rolesOnBranch(staffUser);

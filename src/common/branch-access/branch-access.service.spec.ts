@@ -191,4 +191,30 @@ describe('BranchAccessService', () => {
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it('ignores the cache when fresh is requested', async () => {
+    findFirstMock.mockResolvedValue(
+      staffRow([{ branchId: 'branch-1', role: Role.ADMIN }]),
+    );
+    await service.ensureAccess(authUser, 'branch-1', [Role.ADMIN]);
+    expect(findFirstMock).toHaveBeenCalledTimes(1);
+
+    findFirstMock.mockResolvedValue(
+      staffRow([{ branchId: 'branch-1', role: Role.WAITER }]),
+    );
+
+    await expect(
+      service.ensureAccess(authUser, 'branch-1', [Role.ADMIN], { fresh: true }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(findFirstMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps using the cache without the fresh option', async () => {
+    findFirstMock.mockResolvedValue(
+      staffRow([{ branchId: 'branch-1', role: Role.ADMIN }]),
+    );
+    await service.ensureAccess(authUser, 'branch-1', [Role.ADMIN]);
+    await service.ensureAccess(authUser, 'branch-1', [Role.ADMIN]);
+    expect(findFirstMock).toHaveBeenCalledTimes(1);
+  });
 });

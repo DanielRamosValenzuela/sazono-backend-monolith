@@ -102,6 +102,8 @@ export class CreateBranchService {
                 dto.settings?.autoDeliverAfterMinutes ?? null,
               tableAssignmentEnabled:
                 dto.settings?.tableAssignmentEnabled ?? false,
+              cashierRefundLimit: dto.settings?.cashierRefundLimit ?? null,
+              refundTipDefault: dto.settings?.refundTipDefault ?? false,
             },
           },
         },
@@ -139,6 +141,9 @@ export class CreateBranchService {
           branch.settings?.autoDeliverAfterMinutes ?? null,
         tableAssignmentEnabled:
           branch.settings?.tableAssignmentEnabled ?? false,
+        cashierRefundLimit:
+          branch.settings?.cashierRefundLimit?.toString() ?? null,
+        refundTipDefault: branch.settings?.refundTipDefault ?? false,
       },
     };
   }

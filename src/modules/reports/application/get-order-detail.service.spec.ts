@@ -4,6 +4,7 @@ import type {
   OrderDetailHeaderRecord,
   OrderDetailItemRecord,
   OrderDetailPaymentRecord,
+  OrderDetailRefundRecord,
   ReportsPrismaRepository,
 } from '../infrastructure/reports.prisma.repository';
 import {
@@ -98,6 +99,29 @@ function payment(
     source: 'CASHIER',
     staff_user_id: ME,
     staff_name: 'Caro Cajera',
+    ...extra,
+  };
+}
+
+function refundRecord(
+  extra: Partial<OrderDetailRefundRecord> = {},
+): OrderDetailRefundRecord {
+  return {
+    id: 'refund-1',
+    payment_id: 'pay-1',
+    amount: '3000.00',
+    tip_amount: '0.00',
+    net_amount: '2521.00',
+    vat_amount: '479.00',
+    method: 'CASH_MANUAL',
+    status: 'SUCCEEDED',
+    reason_code: 'CUSTOMER_COMPLAINT',
+    reason_text: 'Plato frio',
+    requested_by_staff_user_id: ME,
+    requested_by_name: 'Caro Cajera',
+    approved_by_name: null,
+    credit_note_status: 'PENDING',
+    completed_at: new Date('2026-07-15T17:00:00.000Z'),
     ...extra,
   };
 }
@@ -297,6 +321,109 @@ describe('buildOrderDetail', () => {
   });
 });
 
+describe('buildOrderDetail refunds', () => {
+  const refundedPayment = payment({
+    refunded_amount: '3500.00',
+    refunded_tip_amount: '500.00',
+  });
+  const build = (payments = [refundedPayment], bill = header()) =>
+    buildOrderDetail(
+      {
+        ...bill,
+        refunded_amount: '3500.00',
+      },
+      [item()],
+      payments,
+      'America/Santiago',
+      [
+        refundRecord(),
+        refundRecord({
+          id: 'refund-2',
+          amount: '500.00',
+          tip_amount: '500.00',
+          net_amount: '0.00',
+          vat_amount: '0.00',
+        }),
+      ],
+    );
+
+  it('shows lifetime refunded amounts and what is still refundable per payment', () => {
+    const detail = build();
+
+    expect(detail.payments[0]).toMatchObject({
+      amount: '10000',
+      tip: '1000',
+      refunded: '3000',
+      refundedTip: '500',
+      refundable: { total: '7500', consumption: '7000', tip: '500' },
+    });
+  });
+
+  it('lists the refunds and nets them in the totals without touching the reconciliation', () => {
+    const detail = build();
+
+    expect(detail.refunds).toHaveLength(2);
+    expect(detail.refunds[0]).toMatchObject({
+      id: 'refund-1',
+      paymentId: 'pay-1',
+      amount: '3000',
+      tip: '0',
+      net: '2521',
+      vat: '479',
+      method: 'CASH_MANUAL',
+      reasonCode: 'CUSTOMER_COMPLAINT',
+      requestedBy: 'Caro Cajera',
+      approvedBy: null,
+      creditNoteStatus: 'PENDING',
+    });
+    expect(detail.totals).toMatchObject({
+      paid: '10000',
+      collected: '11000',
+      refunded: '3000',
+      refundedTip: '500',
+      refundedTotal: '3500',
+      net: '7000',
+    });
+    expect(detail.flags.hasRefundedPayments).toBe(true);
+    expect(detail.totals.difference).toBe(
+      buildOrderDetail(header(), [item()], [payment()], 'America/Santiago')
+        .totals.difference,
+    );
+  });
+
+  it('has no refunds block content when nothing was refunded', () => {
+    const detail = buildOrderDetail(
+      header(),
+      [item()],
+      [payment()],
+      'America/Santiago',
+    );
+
+    expect(detail.refunds).toEqual([]);
+    expect(detail.totals).toMatchObject({
+      refunded: '0',
+      refundedTotal: '0',
+      net: '10000',
+    });
+    expect(detail.flags.hasRefundedPayments).toBe(false);
+    expect(detail.payments[0].refundable).toEqual({
+      total: '11000',
+      consumption: '10000',
+      tip: '1000',
+    });
+  });
+
+  it('reports nothing refundable for a payment that is not PAID', () => {
+    const detail = build([payment({ status: 'PENDING' })]);
+
+    expect(detail.payments[0].refundable).toEqual({
+      total: '0',
+      consumption: '0',
+      tip: '0',
+    });
+  });
+});
+
 describe('GetOrderDetailService', () => {
   const resolveAccessMock = jest.fn();
   const findOrderDetailMock = jest.fn();
@@ -330,7 +457,7 @@ describe('GetOrderDetailService', () => {
   it('returns the detail of any bill of the branch for full access roles', async () => {
     const detail = await service.execute(authUser, 'branch-1', BILL);
 
-    expect(findOrderDetailMock).toHaveBeenCalledWith('branch-1', BILL);
+    expect(findOrderDetailMock).toHaveBeenCalledWith('branch-1', BILL, null);
     expect(detail.billId).toBe(BILL);
   });
 
@@ -386,5 +513,18 @@ describe('GetOrderDetailService', () => {
       service.execute(authUser, 'branch-1', BILL),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(findOrderDetailMock).not.toHaveBeenCalled();
+  });
+
+  it('asks for every refund to a full access role and only the own ones for a CASHIER', async () => {
+    await service.execute(authUser, 'branch-1', BILL);
+    expect(findOrderDetailMock).toHaveBeenLastCalledWith(
+      'branch-1',
+      BILL,
+      null,
+    );
+
+    resolveAccessMock.mockResolvedValue(access({ cashierScoped: true }));
+    await service.execute(authUser, 'branch-1', BILL);
+    expect(findOrderDetailMock).toHaveBeenLastCalledWith('branch-1', BILL, ME);
   });
 });

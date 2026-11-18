@@ -1,4 +1,4 @@
-﻿import { ForbiddenException } from '@nestjs/common';
+﻿import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
   BillItemStatus,
   BillStatus,
@@ -261,5 +261,79 @@ describe('CancelOrderService', () => {
 
     const result = await service.execute(authUser, 'order-4', {});
     expect(result.status).toBe(OrderStatus.CANCELLED);
+  });
+
+  it('answers REFUND_REQUIRED with the bill id for a prepaid order in production', async () => {
+    orderFindUniqueMock.mockResolvedValue({
+      id: 'order-5',
+      branchId: 'branch-1',
+      status: OrderStatus.IN_PREPARATION,
+      paymentPolicy: PaymentPolicy.PREPAID,
+      billId: 'bill-9',
+      orderItems: [{ id: 'order-item-1' }],
+    });
+    ensureAccessMock.mockResolvedValue({
+      staffUserId: 'staff-1',
+      branchId: 'branch-1',
+      roles: ['ADMIN'],
+    });
+
+    const error = await service
+      .execute(authUser, 'order-5', {})
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    const body = (error as ConflictException).getResponse() as {
+      code: string;
+      billId: string;
+      message: string;
+    };
+    expect(body.code).toBe('REFUND_REQUIRED');
+    expect(body.billId).toBe('bill-9');
+    expect(body.message).not.toMatch(/despues de reembolsar/i);
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it('answers REFUND_REQUIRED when the bill payments already cover the order', async () => {
+    orderFindUniqueMock.mockResolvedValue({
+      id: 'order-6',
+      branchId: 'branch-1',
+      status: OrderStatus.CONFIRMED,
+      paymentPolicy: PaymentPolicy.POSTPAID,
+      billId: 'bill-8',
+      orderItems: [{ id: 'order-item-1' }],
+    });
+    ensureAccessMock.mockResolvedValue({
+      staffUserId: 'staff-1',
+      branchId: 'branch-1',
+      roles: ['ADMIN'],
+    });
+    transactionMock.mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          billItem: {
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          bill: {
+            findUniqueOrThrow: jest.fn().mockResolvedValue({
+              id: 'bill-8',
+              tipAmount: new Prisma.Decimal(0),
+              totalAmount: new Prisma.Decimal(5900),
+              remainingAmount: new Prisma.Decimal(0),
+            }),
+          },
+        }),
+    );
+
+    const error = await service
+      .execute(authUser, 'order-6', {})
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toMatchObject({
+      code: 'REFUND_REQUIRED',
+      billId: 'bill-8',
+    });
   });
 });

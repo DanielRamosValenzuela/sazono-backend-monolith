@@ -3,11 +3,12 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { BranchStatus } from '@prisma/client';
+import { BranchStatus, Prisma } from '@prisma/client';
 import {
   BranchAccessService,
   type StaffContext,
 } from '../../../common/branch-access/branch-access.service';
+import type { AuditService } from '../../../common/audit/audit.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
@@ -24,6 +25,8 @@ type BranchWithSettingsResult = {
     qrPaymentMode: string;
     splitBillEnabled: boolean;
     partialDeliveryEnabled: boolean;
+    cashierRefundLimit?: Prisma.Decimal | null;
+    refundTipDefault?: boolean;
   } | null;
 };
 
@@ -33,7 +36,8 @@ type TransactionClient = {
     findUniqueOrThrow: jest.Mock<Promise<BranchWithSettingsResult>, [unknown]>;
   };
   branchSettings: {
-    upsert: jest.Mock<Promise<{ branchId: string }>, [unknown]>;
+    upsert: jest.Mock<Promise<unknown>, [unknown]>;
+    findUnique?: jest.Mock<Promise<unknown>, [unknown]>;
   };
 };
 
@@ -79,11 +83,17 @@ describe('UpdateBranchService', () => {
     adminBranchIds: new Set(['branch-1']),
   };
 
+  const auditRecordMock = jest.fn().mockResolvedValue(undefined);
+  const auditService = { record: auditRecordMock } as unknown as AuditService;
   let service: UpdateBranchService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new UpdateBranchService(prisma, branchAccessService);
+    service = new UpdateBranchService(
+      prisma,
+      branchAccessService,
+      auditService,
+    );
   });
 
   it('rejects an update without any field to change', async () => {
@@ -190,6 +200,8 @@ describe('UpdateBranchService', () => {
         partialDeliveryEnabled: true,
         autoDeliverAfterMinutes: null,
         tableAssignmentEnabled: false,
+        cashierRefundLimit: null,
+        refundTipDefault: false,
       },
     });
     expect(result).toEqual({
@@ -205,6 +217,8 @@ describe('UpdateBranchService', () => {
         partialDeliveryEnabled: true,
         autoDeliverAfterMinutes: null,
         tableAssignmentEnabled: false,
+        cashierRefundLimit: null,
+        refundTipDefault: false,
       },
     });
   });
@@ -269,8 +283,169 @@ describe('UpdateBranchService', () => {
         partialDeliveryEnabled: true,
         autoDeliverAfterMinutes: null,
         tableAssignmentEnabled: false,
+        cashierRefundLimit: null,
+        refundTipDefault: false,
       },
     });
     expect(result.settings.qrPaymentMode).toBe('postpaid_order');
+  });
+
+  it('stores the cashier refund limit and the tip default', async () => {
+    getStaffContextMock.mockResolvedValue(adminContext);
+    branchFindFirstMock.mockResolvedValue({ id: 'branch-1' });
+
+    const settingsUpsertMock = jest
+      .fn<Promise<unknown>, [unknown]>()
+      .mockResolvedValue({
+        cashierRefundLimit: new Prisma.Decimal(20000),
+        refundTipDefault: true,
+      });
+    const found = {
+      id: 'branch-1',
+      restaurantId: 'restaurant-1',
+      name: 'Providencia',
+      address: null,
+      status: BranchStatus.ACTIVE,
+      settings: {
+        qrOrderingEnabled: true,
+        qrPaymentMode: 'prepaid_order',
+        splitBillEnabled: true,
+        partialDeliveryEnabled: true,
+        cashierRefundLimit: new Prisma.Decimal(20000),
+        refundTipDefault: true,
+      },
+    };
+
+    transactionMock.mockImplementation((callback) =>
+      callback({
+        branch: {
+          update: jest.fn(),
+          findUniqueOrThrow: jest.fn().mockResolvedValue(found),
+        },
+        branchSettings: {
+          upsert: settingsUpsertMock,
+          findUnique: jest.fn().mockResolvedValue({
+            cashierRefundLimit: null,
+            refundTipDefault: false,
+          }),
+        },
+      }),
+    );
+
+    const result = await service.execute(authUser, 'branch-1', {
+      settings: { cashierRefundLimit: 20000, refundTipDefault: true },
+    });
+
+    expect(auditRecordMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        restaurantId: 'restaurant-1',
+        branchId: 'branch-1',
+        actorStaffUserId: 'staff-1',
+        action: 'BRANCH_REFUND_SETTINGS_CHANGED',
+        entityType: 'BranchSettings',
+        entityId: 'branch-1',
+        before: { cashierRefundLimit: null, refundTipDefault: false },
+        after: { cashierRefundLimit: '20000', refundTipDefault: true },
+      }),
+    );
+
+    expect(settingsUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { cashierRefundLimit: 20000, refundTipDefault: true },
+        create: expect.objectContaining({
+          cashierRefundLimit: 20000,
+          refundTipDefault: true,
+        }),
+      }),
+    );
+    expect(result.settings.cashierRefundLimit).toBe('20000');
+    expect(result.settings.refundTipDefault).toBe(true);
+  });
+
+  it('clears the cashier refund limit with null', async () => {
+    getStaffContextMock.mockResolvedValue(adminContext);
+    branchFindFirstMock.mockResolvedValue({ id: 'branch-1' });
+    const settingsUpsertMock = jest.fn().mockResolvedValue({
+      cashierRefundLimit: null,
+      refundTipDefault: false,
+    });
+
+    transactionMock.mockImplementation((callback) =>
+      callback({
+        branch: {
+          update: jest.fn(),
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'branch-1',
+            restaurantId: 'restaurant-1',
+            name: 'Providencia',
+            address: null,
+            status: BranchStatus.ACTIVE,
+            settings: null,
+          }),
+        },
+        branchSettings: {
+          upsert: settingsUpsertMock,
+          findUnique: jest.fn().mockResolvedValue({
+            cashierRefundLimit: new Prisma.Decimal(5000),
+            refundTipDefault: false,
+          }),
+        },
+      }),
+    );
+
+    const result = await service.execute(authUser, 'branch-1', {
+      settings: { cashierRefundLimit: null },
+    });
+
+    expect(auditRecordMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        before: { cashierRefundLimit: '5000', refundTipDefault: false },
+        after: { cashierRefundLimit: null, refundTipDefault: false },
+      }),
+    );
+
+    expect(settingsUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { cashierRefundLimit: null } }),
+    );
+    expect(result.settings.cashierRefundLimit).toBeNull();
+  });
+
+  it('does not audit when the refund settings keep their value', async () => {
+    getStaffContextMock.mockResolvedValue(adminContext);
+    branchFindFirstMock.mockResolvedValue({ id: 'branch-1' });
+
+    transactionMock.mockImplementation((callback) =>
+      callback({
+        branch: {
+          update: jest.fn(),
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'branch-1',
+            restaurantId: 'restaurant-1',
+            name: 'Providencia',
+            address: null,
+            status: BranchStatus.ACTIVE,
+            settings: null,
+          }),
+        },
+        branchSettings: {
+          upsert: jest.fn().mockResolvedValue({
+            cashierRefundLimit: new Prisma.Decimal(5000),
+            refundTipDefault: false,
+          }),
+          findUnique: jest.fn().mockResolvedValue({
+            cashierRefundLimit: new Prisma.Decimal(5000),
+            refundTipDefault: false,
+          }),
+        },
+      }),
+    );
+
+    await service.execute(authUser, 'branch-1', {
+      settings: { cashierRefundLimit: 5000 },
+    });
+
+    expect(auditRecordMock).not.toHaveBeenCalled();
   });
 });

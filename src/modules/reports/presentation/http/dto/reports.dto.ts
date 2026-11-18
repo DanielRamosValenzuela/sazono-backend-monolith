@@ -23,6 +23,10 @@ import {
   METHOD_KEYS,
   PAYMENTS_ORDER_BY,
   PAYMENT_SOURCES,
+  REFUND_METHODS,
+  REFUND_REASON_CODES,
+  REFUND_STATUSES,
+  REFUNDS_ORDER_BY,
   SALES_ORDER_BY,
   SORT_DIRECTIONS,
 } from '../../../application/report-types';
@@ -340,4 +344,75 @@ export class SalesByHierarchyQueryDto extends ReportCommonFilterDto {
   @IsOptional()
   @IsIn(['json', 'csv'])
   format?: 'json' | 'csv';
+}
+
+export class RefundsReportQueryDto extends ReportRangeQueryDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Usuario staff que registro el reembolso. Para CASHIER se ignora.',
+  })
+  @IsOptional()
+  @IsUUID()
+  requestedById?: string;
+
+  @ApiPropertyOptional({
+    example: 'CUSTOMER_COMPLAINT,WRONG_ORDER',
+    description: `Lista separada por comas. Valores: ${REFUND_REASON_CODES.join(', ')}.`,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  @Matches(METHOD_LIST_PATTERN)
+  reasonCode?: string;
+
+  @ApiPropertyOptional({
+    example: 'SUCCEEDED',
+    description: `Lista separada por comas. Valores: ${REFUND_STATUSES.join(', ')}.`,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(METHOD_LIST_PATTERN)
+  refundStatus?: string;
+
+  @ApiPropertyOptional({
+    example: 'CASH_MANUAL',
+    description: `Lista separada por comas. Valores: ${REFUND_METHODS.join(', ')}.`,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(METHOD_LIST_PATTERN)
+  refundMethod?: string;
+
+  @ApiPropertyOptional({
+    example: 1000,
+    description: 'Monto reembolsado minimo (total devuelto), en pesos.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_FILTER_AMOUNT)
+  minAmount?: number;
+
+  @ApiPropertyOptional({
+    example: 50000,
+    description: 'Monto reembolsado maximo (total devuelto), en pesos.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_FILTER_AMOUNT)
+  maxAmount?: number;
+
+  @ApiPropertyOptional({ enum: REFUNDS_ORDER_BY, default: 'completedAt' })
+  @IsOptional()
+  @IsIn(REFUNDS_ORDER_BY)
+  orderBy?: (typeof REFUNDS_ORDER_BY)[number];
+
+  @ApiPropertyOptional({ enum: SORT_DIRECTIONS, default: 'desc' })
+  @IsOptional()
+  @IsIn(SORT_DIRECTIONS)
+  direction?: (typeof SORT_DIRECTIONS)[number];
 }

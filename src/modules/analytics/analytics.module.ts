@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
 import { GetBranchSummaryService } from './application/get-branch-summary.service';
 import { BranchAnalyticsPrismaRepository } from './infrastructure/prisma/branch-analytics.prisma.repository';
+import { ReportsInsightsPrismaRepository } from '../reports/infrastructure/reports-insights.prisma.repository';
 import { AnalyticsController } from './presentation/http/analytics.controller';
 
 @Module({
@@ -12,6 +13,7 @@ import { AnalyticsController } from './presentation/http/analytics.controller';
   providers: [
     GetBranchSummaryService,
     BranchAnalyticsPrismaRepository,
+    ReportsInsightsPrismaRepository,
     JwtAuthGuard,
     ProfileTypeGuard,
   ],

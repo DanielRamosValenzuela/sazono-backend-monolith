@@ -1,6 +1,6 @@
 # 28. Reportería M2: jerarquía de ventas tipo Toteat
 
-Segundo hito de la especificación de reportería (`docs/11-spec-reporteria-y-reembolsos.md` del repositorio raíz). Agrega categorías anidadas en la carta, un snapshot de categoría en cada línea de pedido y el reporte `sales-by-hierarchy` con drill-down. No incluye reembolsos, impuestos ni descuentos: el monto es el de las líneas vendidas, sin restar nada.
+Segundo hito de la especificación de reportería (`docs/11-spec-reporteria-y-reembolsos.md` del repositorio raíz). Agrega categorías anidadas en la carta, un snapshot de categoría en cada línea de pedido y el reporte `sales-by-hierarchy` con drill-down. No incluye impuestos ni descuentos: el monto es el de las líneas vendidas, sin restar nada. Los reembolsos (M4) no restan nodos: la respuesta trae un bloque aparte `refunds { consumption, tip }` y el CSV una fila `REEMBOLSOS (no asignados a productos)` (ver `32-reembolsos.md`).
 
 ## Qué se construyó
 
@@ -46,7 +46,7 @@ Sí. El resolvedor guarda `priceSnapshot = menuItem.price + suma(priceDelta de l
 
 ## Pendiente fuera de M2
 
-Reembolsos y descuentos (la jerarquía no resta nada), parámetro `depth` para devolver el árbol completo en una llamada, editor de árbol en Menu Studio y pestaña Jerarquía en la UI (trabajo del frontend), y (resuelto en el doc 30) filtrar por cajero, mesero, medio, origen, zona, mesa, hora y día. Con filtros a nivel de pago la jerarquía cuenta la cuenta completa si alguno de sus pagos cumple; ver el doc 30 para el detalle de la cuadratura.
+Descuentos y prorrateo de reembolsos por producto (la jerarquía no resta nada de los nodos; `refunds` informa el total de reembolsos del rango en una línea aparte, doc 32; el reembolso por ítem es M8), parámetro `depth` para devolver el árbol completo en una llamada, editor de árbol en Menu Studio y pestaña Jerarquía en la UI (trabajo del frontend), y (resuelto en el doc 30) filtrar por cajero, mesero, medio, origen, zona, mesa, hora y día. Con filtros a nivel de pago la jerarquía cuenta la cuenta completa si alguno de sus pagos cumple; ver el doc 30 para el detalle de la cuadratura.
 
 ## SQL no ejecutado
 

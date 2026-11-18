@@ -4,7 +4,8 @@
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
+import { AuditService } from '../../../common/audit/audit.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
@@ -19,6 +20,7 @@ export class UpdateBranchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly branchAccessService: BranchAccessService,
+    private readonly auditService: AuditService,
   ) {}
 
   async execute(
@@ -116,7 +118,25 @@ export class UpdateBranchService {
             dto.settings.tableAssignmentEnabled;
         }
 
-        await tx.branchSettings.upsert({
+        if (dto.settings.cashierRefundLimit !== undefined) {
+          settingsUpdate.cashierRefundLimit = dto.settings.cashierRefundLimit;
+        }
+
+        if (dto.settings.refundTipDefault !== undefined) {
+          settingsUpdate.refundTipDefault = dto.settings.refundTipDefault;
+        }
+
+        const refundSettingsTouched =
+          dto.settings.cashierRefundLimit !== undefined ||
+          dto.settings.refundTipDefault !== undefined;
+        const refundSettingsBefore = refundSettingsTouched
+          ? await tx.branchSettings.findUnique({
+              where: { branchId },
+              select: { cashierRefundLimit: true, refundTipDefault: true },
+            })
+          : null;
+
+        const savedSettings = await tx.branchSettings.upsert({
           where: {
             branchId,
           },
@@ -131,8 +151,38 @@ export class UpdateBranchService {
               dto.settings.autoDeliverAfterMinutes ?? null,
             tableAssignmentEnabled:
               dto.settings.tableAssignmentEnabled ?? false,
+            cashierRefundLimit: dto.settings.cashierRefundLimit ?? null,
+            refundTipDefault: dto.settings.refundTipDefault ?? false,
           },
         });
+
+        if (refundSettingsTouched) {
+          const toJson = (
+            value: {
+              cashierRefundLimit: Prisma.Decimal | null;
+              refundTipDefault: boolean;
+            } | null,
+          ) => ({
+            cashierRefundLimit: value?.cashierRefundLimit?.toString() ?? null,
+            refundTipDefault: value?.refundTipDefault ?? false,
+          });
+          const before = toJson(refundSettingsBefore);
+          const after = toJson(savedSettings);
+
+          if (JSON.stringify(before) !== JSON.stringify(after)) {
+            await this.auditService.record(tx, {
+              restaurantId: context.restaurantId,
+              branchId,
+              actorStaffUserId: context.staffUserId,
+              actorRole: Role.ADMIN,
+              action: 'BRANCH_REFUND_SETTINGS_CHANGED',
+              entityType: 'BranchSettings',
+              entityId: branchId,
+              before,
+              after,
+            });
+          }
+        }
       }
 
       return tx.branch.findUniqueOrThrow({

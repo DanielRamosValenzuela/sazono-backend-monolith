@@ -40,6 +40,15 @@ const IN_PRODUCTION_STATUSES: OrderStatus[] = [
   OrderStatus.READY,
 ];
 
+export const REFUND_REQUIRED_CODE = 'REFUND_REQUIRED';
+
+export const refundRequiredBody = (billId: string) => ({
+  message:
+    'Esta orden ya esta pagada y no se puede anular desde aqui. Si hay que devolver el dinero, un administrador o cajero puede reembolsar el pago desde el detalle de la cuenta (Reportes, Pagos); el reembolso no anula la orden, avisa a cocina.',
+  code: REFUND_REQUIRED_CODE,
+  billId,
+});
+
 @Injectable()
 export class CancelOrderService {
   constructor(
@@ -94,9 +103,7 @@ export class CancelOrderService {
       }
 
       if (order.paymentPolicy === PaymentPolicy.PREPAID) {
-        throw new ConflictException(
-          'Una orden prepagada requiere reembolso y no puede anularse desde aqui.',
-        );
+        throw new ConflictException(refundRequiredBody(order.billId));
       }
 
       await this.cancelInProductionOrder(order, reason);
@@ -191,9 +198,7 @@ export class CancelOrderService {
       const remainingAmount = totalAmount.sub(paidAmount);
 
       if (remainingAmount.lt(0)) {
-        throw new ConflictException(
-          'La cuenta ya tiene pagos que cubren esta orden: anularla requiere reembolso.',
-        );
+        throw new ConflictException(refundRequiredBody(order.billId));
       }
 
       const status = paidAmount.lte(0)

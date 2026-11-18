@@ -21,6 +21,9 @@ export function mapBranchToResponse(
       partialDeliveryEnabled: branch.settings?.partialDeliveryEnabled ?? true,
       autoDeliverAfterMinutes: branch.settings?.autoDeliverAfterMinutes ?? null,
       tableAssignmentEnabled: branch.settings?.tableAssignmentEnabled ?? false,
+      cashierRefundLimit:
+        branch.settings?.cashierRefundLimit?.toString() ?? null,
+      refundTipDefault: branch.settings?.refundTipDefault ?? false,
     },
   };
 }

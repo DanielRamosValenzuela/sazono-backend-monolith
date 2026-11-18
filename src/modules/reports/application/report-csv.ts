@@ -13,7 +13,7 @@ export function csvCell(value: CsvCell): string {
   }
 
   if (typeof value === 'number') {
-    return String(value);
+    return String(value).replace('.', ',');
   }
 
   const text = FORMULA_PREFIXES.some((prefix) => value.startsWith(prefix))

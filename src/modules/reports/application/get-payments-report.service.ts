@@ -7,6 +7,7 @@ import {
   type PaymentReportRecord,
   type PaymentStatusTotalRecord,
   type PaymentsPageFilter,
+  type RefundsByMethodRecord,
 } from '../infrastructure/reports.prisma.repository';
 import type { CsvDownload } from './get-sales-by-order.service';
 import { csvStream, type CsvCell } from './report-csv';
@@ -66,6 +67,8 @@ export type PaymentsReportRow = {
   caja: string;
   source: string | null;
   refunded: string;
+  refundedTip: string;
+  refundStatus: 'NONE' | 'PARTIAL' | 'FULL';
 };
 
 export type PaymentsReportStatusTotal = {
@@ -80,6 +83,16 @@ export type PaymentsReportMethodTotal = {
   count: number;
   amount: string;
   tip: string;
+  refunded: string;
+  refundedTip: string;
+  net: string;
+};
+
+export type PaymentsReportOtherPeriod = {
+  included: boolean;
+  refunded: string;
+  tipRefunded: string;
+  byMethod: { method: MethodKey; refunded: string; tipRefunded: string }[];
 };
 
 export type PaymentsReportResponse = {
@@ -93,6 +106,7 @@ export type PaymentsReportResponse = {
   totals: {
     byStatus: PaymentsReportStatusTotal[];
     byMethod: PaymentsReportMethodTotal[];
+    otherPeriod: PaymentsReportOtherPeriod;
   };
   nextCursor: string | null;
   limit: number;
@@ -159,48 +173,83 @@ export function buildPaymentsReportRow(
     cashier: record.staff_name,
     caja: describeCaja(record),
     source: record.source,
-    refunded: '0',
+    refunded: money(record.refunded ?? 0),
+    refundedTip: money(record.refunded_tip ?? 0),
+    refundStatus: (record.refund_status ??
+      'NONE') as PaymentsReportRow['refundStatus'],
   };
 }
 
+type MethodSums = {
+  count: number;
+  amount: Prisma.Decimal;
+  tip: Prisma.Decimal;
+  refunded: Prisma.Decimal;
+  refundedTip: Prisma.Decimal;
+};
+
+const EMPTY_SUMS: MethodSums = {
+  count: 0,
+  amount: ZERO,
+  tip: ZERO,
+  refunded: ZERO,
+  refundedTip: ZERO,
+};
+
 export function buildPaymentsReportTotals(
   records: PaymentStatusTotalRecord[],
+  allRefundsByMethod: RefundsByMethodRecord[] | null = null,
 ): PaymentsReportResponse['totals'] {
-  const byStatus = new Map<
-    string,
-    { count: number; amount: Prisma.Decimal; tip: Prisma.Decimal }
-  >();
-  const byMethod = new Map<
-    string,
-    { count: number; amount: Prisma.Decimal; tip: Prisma.Decimal }
-  >();
+  const byStatus = new Map<string, MethodSums>();
+  const byMethod = new Map<string, MethodSums>();
 
   for (const record of records) {
-    const status = byStatus.get(record.status) ?? {
-      count: 0,
-      amount: ZERO,
-      tip: ZERO,
-    };
+    const status = byStatus.get(record.status) ?? EMPTY_SUMS;
 
     byStatus.set(record.status, {
       count: status.count + record.count,
       amount: status.amount.add(record.consumption),
       tip: status.tip.add(record.tip),
+      refunded: status.refunded.add(record.refunded ?? 0),
+      refundedTip: status.refundedTip.add(record.refunded_tip ?? 0),
     });
 
     if (record.kind === 'PAYMENT' && record.status === 'PAID') {
       const key = record.method ?? UNCLASSIFIED_METHOD;
-      const method = byMethod.get(key) ?? {
-        count: 0,
-        amount: ZERO,
-        tip: ZERO,
-      };
+      const method = byMethod.get(key) ?? EMPTY_SUMS;
 
       byMethod.set(key, {
         count: method.count + record.count,
         amount: method.amount.add(record.consumption),
         tip: method.tip.add(record.tip),
+        refunded: method.refunded.add(record.refunded ?? 0),
+        refundedTip: method.refundedTip.add(record.refunded_tip ?? 0),
       });
+    }
+  }
+
+  const otherByMethod: PaymentsReportOtherPeriod['byMethod'] = [];
+  let otherRefunded = ZERO;
+  let otherTipRefunded = ZERO;
+
+  if (allRefundsByMethod) {
+    for (const record of allRefundsByMethod) {
+      const key = record.method;
+      const rows = byMethod.get(key) ?? EMPTY_SUMS;
+      const refunded = new Prisma.Decimal(record.consumption).sub(
+        rows.refunded,
+      );
+      const tipRefunded = new Prisma.Decimal(record.tip).sub(rows.refundedTip);
+
+      if (!refunded.isZero() || !tipRefunded.isZero()) {
+        otherByMethod.push({
+          method: key as MethodKey,
+          refunded: money(refunded),
+          tipRefunded: money(tipRefunded),
+        });
+        otherRefunded = otherRefunded.add(refunded);
+        otherTipRefunded = otherTipRefunded.add(tipRefunded);
+      }
     }
   }
 
@@ -216,7 +265,16 @@ export function buildPaymentsReportTotals(
       count: value.count,
       amount: money(value.amount),
       tip: money(value.tip),
+      refunded: money(value.refunded),
+      refundedTip: money(value.refundedTip),
+      net: money(value.amount.sub(value.refunded)),
     })),
+    otherPeriod: {
+      included: allRefundsByMethod !== null,
+      refunded: money(otherRefunded),
+      tipRefunded: money(otherTipRefunded),
+      byMethod: otherByMethod,
+    },
   };
 }
 
@@ -240,6 +298,7 @@ export const PAYMENTS_CSV_HEADERS = [
   'Cajero',
   'Origen',
   'Reembolsado',
+  'Propina reembolsada',
 ];
 
 function paymentRowToCsv(row: PaymentsReportRow, timeZone: string): CsvCell[] {
@@ -265,6 +324,7 @@ function paymentRowToCsv(row: PaymentsReportRow, timeZone: string): CsvCell[] {
     row.cashier,
     row.source,
     Number(row.refunded),
+    Number(row.refundedTip),
   ];
 }
 
@@ -286,13 +346,14 @@ export class GetPaymentsReportService {
     const filter = this.toFilter(scope, query);
     const limit = Math.min(query.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
 
-    const [page, totalRecords] = await Promise.all([
+    const [page, totalRecords, otherPeriod] = await Promise.all([
       this.loadPage(
         filter,
         decodeCursor(query.cursor, CURSOR_KINDS[filter.orderBy]),
         limit,
       ),
       this.reportsRepository.findPaymentStatusTotals(filter),
+      this.loadAllRefunds(filter),
     ]);
 
     return {
@@ -303,7 +364,7 @@ export class GetPaymentsReportService {
       orderBy: filter.orderBy,
       direction: filter.direction,
       rows: page.rows,
-      totals: buildPaymentsReportTotals(totalRecords),
+      totals: buildPaymentsReportTotals(totalRecords, otherPeriod),
       nextCursor: page.nextCursor,
       limit,
     };
@@ -346,6 +407,26 @@ export class GetPaymentsReportService {
         CURSOR_KINDS[filter.orderBy],
       );
     } while (cursor !== null);
+  }
+
+  private loadAllRefunds(
+    filter: PaymentsPageFilter,
+  ): Promise<RefundsByMethodRecord[] | null> {
+    const rowSpecific =
+      filter.kind === 'attempt' ||
+      filter.status !== null ||
+      filter.q !== null ||
+      filter.timeFromMinute !== null ||
+      filter.timeToMinute !== null ||
+      filter.weekdays.length > 0 ||
+      filter.hasTip !== null ||
+      filter.minTip !== null ||
+      filter.minAmount !== null ||
+      filter.maxAmount !== null;
+
+    return rowSpecific
+      ? Promise.resolve(null)
+      : this.reportsRepository.findRefundsByMethod(filter);
   }
 
   private toFilter(

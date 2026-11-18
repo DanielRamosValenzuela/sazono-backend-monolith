@@ -34,7 +34,7 @@ Cierre por comanda: una fila por cuenta con estado PAID cuya fecha de cierre cae
 
 Query: `from`, `to`, `cashierId`, `method`, `cursor`, `limit`, `format=json|csv`. Orden por defecto: cierre descendente. Desde el doc 30 acepta además filtros libres (mesero, mesa, zona, estado, rango de total, propina, origen, hora, día de la semana, búsqueda, producto y categoría) y `orderBy`/`direction`; también hay un endpoint de detalle de comanda y otro de opciones de filtro.
 
-Cada fila trae comanda (número de ticket de mostrador o últimos 6 caracteres del id), caja, mesa, zona, mesero, cajero, comensales, estado de pago (`Pagado` o `Mixto` si hay más de un medio), total, descuentos (0), a pagar, propina, cantidad de pagos, boleta (vacío), reembolsado (0) y `methods`: arreglo de 9 entradas fijas `{ method, amount }`, una por medio más `SIN_CLASIFICAR`. La columna "Caja" es el nombre de quien cobró, `QR/Online` para pagos web y `Sin asignar` para pagos históricos sin cajero.
+Cada fila trae comanda (número de ticket de mostrador o últimos 6 caracteres del id), caja, mesa, zona, mesero, cajero, comensales, estado de pago (`Pagado` o `Mixto` si hay más de un medio), total, descuentos (0), a pagar, propina, cantidad de pagos, boleta (vacío), reembolsado (real desde M4, ver doc 32) y `methods`: arreglo de 9 entradas fijas `{ method, amount }`, una por medio más `SIN_CLASIFICAR`. La columna "Caja" es el nombre de quien cobró, `QR/Online` para pagos web y `Sin asignar` para pagos históricos sin cajero.
 
 Invariante: la suma de las columnas de medio de una fila es igual a su `total`, y la suma de las filas es igual a `totals.total` para el mismo filtro. La propina nunca entra en las columnas de medio ni en `total`.
 
@@ -46,10 +46,10 @@ Detalle de pagos: une los pagos registrados con los intentos de pago sin pago as
 
 Query: `from`, `to`, `kind=payment|attempt|all` (por defecto all), `provider` (MANUAL, MERCADO_PAGO, TRANSBANK), `paymentStatus` (estado del pago o del intento), `cashierId`, `method`, `cursor`, `limit`, `format=json|csv`. Con `cashierId` o `method` solo aparecen pagos (los intentos no tienen cajero ni medio). Orden: fecha del evento descendente (`paidAt` o, si no hay, `createdAt`).
 
-Cada fila trae id, tipo (PAYMENT o ATTEMPT), fechas, comanda, mesa, medio, proveedor, referencia, estado, estado y detalle del proveedor, motivo de falla, monto (consumo, sin propina), propina, total cobrado, caja, cajero, origen y reembolsado (0). Los totales vienen por estado y por medio (este último solo sobre pagos PAID).
+Cada fila trae id, tipo (PAYMENT o ATTEMPT), fechas, comanda, mesa, medio, proveedor, referencia, estado, estado y detalle del proveedor, motivo de falla, monto (consumo, sin propina), propina, total cobrado, caja, cajero, origen y reembolsado (real desde M4, ver doc 32). Los totales vienen por estado y por medio (este último solo sobre pagos PAID).
 
 Archivo CSV: `pagos_{branchId}_{from}_{to}.csv`.
 
 ## Pendiente fuera de M1
 
-Descuentos, boleta y folio, reembolsos, jerarquía de ventas, turnos de caja y reportes por mesero o por hora. Las columnas correspondientes salen en 0 o vacías.
+Descuentos, boleta y folio, jerarquía de ventas, turnos de caja y reportes por mesero o por hora. Las columnas correspondientes salen en 0 o vacías. Los reembolsos ya existen desde M4: `refunded`, `tipRefunded`, `net`, `refundStatus` y los medios en neto en `sales-by-order`, y las columnas de reembolso en `payments` (contrato completo en `32-reembolsos.md`).

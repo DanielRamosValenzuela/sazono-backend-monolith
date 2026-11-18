@@ -72,6 +72,27 @@ describe('buildPaymentsReportRow', () => {
       method: 'CASH',
       caja: 'Caro Cajera',
       refunded: '0',
+      refundedTip: '0',
+      refundStatus: 'NONE',
+    });
+  });
+
+  it('exposes the refunded consumption of the range, the tip and the lifetime status', () => {
+    const row = buildPaymentsReportRow(
+      record({
+        refunded: '3000',
+        refunded_tip: '273',
+        refund_status: 'PARTIAL',
+      }),
+    );
+
+    expect(row).toMatchObject({
+      amount: '10000',
+      tip: '1000',
+      total: '11000',
+      refunded: '3000',
+      refundedTip: '273',
+      refundStatus: 'PARTIAL',
     });
   });
 
@@ -156,10 +177,98 @@ describe('buildPaymentsReportTotals', () => {
       { status: 'PENDING', count: 1, amount: '1000', tip: '0' },
     ]);
     expect(totals.byMethod).toEqual([
-      { method: 'CASH', count: 2, amount: '8000', tip: '500' },
-      { method: 'SIN_CLASIFICAR', count: 1, amount: '2000', tip: '0' },
-      { method: 'CREDIT_CARD', count: 1, amount: '5000', tip: '0' },
+      {
+        method: 'CASH',
+        count: 2,
+        amount: '8000',
+        tip: '500',
+        refunded: '0',
+        refundedTip: '0',
+        net: '8000',
+      },
+      {
+        method: 'SIN_CLASIFICAR',
+        count: 1,
+        amount: '2000',
+        tip: '0',
+        refunded: '0',
+        refundedTip: '0',
+        net: '2000',
+      },
+      {
+        method: 'CREDIT_CARD',
+        count: 1,
+        amount: '5000',
+        tip: '0',
+        refunded: '0',
+        refundedTip: '0',
+        net: '5000',
+      },
     ]);
+    expect(totals.otherPeriod).toEqual({
+      included: false,
+      refunded: '0',
+      tipRefunded: '0',
+      byMethod: [],
+    });
+  });
+
+  it('nets the refunds of the rows by method and shows the rest as other period', () => {
+    const records: PaymentStatusTotalRecord[] = [
+      {
+        kind: 'PAYMENT',
+        status: 'PAID',
+        method: 'CASH',
+        count: 1,
+        consumption: 10000,
+        tip: 1000,
+        refunded: 3000,
+        refunded_tip: 200,
+      },
+      {
+        kind: 'ATTEMPT',
+        status: 'FAILED',
+        method: null,
+        count: 1,
+        consumption: 500,
+        tip: 0,
+        refunded: 0,
+        refunded_tip: 0,
+      },
+    ];
+
+    const totals = buildPaymentsReportTotals(records, [
+      { method: 'CASH', refunds: 2, consumption: 3500, tip: 200 },
+      { method: 'MERCADO_PAGO', refunds: 1, consumption: 2000, tip: 0 },
+    ]);
+
+    expect(totals.byMethod).toEqual([
+      {
+        method: 'CASH',
+        count: 1,
+        amount: '10000',
+        tip: '1000',
+        refunded: '3000',
+        refundedTip: '200',
+        net: '7000',
+      },
+    ]);
+    expect(totals.otherPeriod).toEqual({
+      included: true,
+      refunded: '2500',
+      tipRefunded: '0',
+      byMethod: [
+        { method: 'CASH', refunded: '500', tipRefunded: '0' },
+        { method: 'MERCADO_PAGO', refunded: '2000', tipRefunded: '0' },
+      ],
+    });
+    const netSum = totals.byMethod.reduce(
+      (sum, entry) => sum + Number(entry.net),
+      0,
+    );
+    expect(netSum + Number(totals.otherPeriod.refunded)).toBe(
+      10000 - 3000 + 2500,
+    );
   });
 });
 
@@ -167,11 +276,13 @@ describe('GetPaymentsReportService', () => {
   const resolveMock = jest.fn();
   const findPaymentsPageMock = jest.fn();
   const findPaymentStatusTotalsMock = jest.fn();
+  const findRefundsByMethodMock = jest.fn();
   const service = new GetPaymentsReportService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findPaymentsPage: findPaymentsPageMock,
       findPaymentStatusTotals: findPaymentStatusTotalsMock,
+      findRefundsByMethod: findRefundsByMethodMock,
     } as unknown as ReportsPrismaRepository,
   );
 
@@ -179,6 +290,92 @@ describe('GetPaymentsReportService', () => {
     jest.clearAllMocks();
     resolveMock.mockResolvedValue(scope);
     findPaymentStatusTotalsMock.mockResolvedValue([]);
+    findRefundsByMethodMock.mockResolvedValue([]);
+  });
+
+  it('includes other period with the payment level filters', async () => {
+    findPaymentsPageMock.mockResolvedValue([]);
+    resolveMock.mockResolvedValue({
+      ...scope,
+      cashierId: 'staff-1',
+      methods: ['CASH'],
+      filters: { ...EMPTY_FILTERS, sources: ['CASHIER'], zoneId: 'zone-1' },
+    });
+
+    const result = await service.execute(authUser, 'branch-1', {
+      provider: 'MANUAL',
+    });
+
+    expect(findRefundsByMethodMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cashierId: 'staff-1',
+        methods: ['CASH'],
+        sources: ['CASHIER'],
+        zoneId: 'zone-1',
+        provider: 'MANUAL',
+        branchId: 'branch-1',
+      }),
+    );
+    expect(result.totals.otherPeriod.included).toBe(true);
+  });
+
+  it.each([
+    ['kind attempt', { kind: 'attempt' as const }, {}],
+    ['a payment status', { paymentStatus: 'PAID' }, {}],
+    ['a search', {}, { q: 'mesa' }],
+    ['a time window', {}, { timeFromMinute: 600 }],
+    ['weekdays', {}, { weekdays: [1] }],
+    ['a tip filter', {}, { hasTip: true }],
+    ['a min tip', {}, { minTip: 100 }],
+    ['an amount filter', {}, { minAmount: 1000 }],
+  ])(
+    'does not include other period with %s',
+    async (_label, query, filters) => {
+      findPaymentsPageMock.mockResolvedValue([]);
+      resolveMock.mockResolvedValue({
+        ...scope,
+        filters: { ...EMPTY_FILTERS, ...filters },
+      });
+
+      const result = await service.execute(authUser, 'branch-1', query);
+
+      expect(findRefundsByMethodMock).not.toHaveBeenCalled();
+      expect(result.totals.otherPeriod).toMatchObject({
+        included: false,
+        refunded: '0',
+      });
+    },
+  );
+
+  it('keeps the dashboard invariant: net by method plus other period is the net of the range', async () => {
+    findPaymentsPageMock.mockResolvedValue([]);
+    findPaymentStatusTotalsMock.mockResolvedValue([
+      {
+        kind: 'PAYMENT',
+        status: 'PAID',
+        method: 'CASH',
+        count: 1,
+        consumption: 10000,
+        tip: 1000,
+        refunded: 3000,
+        refunded_tip: 0,
+      },
+    ]);
+    findRefundsByMethodMock.mockResolvedValue([
+      { method: 'CASH', refunds: 1, consumption: 3000, tip: 0 },
+      { method: 'MERCADO_PAGO', refunds: 1, consumption: 2000, tip: 0 },
+    ]);
+
+    const result = await service.execute(authUser, 'branch-1', {});
+    const dashboardNet = 10000 - (3000 + 2000);
+    const netByMethod = result.totals.byMethod.reduce(
+      (sum, entry) => sum + Number(entry.net),
+      0,
+    );
+
+    expect(netByMethod - Number(result.totals.otherPeriod.refunded)).toBe(
+      dashboardNet,
+    );
   });
 
   it('forwards filters and paginates with a cursor built from the last visible row', async () => {
@@ -240,7 +437,7 @@ describe('GetPaymentsReportService', () => {
     expect(download.filename).toBe('pagos_branch-1_2026-07-14_2026-07-15.csv');
     expect(lines[0]).toBe(BOM + PAYMENTS_CSV_HEADERS.join(';'));
     expect(lines[1]).toBe(
-      '15-07-2026 23:30;15-07-2026 23:30;Pago;7;Mesa 1;Efectivo;MANUAL;manual-1;PAID;;;;10000;1000;11000;Caro Cajera;Caro Cajera;CASHIER;0',
+      '15-07-2026 23:30;15-07-2026 23:30;Pago;7;Mesa 1;Efectivo;MANUAL;manual-1;PAID;;;;10000;1000;11000;Caro Cajera;Caro Cajera;CASHIER;0;0',
     );
   });
 });

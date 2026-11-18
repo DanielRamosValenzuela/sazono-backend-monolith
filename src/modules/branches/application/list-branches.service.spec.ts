@@ -124,6 +124,8 @@ describe('ListBranchesService', () => {
           partialDeliveryEnabled: true,
           autoDeliverAfterMinutes: null,
           tableAssignmentEnabled: false,
+          cashierRefundLimit: null,
+          refundTipDefault: false,
         },
       },
       {
@@ -139,6 +141,8 @@ describe('ListBranchesService', () => {
           partialDeliveryEnabled: true,
           autoDeliverAfterMinutes: null,
           tableAssignmentEnabled: false,
+          cashierRefundLimit: null,
+          refundTipDefault: false,
         },
       },
     ]);

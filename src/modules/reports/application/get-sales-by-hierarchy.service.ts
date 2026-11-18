@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import {
   ReportsPrismaRepository,
@@ -50,6 +51,7 @@ export type SalesByHierarchyResponse = {
   includeModifiers: boolean;
   nodes: HierarchyNode[];
   totals: { amount: string; quantity: number };
+  refunds: { consumption: string; tip: string };
 };
 
 export const SALES_BY_HIERARCHY_CSV_HEADERS = [
@@ -64,6 +66,7 @@ export const SALES_BY_HIERARCHY_CSV_HEADERS = [
 ];
 
 const PATH_SEPARATOR = ' > ';
+const REFUNDS_ROW_LABEL = 'REEMBOLSOS (no asignados a productos)';
 
 export function toHierarchyLines(
   records: HierarchyLineRecord[],
@@ -110,6 +113,17 @@ export function hierarchyToCsvRows(
     response.totals.quantity,
     '',
     response.nodes.reduce((sum, node) => sum + node.cancelledQuantity, 0),
+    '',
+  ]);
+
+  rows.push([
+    REFUNDS_ROW_LABEL,
+    '',
+    null,
+    Number(response.refunds.consumption),
+    null,
+    '',
+    null,
     '',
   ]);
 
@@ -171,7 +185,7 @@ export class GetSalesByHierarchyService {
       groupBy === 'category' && query.parentId
         ? decodeCategoryNodeId(query.parentId)
         : null;
-    const records = await this.reportsRepository.findHierarchyLines({
+    const filter = {
       ...scope.filters,
       branchId: scope.branchId,
       start: scope.start,
@@ -179,8 +193,14 @@ export class GetSalesByHierarchyService {
       timeZone: scope.timeZone,
       cashierId: scope.cashierId,
       methods: scope.methods,
-      includeModifiers,
-    });
+    };
+    const [records, refunds] = await Promise.all([
+      this.reportsRepository.findHierarchyLines({
+        ...filter,
+        includeModifiers,
+      }),
+      this.reportsRepository.findPeriodRefundTotals(filter),
+    ]);
     const view = buildHierarchyView(
       toHierarchyLines(records),
       groupBy,
@@ -197,6 +217,10 @@ export class GetSalesByHierarchyService {
       includeModifiers,
       nodes: view.nodes,
       totals: view.totals,
+      refunds: {
+        consumption: new Prisma.Decimal(refunds.consumption).toFixed(0),
+        tip: new Prisma.Decimal(refunds.tip).toFixed(0),
+      },
     };
   }
 }

@@ -31,6 +31,13 @@ export class DailyPaymentsMetricDto {
 
   @ApiProperty({ example: 6 })
   count!: number;
+
+  @ApiProperty({
+    example: '3000.00',
+    description:
+      'Consumo reembolsado ese dia (por fecha del reembolso). amount ya viene neto.',
+  })
+  refunded!: string;
 }
 
 export class OrdersByStatusMetricDto {
@@ -65,8 +72,15 @@ export class BranchSummaryResponseDto {
   @ApiProperty({ example: 4 })
   openSessions!: number;
 
-  @ApiProperty({ example: '45000.00' })
+  @ApiProperty({
+    example: '45000.00',
+    description:
+      'Ventas netas de hoy: consumo cobrado menos reembolsos de hoy.',
+  })
   todayRevenue!: string;
+
+  @ApiProperty({ example: '3000.00' })
+  todayRefunded!: string;
 
   @ApiProperty({ example: 9 })
   todayPaymentsCount!: number;

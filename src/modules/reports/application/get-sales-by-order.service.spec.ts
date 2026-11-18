@@ -240,16 +240,19 @@ describe('GetSalesByOrderService', () => {
   const resolveMock = jest.fn();
   const findBillPageMock = jest.fn();
   const findMethodTotalsMock = jest.fn();
+  const findRefundsByMethodMock = jest.fn();
   const service = new GetSalesByOrderService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findBillPage: findBillPageMock,
       findMethodTotals: findMethodTotalsMock,
+      findRefundsByMethod: findRefundsByMethodMock,
     } as unknown as ReportsPrismaRepository,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    findRefundsByMethodMock.mockResolvedValue([]);
     resolveMock.mockResolvedValue(scope);
     findMethodTotalsMock.mockResolvedValue([
       { method: 'CASH', payments: 2, consumption: 12000, tip: 1000, bills: 3 },

@@ -57,6 +57,34 @@ export const SOLD_ORDER_STATUSES = [
   'READY',
   'DELIVERED',
 ];
+export const ACTIVE_ORDER_STATUS_NAMES = [
+  'CONFIRMED',
+  'ROUTED',
+  'IN_PREPARATION',
+  'PARTIALLY_READY',
+  'READY',
+];
+export const REFUNDS_ORDER_BY = ['completedAt', 'amount'] as const;
+export const REFUND_REASON_CODES = [
+  'CUSTOMER_COMPLAINT',
+  'WRONG_ORDER',
+  'DISH_UNAVAILABLE',
+  'QUALITY_ISSUE',
+  'DUPLICATE_CHARGE',
+  'CASHIER_ERROR',
+  'OTHER',
+] as const;
+export const REFUND_STATUSES = [
+  'PENDING',
+  'SUCCEEDED',
+  'FAILED',
+  'REQUIRES_MANUAL_REVIEW',
+] as const;
+export const REFUND_METHODS = [
+  'CASH_MANUAL',
+  'GATEWAY',
+  'MANUAL_EXTERNAL',
+] as const;
 export const MAX_FILTER_AMOUNT = 1_000_000_000;
 export const MAX_SEARCH_LENGTH = 100;
 export const MAX_CATEGORY_PATH_DEPTH = 4;
@@ -68,6 +96,10 @@ export type BillPaymentStatus = (typeof BILL_PAYMENT_STATUSES)[number];
 export type SalesOrderBy = (typeof SALES_ORDER_BY)[number];
 export type PaymentsOrderBy = (typeof PAYMENTS_ORDER_BY)[number];
 export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+export type RefundsOrderBy = (typeof REFUNDS_ORDER_BY)[number];
+export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
+export type RefundStatusKey = (typeof REFUND_STATUSES)[number];
+export type RefundMethodKey = (typeof REFUND_METHODS)[number];
 
 export type PaymentSqlFilter = {
   cashierId: string | null;
@@ -127,3 +159,20 @@ export type ReportScope = {
 };
 
 export type KeysetCursor = { value: string; id: string };
+
+export function hasClosureFilters(filter: ReportFilters): boolean {
+  return (
+    filter.timeFromMinute !== null ||
+    filter.timeToMinute !== null ||
+    filter.weekdays.length > 0 ||
+    filter.billStatuses.length > 0 ||
+    filter.minAmount !== null ||
+    filter.maxAmount !== null ||
+    filter.hasTip !== null ||
+    filter.minTip !== null ||
+    filter.q !== null ||
+    filter.productId !== null ||
+    filter.productName !== null ||
+    filter.categoryPath !== null
+  );
+}

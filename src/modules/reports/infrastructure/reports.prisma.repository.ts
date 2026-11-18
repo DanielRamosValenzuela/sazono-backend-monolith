@@ -6,6 +6,7 @@ import {
   UNCLASSIFIED_METHOD,
   type KeysetCursor,
   type PaymentsOrderBy,
+  type RefundsOrderBy,
   type SortDirection,
 } from '../application/report-types';
 import {
@@ -13,12 +14,94 @@ import {
   eligibleBillsSql,
   paidPaymentConditionSql,
   paymentsFilteredSql,
+  refundJoinSql,
+  periodRefundsSql,
+  refundsByMethodSql,
+  refundsFilteredSql,
   type BillFilter,
   type BillPageFilter,
   type PaymentsReportFilter,
+  type RefundsByMethodFilter,
+  type RefundsReportFilter,
 } from './report-sql';
 
-export type { BillFilter, BillPageFilter, PaymentsReportFilter };
+export type {
+  BillFilter,
+  BillPageFilter,
+  PaymentsReportFilter,
+  RefundsByMethodFilter,
+  RefundsReportFilter,
+};
+
+export type RefundsPageFilter = RefundsReportFilter & {
+  orderBy: RefundsOrderBy;
+  direction: SortDirection;
+};
+
+export type RefundReportRecord = {
+  id: string;
+  completed_at: Date;
+  amount: Prisma.Decimal.Value;
+  tip_amount: Prisma.Decimal.Value;
+  net_amount: Prisma.Decimal.Value;
+  vat_amount: Prisma.Decimal.Value;
+  status: string;
+  refund_method: string;
+  reason_code: string;
+  reason_text: string;
+  requested_by_staff_user_id: string | null;
+  requested_by_role: string | null;
+  credit_note_status: string;
+  credit_note_folio: string | null;
+  bill_id: string;
+  payment_id: string;
+  payment_method: string | null;
+  provider: string;
+  order_number: string;
+  table_name: string | null;
+  cashier_name: string | null;
+  requested_by_name: string | null;
+  approved_by_name: string | null;
+  bill_has_active_orders: boolean;
+};
+
+export type RefundTotalRecord = {
+  method: string | null;
+  reason_code: string;
+  requested_by_staff_user_id: string | null;
+  requested_by_name: string | null;
+  count: number;
+  amount: Prisma.Decimal.Value;
+  consumption: Prisma.Decimal.Value;
+  tip: Prisma.Decimal.Value;
+  net: Prisma.Decimal.Value;
+  vat: Prisma.Decimal.Value;
+};
+
+export type RefundsByMethodRecord = {
+  method: string;
+  refunds: number;
+  consumption: Prisma.Decimal.Value;
+  tip: Prisma.Decimal.Value;
+};
+
+export type OrderDetailRefundRecord = {
+  id: string;
+  payment_id: string;
+  amount: Prisma.Decimal.Value;
+  tip_amount: Prisma.Decimal.Value;
+  net_amount: Prisma.Decimal.Value;
+  vat_amount: Prisma.Decimal.Value;
+  method: string;
+  status: string;
+  reason_code: string;
+  reason_text: string;
+  requested_by_staff_user_id: string | null;
+  requested_by_name: string | null;
+  approved_by_name: string | null;
+  credit_note_status: string;
+  completed_at: Date | null;
+};
 
 export type PaymentsPageFilter = PaymentsReportFilter & {
   orderBy: PaymentsOrderBy;
@@ -40,6 +123,8 @@ export type BillPaymentRecord = {
   bill_id: string;
   amount: Prisma.Decimal.Value;
   tip_amount: Prisma.Decimal.Value;
+  refunded?: Prisma.Decimal.Value;
+  refunded_tip?: Prisma.Decimal.Value;
   method: string | null;
   source: string | null;
   staff_name: string | null;
@@ -57,6 +142,8 @@ export type MethodTotalRecord = {
   payments: number;
   consumption: Prisma.Decimal.Value;
   tip: Prisma.Decimal.Value;
+  refunded?: Prisma.Decimal.Value;
+  refunded_tip?: Prisma.Decimal.Value;
   bills?: number;
 };
 
@@ -80,6 +167,9 @@ export type PaymentReportRecord = {
   tip: Prisma.Decimal.Value;
   source: string | null;
   staff_name: string | null;
+  refunded?: Prisma.Decimal.Value;
+  refunded_tip?: Prisma.Decimal.Value;
+  refund_status?: string;
 };
 
 export type PaymentStatusTotalRecord = {
@@ -89,6 +179,8 @@ export type PaymentStatusTotalRecord = {
   count: number;
   consumption: Prisma.Decimal.Value;
   tip: Prisma.Decimal.Value;
+  refunded?: Prisma.Decimal.Value;
+  refunded_tip?: Prisma.Decimal.Value;
 };
 
 export type HierarchyFilter = BillFilter & {
@@ -112,6 +204,7 @@ export type OrderDetailHeaderRecord = {
   tip_amount: Prisma.Decimal.Value;
   total_amount: Prisma.Decimal.Value;
   remaining_amount: Prisma.Decimal.Value;
+  refunded_amount?: Prisma.Decimal.Value;
   opened_at: Date;
   closed_at: Date | null;
   close_reason: string | null;
@@ -164,12 +257,15 @@ export type OrderDetailPaymentRecord = {
   source: string | null;
   staff_user_id: string | null;
   staff_name: string | null;
+  refunded_amount?: Prisma.Decimal.Value;
+  refunded_tip_amount?: Prisma.Decimal.Value;
 };
 
 export type OrderDetailRecords = {
   header: OrderDetailHeaderRecord | null;
   items: OrderDetailItemRecord[];
   payments: OrderDetailPaymentRecord[];
+  refunds?: OrderDetailRefundRecord[];
 };
 
 export type FilterOptionsRecord = {
@@ -208,6 +304,11 @@ const SORT_COLUMNS = {
   total: { column: 'total', cast: 'numeric' },
   tip: { column: 'tip', cast: 'numeric' },
   orderNumber: { column: 'order_key', cast: 'text COLLATE "C"' },
+} as const;
+
+const REFUND_SORT_COLUMNS = {
+  completedAt: { column: 'completed_at', cast: 'timestamptz' },
+  amount: { column: 'amount', cast: 'numeric' },
 } as const;
 
 const PAYMENT_SORT_COLUMNS = {
@@ -285,6 +386,8 @@ export class ReportsPrismaRepository {
               'bill_id', pg.id::text,
               'amount', p.amount::text,
               'tip_amount', p.tip_amount::text,
+              'refunded', COALESCE(rf.consumption, 0)::text,
+              'refunded_tip', COALESCE(rf.tip, 0)::text,
               'method', p.method::text,
               'source', p.source,
               'staff_name', NULLIF(TRIM(CONCAT(su.first_name, ' ', su.last_name)), '')
@@ -295,6 +398,7 @@ export class ReportsPrismaRepository {
         ) AS payments
         FROM payments p
         LEFT JOIN staff_users su ON su.id = p.staff_user_id
+        ${refundJoinSql(filter)}
         WHERE p.bill_id = pg.id AND ${paidPaymentConditionSql(filter)}
       ) pay ON TRUE
       ${outer.orderBy}
@@ -310,10 +414,99 @@ export class ReportsPrismaRepository {
         COUNT(*)::int AS payments,
         COALESCE(SUM(p.amount - p.tip_amount), 0) AS consumption,
         COALESCE(SUM(p.tip_amount), 0) AS tip,
+        COALESCE(SUM(rf.consumption), 0) AS refunded,
+        COALESCE(SUM(rf.tip), 0) AS refunded_tip,
         (SELECT bills FROM bill_count) AS bills
       FROM e
       JOIN payments p ON p.bill_id = e.id AND ${paidPaymentConditionSql(filter)}
+      ${refundJoinSql(filter)}
       GROUP BY 1
+    `);
+  }
+
+  findRefundsByMethod(
+    filter: RefundsByMethodFilter,
+  ): Promise<RefundsByMethodRecord[]> {
+    return this.prisma.$queryRaw<RefundsByMethodRecord[]>(
+      refundsByMethodSql(filter),
+    );
+  }
+
+  async findPeriodRefundTotals(
+    filter: BillFilter,
+  ): Promise<{ consumption: Prisma.Decimal.Value; tip: Prisma.Decimal.Value }> {
+    const rows = await this.prisma.$queryRaw<
+      { consumption: Prisma.Decimal.Value; tip: Prisma.Decimal.Value }[]
+    >(Prisma.sql`
+      SELECT
+        COALESCE(SUM(x.consumption), 0) AS consumption,
+        COALESCE(SUM(x.tip), 0) AS tip
+      FROM (${periodRefundsSql(filter)}) x
+    `);
+
+    return rows[0];
+  }
+
+  findRefundsPage(
+    filter: RefundsPageFilter,
+    cursor: KeysetCursor | null,
+    limit: number,
+  ): Promise<RefundReportRecord[]> {
+    const keyset = keysetSql(
+      'x',
+      REFUND_SORT_COLUMNS[filter.orderBy],
+      filter.direction,
+      cursor,
+    );
+
+    return this.prisma.$queryRaw<RefundReportRecord[]>(Prisma.sql`
+      SELECT
+        x.id::text AS id,
+        x.completed_at,
+        x.amount,
+        x.tip_amount,
+        x.net_amount,
+        x.vat_amount,
+        x.status,
+        x.refund_method,
+        x.reason_code,
+        x.reason_text,
+        x.requested_by_staff_user_id::text AS requested_by_staff_user_id,
+        x.requested_by_role,
+        x.credit_note_status,
+        x.credit_note_folio,
+        x.bill_id::text AS bill_id,
+        x.payment_id::text AS payment_id,
+        x.payment_method,
+        x.provider,
+        x.order_number,
+        x.table_name,
+        x.cashier_name,
+        x.requested_by_name,
+        x.approved_by_name,
+        x.bill_has_active_orders
+      FROM (${refundsFilteredSql(filter)}) x
+      ${keyset.where}
+      ${keyset.orderBy}
+      LIMIT ${limit}
+    `);
+  }
+
+  findRefundTotals(filter: RefundsReportFilter): Promise<RefundTotalRecord[]> {
+    return this.prisma.$queryRaw<RefundTotalRecord[]>(Prisma.sql`
+      SELECT
+        x.payment_method AS method,
+        x.reason_code,
+        x.requested_by_staff_user_id::text AS requested_by_staff_user_id,
+        MAX(x.requested_by_name) AS requested_by_name,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(x.amount), 0) AS amount,
+        COALESCE(SUM(x.amount - x.tip_amount), 0) AS consumption,
+        COALESCE(SUM(x.tip_amount), 0) AS tip,
+        COALESCE(SUM(x.net_amount), 0) AS net,
+        COALESCE(SUM(x.vat_amount), 0) AS vat
+      FROM (${refundsFilteredSql(filter)}) x
+      GROUP BY x.payment_method, x.reason_code, x.requested_by_staff_user_id
     `);
   }
 
@@ -378,6 +571,9 @@ export class ReportsPrismaRepository {
         r.amount,
         r.tip,
         r.source,
+        r.refunded,
+        r.refunded_tip,
+        r.refund_status,
         r.staff_name
       FROM (${paymentsFilteredSql(filter)}) r
       ${keyset.where}
@@ -396,7 +592,9 @@ export class ReportsPrismaRepository {
         r.method,
         COUNT(*)::int AS count,
         COALESCE(SUM(r.amount), 0) AS consumption,
-        COALESCE(SUM(r.tip), 0) AS tip
+        COALESCE(SUM(r.tip), 0) AS tip,
+        COALESCE(SUM(r.refunded), 0) AS refunded,
+        COALESCE(SUM(r.refunded_tip), 0) AS refunded_tip
       FROM (${paymentsFilteredSql(filter)}) r
       GROUP BY r.kind, r.status, r.method
     `);
@@ -405,8 +603,9 @@ export class ReportsPrismaRepository {
   async findOrderDetail(
     branchId: string,
     billId: string,
+    refundsOnlyRequestedBy: string | null = null,
   ): Promise<OrderDetailRecords> {
-    const [headers, items, payments] = await Promise.all([
+    const [headers, items, payments, refunds] = await Promise.all([
       this.prisma.$queryRaw<OrderDetailHeaderRecord[]>(Prisma.sql`
         SELECT
           b.id::text AS id,
@@ -416,6 +615,7 @@ export class ReportsPrismaRepository {
           b.tip_amount,
           b.total_amount,
           b.remaining_amount,
+          b.refunded_amount,
           b.opened_at,
           b.closed_at,
           b.close_reason,
@@ -491,15 +691,47 @@ export class ReportsPrismaRepository {
           p.created_at,
           p.source,
           p.staff_user_id::text AS staff_user_id,
-          NULLIF(TRIM(CONCAT(su.first_name, ' ', su.last_name)), '') AS staff_name
+          NULLIF(TRIM(CONCAT(su.first_name, ' ', su.last_name)), '') AS staff_name,
+          p.refunded_amount,
+          p.refunded_tip_amount
         FROM payments p
         LEFT JOIN staff_users su ON su.id = p.staff_user_id
         WHERE p.bill_id = ${billId}::uuid
         ORDER BY COALESCE(p.paid_at, p.created_at) ASC, p.id ASC
       `),
+      this.prisma.$queryRaw<OrderDetailRefundRecord[]>(Prisma.sql`
+        SELECT
+          r.id::text AS id,
+          r.payment_id::text AS payment_id,
+          r.amount,
+          r.tip_amount,
+          r.net_amount,
+          r.vat_amount,
+          r.method::text AS method,
+          r.status::text AS status,
+          r.reason_code::text AS reason_code,
+          r.reason_text,
+          r.requested_by_staff_user_id::text AS requested_by_staff_user_id,
+          NULLIF(TRIM(CONCAT(ru.first_name, ' ', ru.last_name)), '') AS requested_by_name,
+          NULLIF(TRIM(CONCAT(au.first_name, ' ', au.last_name)), '') AS approved_by_name,
+          r.credit_note_status,
+          r.completed_at
+        FROM refunds r
+        JOIN bills rb ON rb.id = r.bill_id
+        LEFT JOIN staff_users ru ON ru.id = r.requested_by_staff_user_id
+        LEFT JOIN staff_users au ON au.id = r.approved_by_staff_user_id
+        WHERE r.bill_id = ${billId}::uuid
+          AND rb.branch_id = ${branchId}::uuid
+          ${
+            refundsOnlyRequestedBy
+              ? Prisma.sql`AND r.requested_by_staff_user_id = ${refundsOnlyRequestedBy}::uuid`
+              : Prisma.empty
+          }
+        ORDER BY COALESCE(r.completed_at, r.created_at) ASC, r.id ASC
+      `),
     ]);
 
-    return { header: headers[0] ?? null, items, payments };
+    return { header: headers[0] ?? null, items, payments, refunds };
   }
 
   async findFilterOptions(

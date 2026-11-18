@@ -4,6 +4,7 @@ import { LoginProfileType } from '../../../auth/dto/login.dto';
 import type { GetFilterOptionsService } from '../../application/get-filter-options.service';
 import type { GetOrderDetailService } from '../../application/get-order-detail.service';
 import type { GetPaymentsReportService } from '../../application/get-payments-report.service';
+import type { GetRefundsReportService } from '../../application/get-refunds-report.service';
 import type { GetSalesByHierarchyService } from '../../application/get-sales-by-hierarchy.service';
 import type { GetSalesByOrderService } from '../../application/get-sales-by-order.service';
 import { ReportsController } from './reports.controller';
@@ -24,6 +25,8 @@ describe('ReportsController', () => {
   const hierarchyExecute = jest.fn();
   const detailExecute = jest.fn();
   const optionsExecute = jest.fn();
+  const refundsExecute = jest.fn();
+  const refundsCsv = jest.fn();
   const controller = new ReportsController(
     {
       execute: salesExecute,
@@ -33,6 +36,10 @@ describe('ReportsController', () => {
     { execute: hierarchyExecute } as unknown as GetSalesByHierarchyService,
     { execute: detailExecute } as unknown as GetOrderDetailService,
     { execute: optionsExecute } as unknown as GetFilterOptionsService,
+    {
+      execute: refundsExecute,
+      executeCsv: refundsCsv,
+    } as unknown as GetRefundsReportService,
   );
 
   beforeEach(() => {
@@ -84,6 +91,37 @@ describe('ReportsController', () => {
       authUser,
       BRANCH,
       expect.objectContaining({ waiterId: BILL, q: 'caro', orderBy: 'total' }),
+    );
+    expect(file).toBeInstanceOf(StreamableFile);
+  });
+
+  it('serves the refunds report as JSON and as CSV with the same query', async () => {
+    const query = {
+      from: '2026-07-14',
+      to: '2026-07-15',
+      reasonCode: 'OTHER',
+      requestedById: BILL,
+    };
+
+    refundsExecute.mockResolvedValue({ rows: [] });
+    refundsCsv.mockResolvedValue({
+      filename: 'reembolsos.csv',
+      stream: Readable.from(['a']),
+    });
+
+    await expect(
+      controller.getRefunds(authUser, BRANCH, query),
+    ).resolves.toEqual({ rows: [] });
+    const file = await controller.getRefunds(authUser, BRANCH, {
+      ...query,
+      format: 'csv',
+    });
+
+    expect(refundsExecute).toHaveBeenCalledWith(authUser, BRANCH, query);
+    expect(refundsCsv).toHaveBeenCalledWith(
+      authUser,
+      BRANCH,
+      expect.objectContaining({ reasonCode: 'OTHER', requestedById: BILL }),
     );
     expect(file).toBeInstanceOf(StreamableFile);
   });

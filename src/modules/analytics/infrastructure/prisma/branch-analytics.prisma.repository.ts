@@ -1,19 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import {
   OrderStatus,
-  PaymentStatus,
   Prisma,
   TableSessionStatus,
   TableStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
-
-export type PaidPaymentRecord = {
-  amount: Prisma.Decimal;
-  tipAmount: Prisma.Decimal;
-  paidAt: Date | null;
-  createdAt: Date;
-};
 
 export type OrdersByStatusRecord = {
   status: OrderStatus;
@@ -66,42 +58,6 @@ export class BranchAnalyticsPrismaRepository {
         branchId,
         status: TableSessionStatus.OPEN,
         isCounter: false,
-      },
-    });
-  }
-
-  findPaidPaymentsInRange(
-    branchId: string,
-    since: Date,
-    until: Date,
-  ): Promise<PaidPaymentRecord[]> {
-    return this.prisma.payment.findMany({
-      where: {
-        status: PaymentStatus.PAID,
-        bill: {
-          branchId,
-        },
-        OR: [
-          {
-            paidAt: {
-              gte: since,
-              lte: until,
-            },
-          },
-          {
-            paidAt: null,
-            createdAt: {
-              gte: since,
-              lte: until,
-            },
-          },
-        ],
-      },
-      select: {
-        amount: true,
-        tipAmount: true,
-        paidAt: true,
-        createdAt: true,
       },
     });
   }
