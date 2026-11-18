@@ -111,6 +111,12 @@ class CreateBranchSettingsResponseDto {
 
   @ApiProperty()
   refundTipDefault!: boolean;
+
+  @ApiProperty({ nullable: true, required: false })
+  discountApprovalPercent!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  discountApprovalAmount!: string | null;
 }
 
 export class CreateBranchResponseDto {

@@ -52,6 +52,7 @@ function build(
     requestFingerprint: 'abc',
     requestedBy: { id: 'staff-1', firstName: 'Caro', lastName: 'Cajera' },
     approvedBy: null,
+    items: [],
   };
   const prisma = {
     payment: {

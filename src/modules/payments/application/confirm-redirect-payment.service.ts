@@ -744,6 +744,7 @@ export class ConfirmRedirectPaymentService {
       billId: bill.id,
       status: bill.status,
       subtotalAmount: bill.subtotalAmount,
+      discountAmount: bill.discountAmount,
       tipAmount: bill.tipAmount,
       totalAmount: bill.totalAmount,
       remainingAmount: bill.remainingAmount,

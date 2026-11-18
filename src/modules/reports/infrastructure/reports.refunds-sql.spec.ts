@@ -330,4 +330,31 @@ describe('refund SQL shape', () => {
 
     expect(scoped).toContain('r.requested_by_staff_user_id = ?::uuid');
   });
+
+  it('loads the refund items of all refunds in one batch query', async () => {
+    queryRawMock.mockReset();
+    queryRawMock
+      .mockResolvedValueOnce([{ id: 'r1' }, { id: 'r2' }])
+      .mockResolvedValueOnce([
+        { refund_id: 'r2', bill_item_id: 'b1', name: 'Pizza' },
+      ]);
+    const rows = await repository.findRefundsPage(
+      {
+        ...refundsFilter,
+        orderBy: 'completedAt',
+        direction: 'desc',
+      },
+      null,
+      51,
+    );
+    const itemsQuery = queryRawMock.mock.calls[1][0] as Prisma.Sql;
+
+    expect(queryRawMock).toHaveBeenCalledTimes(2);
+    expect(itemsQuery.sql).toContain('FROM refund_items ri');
+    expect(itemsQuery.values).toEqual(['r1', 'r2']);
+    expect(rows).toEqual([
+      { id: 'r1', items: [] },
+      { id: 'r2', items: [{ bill_item_id: 'b1', name: 'Pizza' }] },
+    ]);
+  });
 });

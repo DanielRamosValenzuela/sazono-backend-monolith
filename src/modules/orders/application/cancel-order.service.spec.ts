@@ -11,6 +11,21 @@ import { LoginProfileType } from '../../auth/dto/login.dto';
 import { CancelOrderService } from './cancel-order.service';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
+jest.mock('../../billing/application/lock-bill', () => ({
+  lockBill: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../billing/application/refresh-bill-discounts', () => ({
+  refreshBillDiscounts: jest
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new (jest.requireActual<{ Prisma: typeof Prisma }>(
+          '@prisma/client',
+        ).Prisma.Decimal)(0),
+      ),
+    ),
+}));
+
 describe('CancelOrderService', () => {
   const orderFindUniqueMock = jest.fn();
   const orderFindUniqueOrThrowMock = jest.fn();
@@ -120,6 +135,7 @@ describe('CancelOrderService', () => {
       (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           billItem: {
+            count: jest.fn().mockResolvedValue(0),
             updateMany: billItemUpdateManyMock,
             findMany: billItemFindManyMock,
           },
@@ -221,6 +237,7 @@ describe('CancelOrderService', () => {
       (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           billItem: {
+            count: jest.fn().mockResolvedValue(0),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             findMany: jest.fn().mockResolvedValue([]),
           },
@@ -312,6 +329,7 @@ describe('CancelOrderService', () => {
       (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           billItem: {
+            count: jest.fn().mockResolvedValue(0),
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             findMany: jest.fn().mockResolvedValue([]),
           },

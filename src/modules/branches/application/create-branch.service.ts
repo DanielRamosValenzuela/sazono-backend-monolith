@@ -144,6 +144,11 @@ export class CreateBranchService {
         cashierRefundLimit:
           branch.settings?.cashierRefundLimit?.toString() ?? null,
         refundTipDefault: branch.settings?.refundTipDefault ?? false,
+        discountApprovalPercent: branch.settings
+          ? (branch.settings.discountApprovalPercent?.toString() ?? null)
+          : '10',
+        discountApprovalAmount:
+          branch.settings?.discountApprovalAmount?.toString() ?? null,
       },
     };
   }

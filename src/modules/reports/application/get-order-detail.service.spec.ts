@@ -108,6 +108,15 @@ function refundRecord(
 ): OrderDetailRefundRecord {
   return {
     id: 'refund-1',
+    items: [
+      {
+        bill_item_id: 'bi-1',
+        name: 'Pizza',
+        quantity: 1,
+        amount: '3000.00',
+        kitchen_waste: false,
+      },
+    ],
     payment_id: 'pay-1',
     amount: '3000.00',
     tip_amount: '0.00',
@@ -364,6 +373,15 @@ describe('buildOrderDetail refunds', () => {
 
     expect(detail.refunds).toHaveLength(2);
     expect(detail.refunds[0]).toMatchObject({
+      items: [
+        {
+          billItemId: 'bi-1',
+          name: 'Pizza',
+          quantity: 1,
+          amount: '3000',
+          kitchenWaste: false,
+        },
+      ],
       id: 'refund-1',
       paymentId: 'pay-1',
       amount: '3000',

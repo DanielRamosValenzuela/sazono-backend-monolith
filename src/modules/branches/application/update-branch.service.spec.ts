@@ -219,6 +219,9 @@ describe('UpdateBranchService', () => {
         tableAssignmentEnabled: false,
         cashierRefundLimit: null,
         refundTipDefault: false,
+        discountApprovalPercent: null,
+        discountApprovalAmount: null,
+        requireOpenCashSession: false,
       },
     });
   });
@@ -410,6 +413,62 @@ describe('UpdateBranchService', () => {
       expect.objectContaining({ update: { cashierRefundLimit: null } }),
     );
     expect(result.settings.cashierRefundLimit).toBeNull();
+  });
+
+  it('stores requireOpenCashSession, audits it and returns it', async () => {
+    getStaffContextMock.mockResolvedValue(adminContext);
+    branchFindFirstMock.mockResolvedValue({ id: 'branch-1' });
+    const settingsUpsertMock = jest
+      .fn()
+      .mockResolvedValue({ requireOpenCashSession: true });
+
+    transactionMock.mockImplementation((callback) =>
+      callback({
+        branch: {
+          update: jest.fn(),
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'branch-1',
+            restaurantId: 'restaurant-1',
+            name: 'Providencia',
+            address: null,
+            status: BranchStatus.ACTIVE,
+            settings: {
+              qrOrderingEnabled: true,
+              qrPaymentMode: 'prepaid_order',
+              splitBillEnabled: true,
+              partialDeliveryEnabled: true,
+              requireOpenCashSession: true,
+            },
+          }),
+        },
+        branchSettings: {
+          upsert: settingsUpsertMock,
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ requireOpenCashSession: false }),
+        },
+      }),
+    );
+
+    const result = await service.execute(authUser, 'branch-1', {
+      settings: { requireOpenCashSession: true },
+    });
+
+    expect(settingsUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { requireOpenCashSession: true },
+        create: expect.objectContaining({ requireOpenCashSession: true }),
+      }),
+    );
+    expect(auditRecordMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: 'BRANCH_CASH_SETTINGS_CHANGED',
+        before: { requireOpenCashSession: false },
+        after: { requireOpenCashSession: true },
+      }),
+    );
+    expect(result.settings.requireOpenCashSession).toBe(true);
   });
 
   it('does not audit when the refund settings keep their value', async () => {

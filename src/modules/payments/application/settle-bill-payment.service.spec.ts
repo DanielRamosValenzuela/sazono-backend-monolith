@@ -20,6 +20,21 @@ import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/me
 import type { OfflinePaymentRecorderPort } from './ports/offline-payment-recorder.port';
 import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 
+jest.mock('../../billing/application/lock-bill', () => ({
+  lockBill: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../billing/application/refresh-bill-discounts', () => ({
+  refreshBillDiscounts: jest
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new (jest.requireActual<{ Prisma: typeof Prisma }>(
+          '@prisma/client',
+        ).Prisma.Decimal)(0),
+      ),
+    ),
+}));
+
 describe('SettleBillPaymentService', () => {
   const attemptCreateMock = jest.fn();
   const attemptUpdateManyMock = jest.fn();
@@ -99,6 +114,7 @@ describe('SettleBillPaymentService', () => {
       tableSessionId: 'session-1',
       status: BillStatus.OPEN,
       subtotalAmount: new Prisma.Decimal(23600),
+      discountAmount: new Prisma.Decimal(0),
       tipAmount: new Prisma.Decimal(0),
       taxAmount: new Prisma.Decimal(0),
       totalAmount: new Prisma.Decimal(23600),
@@ -164,12 +180,14 @@ describe('SettleBillPaymentService', () => {
               tableSessionId: 'session-1',
               status: BillStatus.OPEN,
               subtotalAmount: new Prisma.Decimal(23600),
+              discountAmount: new Prisma.Decimal(0),
               tipAmount: new Prisma.Decimal(0),
               taxAmount: new Prisma.Decimal(0),
               totalAmount: new Prisma.Decimal(23600),
               remainingAmount: new Prisma.Decimal(23600),
             }),
             update: jest.fn().mockResolvedValue({}),
+            findUnique: jest.fn().mockResolvedValue(null),
           },
           tableSession: { updateMany: jest.fn() },
           order: { updateMany: jest.fn() },
@@ -222,6 +240,7 @@ describe('SettleBillPaymentService', () => {
       tableSessionId: 'session-1',
       status: BillStatus.OPEN,
       subtotalAmount: new Prisma.Decimal(23600),
+      discountAmount: new Prisma.Decimal(0),
       tipAmount: new Prisma.Decimal(0),
       taxAmount: new Prisma.Decimal(0),
       totalAmount: new Prisma.Decimal(23600),
@@ -242,6 +261,7 @@ describe('SettleBillPaymentService', () => {
           bill: {
             findUniqueOrThrow: txBillFindUniqueOrThrowMock,
             update: txBillUpdateMock,
+            findUnique: jest.fn().mockResolvedValue(null),
           },
           tableSession: { updateMany: txSessionUpdateManyMock },
           order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },

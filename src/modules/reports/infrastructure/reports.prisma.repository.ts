@@ -11,6 +11,7 @@ import {
 } from '../application/report-types';
 import {
   directionSql,
+  discountOnlyBillsSql,
   eligibleBillsSql,
   paidPaymentConditionSql,
   paymentsFilteredSql,
@@ -38,7 +39,16 @@ export type RefundsPageFilter = RefundsReportFilter & {
   direction: SortDirection;
 };
 
+export type RefundItemReportRecord = {
+  bill_item_id: string;
+  name: string;
+  quantity: number;
+  amount: Prisma.Decimal.Value;
+  kitchen_waste: boolean;
+};
+
 export type RefundReportRecord = {
+  items?: RefundItemReportRecord[];
   id: string;
   completed_at: Date;
   amount: Prisma.Decimal.Value;
@@ -86,6 +96,7 @@ export type RefundsByMethodRecord = {
 };
 
 export type OrderDetailRefundRecord = {
+  items?: RefundItemReportRecord[];
   id: string;
   payment_id: string;
   amount: Prisma.Decimal.Value;
@@ -119,6 +130,7 @@ export type BillRowRecord = {
   table_name: string | null;
   zone_name: string | null;
   waiter_name: string | null;
+  discount_amount?: Prisma.Decimal.Value;
 };
 
 export type BillPaymentRecord = {
@@ -148,6 +160,7 @@ export type MethodTotalRecord = {
   refunded?: Prisma.Decimal.Value;
   refunded_tip?: Prisma.Decimal.Value;
   bills?: number;
+  discounts?: Prisma.Decimal.Value;
 };
 
 export type PaymentReportRecord = {
@@ -207,6 +220,7 @@ export type OrderDetailHeaderRecord = {
   tip_amount: Prisma.Decimal.Value;
   total_amount: Prisma.Decimal.Value;
   remaining_amount: Prisma.Decimal.Value;
+  discount_amount?: Prisma.Decimal.Value;
   refunded_amount?: Prisma.Decimal.Value;
   opened_at: Date;
   closed_at: Date | null;
@@ -245,6 +259,23 @@ export type OrderDetailItemRecord = {
   station_name: string;
   menu_item_id: string | null;
   modifiers: { name: string; price_delta: string }[];
+  discount_amount?: Prisma.Decimal.Value;
+};
+
+export type OrderDetailDiscountRecord = {
+  id: string;
+  bill_item_id: string | null;
+  item_name: string | null;
+  type: string;
+  value: Prisma.Decimal.Value;
+  amount: Prisma.Decimal.Value;
+  reason_code: string;
+  reason_text: string;
+  applied_by_name: string | null;
+  approved_by_name: string | null;
+  voided_at: Date | null;
+  void_reason: string | null;
+  created_at: Date;
 };
 
 export type OrderDetailPaymentRecord = {
@@ -269,6 +300,7 @@ export type OrderDetailRecords = {
   items: OrderDetailItemRecord[];
   payments: OrderDetailPaymentRecord[];
   refunds?: OrderDetailRefundRecord[];
+  discounts?: OrderDetailDiscountRecord[];
 };
 
 export type FilterOptionsRecord = {
@@ -373,6 +405,7 @@ export class ReportsPrismaRepository {
         pg.table_name,
         pg.zone_name,
         pg.waiter_name,
+        pg.discount_amount,
         pg.total AS bill_total,
         pg.tip AS bill_tip,
         pg.order_key,
@@ -414,7 +447,11 @@ export class ReportsPrismaRepository {
   findMethodTotals(filter: BillFilter): Promise<MethodTotalRecord[]> {
     return this.prisma.$queryRaw<MethodTotalRecord[]>(Prisma.sql`
       WITH e AS (${eligibleBillsSql(filter)}),
-      bill_count AS (SELECT COUNT(*)::int AS bills FROM e)
+      bill_count AS (
+        SELECT COUNT(*)::int AS bills,
+               COALESCE(SUM(discount_amount), 0) AS discounts
+        FROM e
+      )
       SELECT
         COALESCE(p.method::text, ${UNCLASSIFIED_METHOD}::text) AS method,
         COUNT(*)::int AS payments,
@@ -422,12 +459,24 @@ export class ReportsPrismaRepository {
         COALESCE(SUM(p.tip_amount), 0) AS tip,
         COALESCE(SUM(rf.consumption), 0) AS refunded,
         COALESCE(SUM(rf.tip), 0) AS refunded_tip,
-        (SELECT bills FROM bill_count) AS bills
+        (SELECT bills FROM bill_count) AS bills,
+        (SELECT discounts FROM bill_count) AS discounts
       FROM e
       JOIN payments p ON p.bill_id = e.id AND ${paidPaymentConditionSql(filter)}
       ${refundJoinSql(filter)}
       GROUP BY 1
     `);
+  }
+
+  async findDiscountOnlyTotal(filter: BillFilter): Promise<Prisma.Decimal> {
+    const rows = await this.prisma.$queryRaw<
+      { amount: Prisma.Decimal.Value }[]
+    >(Prisma.sql`
+      SELECT COALESCE(SUM(discount_amount), 0) AS amount
+      FROM (${discountOnlyBillsSql(filter)}) d
+    `);
+
+    return new Prisma.Decimal(rows[0]?.amount ?? 0);
   }
 
   findRefundsByMethod(
@@ -445,7 +494,7 @@ export class ReportsPrismaRepository {
       { consumption: Prisma.Decimal.Value; tip: Prisma.Decimal.Value }[]
     >(Prisma.sql`
       SELECT
-        COALESCE(SUM(x.consumption), 0) AS consumption,
+        COALESCE(SUM(x.consumption - x.items_consumption), 0) AS consumption,
         COALESCE(SUM(x.tip), 0) AS tip
       FROM (${periodRefundsSql(filter)}) x
     `);
@@ -453,7 +502,40 @@ export class ReportsPrismaRepository {
     return rows[0];
   }
 
-  findRefundsPage(
+  private async withRefundItems<T extends { id: string }>(
+    refunds: T[],
+  ): Promise<(T & { items: RefundItemReportRecord[] })[]> {
+    if (refunds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      (RefundItemReportRecord & { refund_id: string })[]
+    >(Prisma.sql`
+      SELECT
+        ri.refund_id::text AS refund_id,
+        ri.bill_item_id::text AS bill_item_id,
+        ri.name_snapshot AS name,
+        ri.quantity,
+        ri.amount,
+        ri.kitchen_waste
+      FROM refund_items ri
+      WHERE ri.refund_id IN (${Prisma.join(refunds.map((refund) => Prisma.sql`${refund.id}::uuid`))})
+      ORDER BY ri.created_at ASC, ri.id ASC
+    `);
+    const byRefund = new Map<string, RefundItemReportRecord[]>();
+
+    for (const { refund_id: refundId, ...item } of rows) {
+      byRefund.set(refundId, [...(byRefund.get(refundId) ?? []), item]);
+    }
+
+    return refunds.map((refund) => ({
+      ...refund,
+      items: byRefund.get(refund.id) ?? [],
+    }));
+  }
+
+  async findRefundsPage(
     filter: RefundsPageFilter,
     cursor: KeysetCursor | null,
     limit: number,
@@ -465,7 +547,9 @@ export class ReportsPrismaRepository {
       cursor,
     );
 
-    return this.prisma.$queryRaw<RefundReportRecord[]>(Prisma.sql`
+    const refunds = await this.prisma.$queryRaw<
+      RefundReportRecord[]
+    >(Prisma.sql`
       SELECT
         x.id::text AS id,
         x.completed_at,
@@ -496,6 +580,8 @@ export class ReportsPrismaRepository {
       ${keyset.orderBy}
       LIMIT ${limit}
     `);
+
+    return this.withRefundItems(refunds);
   }
 
   findRefundTotals(filter: RefundsReportFilter): Promise<RefundTotalRecord[]> {
@@ -516,7 +602,49 @@ export class ReportsPrismaRepository {
     `);
   }
 
-  findHierarchyLines(filter: HierarchyFilter): Promise<HierarchyLineRecord[]> {
+  async findHierarchyLines(
+    filter: HierarchyFilter,
+  ): Promise<HierarchyLineRecord[]> {
+    const [refundLines, lines] = await Promise.all([
+      this.findRefundItemLines(filter),
+      this.findSoldHierarchyLines(filter),
+    ]);
+
+    return [...lines, ...refundLines];
+  }
+
+  private findRefundItemLines(
+    filter: HierarchyFilter,
+  ): Promise<HierarchyLineRecord[]> {
+    const modifierShare = filter.includeModifiers
+      ? Prisma.sql`0`
+      : Prisma.sql`ri.quantity * mods.delta`;
+
+    return this.prisma.$queryRaw<HierarchyLineRecord[]>(Prisma.sql`
+      SELECT
+        ri.category_path_snapshot AS category_path,
+        ri.name_snapshot AS item_name,
+        COALESCE(ps.name, '-') AS station_name,
+        -COALESCE(SUM(ri.amount - ${modifierShare}), 0) AS amount,
+        (-COALESCE(SUM(ri.quantity), 0))::int AS quantity,
+        0 AS cancelled_quantity
+      FROM refund_items ri
+      LEFT JOIN preparation_stations ps ON ps.id = ri.preparation_station_id
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(m.price_delta_snapshot), 0) AS delta
+        FROM order_item_modifiers m
+        WHERE m.order_item_id = ri.order_item_id
+      ) mods ON TRUE
+      WHERE ri.refund_id IN (
+        SELECT pr.refund_id FROM (${periodRefundsSql(filter)}) pr
+      )
+      GROUP BY ri.category_path_snapshot, ri.name_snapshot, ps.name
+    `);
+  }
+
+  findSoldHierarchyLines(
+    filter: HierarchyFilter,
+  ): Promise<HierarchyLineRecord[]> {
     const unitPrice = filter.includeModifiers
       ? Prisma.sql`oi.price_snapshot`
       : Prisma.sql`(oi.price_snapshot - mods.delta)`;
@@ -527,13 +655,15 @@ export class ReportsPrismaRepository {
         oi.category_path_snapshot AS category_path,
         oi.name_snapshot AS item_name,
         ps.name AS station_name,
-        COALESCE(SUM(${unitPrice} * oi.quantity) FILTER (WHERE ${sold}), 0) AS amount,
+        COALESCE(SUM(${unitPrice} * oi.quantity - COALESCE(bi.discount_amount, 0)) FILTER (WHERE ${sold}), 0) AS amount,
         COALESCE(SUM(oi.quantity) FILTER (WHERE ${sold}), 0)::int AS quantity,
         COALESCE(SUM(oi.quantity) FILTER (WHERE oi.status::text = 'CANCELLED'), 0)::int AS cancelled_quantity
       FROM (${eligibleBillsSql(filter)}) e
       JOIN orders o ON o.bill_id = e.id
       JOIN order_items oi ON oi.order_id = o.id
       JOIN preparation_stations ps ON ps.id = oi.preparation_station_id
+      LEFT JOIN bill_items bi
+        ON bi.order_item_id = oi.id AND bi.bill_id = e.id AND bi.status::text = 'OPEN'
       LEFT JOIN LATERAL (
         SELECT COALESCE(SUM(m.price_delta_snapshot), 0) AS delta
         FROM order_item_modifiers m
@@ -611,7 +741,7 @@ export class ReportsPrismaRepository {
     billId: string,
     refundsOnlyRequestedBy: string | null = null,
   ): Promise<OrderDetailRecords> {
-    const [headers, items, payments, refunds] = await Promise.all([
+    const [headers, items, payments, refunds, discounts] = await Promise.all([
       this.prisma.$queryRaw<OrderDetailHeaderRecord[]>(Prisma.sql`
         SELECT
           b.id::text AS id,
@@ -621,6 +751,7 @@ export class ReportsPrismaRepository {
           b.tip_amount,
           b.total_amount,
           b.remaining_amount,
+          b.discount_amount,
           b.refunded_amount,
           b.opened_at,
           b.closed_at,
@@ -669,6 +800,11 @@ export class ReportsPrismaRepository {
           oi.notes,
           ps.name AS station_name,
           oi.menu_item_id::text AS menu_item_id,
+          COALESCE((
+            SELECT bi.discount_amount FROM bill_items bi
+            WHERE bi.order_item_id = oi.id AND bi.status::text = 'OPEN'
+            LIMIT 1
+          ), 0) AS discount_amount,
           COALESCE(
             json_agg(
               json_build_object('name', m.name_snapshot, 'price_delta', m.price_delta_snapshot::text)
@@ -735,9 +871,37 @@ export class ReportsPrismaRepository {
           }
         ORDER BY COALESCE(r.completed_at, r.created_at) ASC, r.id ASC
       `),
+      this.prisma.$queryRaw<OrderDetailDiscountRecord[]>(Prisma.sql`
+        SELECT
+          d.id::text AS id,
+          d.bill_item_id::text AS bill_item_id,
+          bi.description AS item_name,
+          d.type::text AS type,
+          d.value,
+          d.amount,
+          d.reason_code::text AS reason_code,
+          d.reason_text,
+          NULLIF(TRIM(CONCAT(ab.first_name, ' ', ab.last_name)), '') AS applied_by_name,
+          NULLIF(TRIM(CONCAT(ap.first_name, ' ', ap.last_name)), '') AS approved_by_name,
+          d.voided_at,
+          d.void_reason,
+          d.created_at
+        FROM bill_discounts d
+        LEFT JOIN bill_items bi ON bi.id = d.bill_item_id
+        LEFT JOIN staff_users ab ON ab.id = d.applied_by_staff_user_id
+        LEFT JOIN staff_users ap ON ap.id = d.approved_by_staff_user_id
+        WHERE d.bill_id = ${billId}::uuid AND d.branch_id = ${branchId}::uuid
+        ORDER BY d.created_at ASC, d.id ASC
+      `),
     ]);
 
-    return { header: headers[0] ?? null, items, payments, refunds };
+    return {
+      header: headers[0] ?? null,
+      items,
+      payments,
+      refunds: await this.withRefundItems(refunds),
+      discounts,
+    };
   }
 
   async findFilterOptions(

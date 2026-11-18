@@ -16,6 +16,21 @@ import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/me
 import type { OfflinePaymentRecorderPort } from './ports/offline-payment-recorder.port';
 import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 
+jest.mock('../../billing/application/lock-bill', () => ({
+  lockBill: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../billing/application/refresh-bill-discounts', () => ({
+  refreshBillDiscounts: jest
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new (jest.requireActual<{ Prisma: typeof Prisma }>(
+          '@prisma/client',
+        ).Prisma.Decimal)(0),
+      ),
+    ),
+}));
+
 describe('PayQrOrderService', () => {
   const tableFindUniqueMock = jest.fn();
   const orderFindUniqueMock = jest.fn();
@@ -23,6 +38,9 @@ describe('PayQrOrderService', () => {
   const attemptUpdateMock = jest.fn();
   const attemptFindFirstMock = jest.fn().mockResolvedValue(null);
   const transactionMock = jest.fn();
+  const billDiscountFindManyMock = jest.fn();
+  const billFindUniqueOrThrowMock = jest.fn();
+  const billItemFindManyMock = jest.fn();
   const prisma = {
     table: {
       findUnique: tableFindUniqueMock,
@@ -35,6 +53,9 @@ describe('PayQrOrderService', () => {
       updateMany: attemptUpdateMock,
       findFirst: attemptFindFirstMock,
     },
+    billDiscount: { findMany: billDiscountFindManyMock },
+    bill: { findUniqueOrThrow: billFindUniqueOrThrowMock },
+    billItem: { findMany: billItemFindManyMock },
     $transaction: transactionMock,
   } as unknown as PrismaService;
 
@@ -64,6 +85,7 @@ describe('PayQrOrderService', () => {
     jest.clearAllMocks();
     resolveAvailableMock.mockResolvedValue([]);
     attemptFindFirstMock.mockResolvedValue(null);
+    billDiscountFindManyMock.mockResolvedValue([]);
     service = new PayQrOrderService(
       prisma,
       offlinePaymentRecorder,
@@ -141,6 +163,50 @@ describe('PayQrOrderService', () => {
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
+  it('charges only the discounted delta when the bill has an active percent discount', async () => {
+    tableFindUniqueMock.mockResolvedValue(table);
+    orderFindUniqueMock.mockResolvedValue(awaitingOrder);
+    attemptCreateMock.mockResolvedValue({ id: 'attempt-1' });
+    billDiscountFindManyMock.mockResolvedValue([
+      {
+        id: 'discount-1',
+        billItemId: null,
+        type: 'PERCENT',
+        value: new Prisma.Decimal(10),
+      },
+    ]);
+    billFindUniqueOrThrowMock.mockResolvedValue({
+      subtotalAmount: new Prisma.Decimal(10000),
+      tipAmount: new Prisma.Decimal(0),
+      totalAmount: new Prisma.Decimal(9000),
+    });
+    billItemFindManyMock.mockResolvedValue([
+      { id: 'bill-item-1', totalPrice: new Prisma.Decimal(10000) },
+    ]);
+
+    const pendingService = new PayQrOrderService(
+      prisma,
+      offlinePaymentRecorder,
+      {
+        execute: jest.fn().mockResolvedValue({
+          kind: 'PENDING',
+          providerName: 'MERCADO_PAGO',
+          providerReference: 'ORD01',
+        }),
+      } as unknown as ChargePaymentService,
+      finalizePaymentService,
+      failPaymentService,
+    );
+
+    await expect(
+      pendingService.execute('qr-token', 'order-1', { tipAmount: '500' }),
+    ).rejects.toThrow(/en revision/);
+
+    expect(attemptCreateMock).toHaveBeenCalledWith({
+      data: expect.objectContaining({ amount: new Prisma.Decimal(11120) }),
+    });
+  });
+
   it('refuses a new charge while a Mercado Pago attempt for the order is still in review', async () => {
     tableFindUniqueMock.mockResolvedValue(table);
     orderFindUniqueMock.mockResolvedValue(awaitingOrder);
@@ -181,6 +247,18 @@ describe('PayQrOrderService', () => {
         tableSessionId: 'session-1',
         status: BillStatus.OPEN,
         subtotalAmount: new Prisma.Decimal(0),
+        discountAmount: new Prisma.Decimal(0),
+        tipAmount: new Prisma.Decimal(0),
+        taxAmount: new Prisma.Decimal(0),
+        totalAmount: new Prisma.Decimal(0),
+        remainingAmount: new Prisma.Decimal(0),
+      })
+      .mockResolvedValueOnce({
+        id: 'bill-1',
+        tableSessionId: 'session-1',
+        status: BillStatus.OPEN,
+        subtotalAmount: new Prisma.Decimal(0),
+        discountAmount: new Prisma.Decimal(0),
         tipAmount: new Prisma.Decimal(0),
         taxAmount: new Prisma.Decimal(0),
         totalAmount: new Prisma.Decimal(0),
@@ -191,6 +269,7 @@ describe('PayQrOrderService', () => {
         tableSessionId: 'session-1',
         status: BillStatus.OPEN,
         subtotalAmount: new Prisma.Decimal(11800),
+        discountAmount: new Prisma.Decimal(0),
         tipAmount: new Prisma.Decimal(0),
         taxAmount: new Prisma.Decimal(0),
         totalAmount: new Prisma.Decimal(11800),

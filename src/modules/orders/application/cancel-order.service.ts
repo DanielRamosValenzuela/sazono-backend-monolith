@@ -16,6 +16,8 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { lockBill } from '../../billing/application/lock-bill';
+import { refreshBillDiscounts } from '../../billing/application/refresh-bill-discounts';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
@@ -155,7 +157,25 @@ export class CancelOrderService {
     reason: string | null,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      await lockBill(tx, order.billId);
+
       const orderItemIds = order.orderItems.map((item) => item.id);
+
+      const refundedLines = await tx.billItem.count({
+        where: {
+          billId: order.billId,
+          orderItemId: { in: orderItemIds },
+          refundedQuantity: { gt: 0 },
+        },
+      });
+
+      if (refundedLines > 0) {
+        throw new ConflictException({
+          message:
+            'La orden tiene productos reembolsados y no se puede anular.',
+          code: 'ORDER_HAS_REFUNDED_ITEMS',
+        });
+      }
 
       await tx.billItem.updateMany({
         where: {
@@ -190,9 +210,11 @@ export class CancelOrderService {
         (total, item) => total.add(item.totalPrice),
         new Prisma.Decimal(0),
       );
+      const discountAmount = await refreshBillDiscounts(tx, bill.id);
       const { taxAmount, totalAmount } = computeBillTotals(
         subtotalAmount,
         bill.tipAmount,
+        discountAmount,
       );
       const paidAmount = bill.totalAmount.sub(bill.remainingAmount);
       const remainingAmount = totalAmount.sub(paidAmount);
@@ -213,6 +235,7 @@ export class CancelOrderService {
         },
         data: {
           subtotalAmount,
+          discountAmount,
           taxAmount,
           totalAmount,
           remainingAmount,

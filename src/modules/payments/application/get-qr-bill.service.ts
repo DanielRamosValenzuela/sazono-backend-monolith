@@ -41,6 +41,7 @@ export class GetQrBillService {
       billId: bill.id,
       status: bill.status,
       subtotalAmount: bill.subtotalAmount.toString(),
+      discountAmount: bill.discountAmount.toString(),
       tipAmount: bill.tipAmount.toString(),
       totalAmount: bill.totalAmount.toString(),
       remainingAmount: bill.remainingAmount.toString(),

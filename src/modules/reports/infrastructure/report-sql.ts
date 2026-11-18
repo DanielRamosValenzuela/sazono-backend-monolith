@@ -341,6 +341,7 @@ export function eligibleBillsSql(filter: BillFilter): Prisma.Sql {
       agg.refunded,
       agg.tip_refunded,
       agg.method_count,
+      CASE WHEN b.status = 'PAID' THEN b.discount_amount ELSE 0 END AS discount_amount,
       COALESCE(LPAD(ts.ticket_number::text, 10, '0'), UPPER(RIGHT(b.id::text, 6))) COLLATE "C" AS order_key,
       ts.ticket_number,
       b.number AS bill_number,
@@ -394,6 +395,39 @@ export function eligibleBillsSql(filter: BillFilter): Prisma.Sql {
       )
       AND agg.payments_count > 0
       ${extra.length > 0 ? Prisma.sql`AND ${joinAnd(extra)}` : Prisma.empty}
+  `;
+}
+
+export function discountOnlyBillsSql(filter: BillFilter): Prisma.Sql {
+  const paymentScoped =
+    filter.cashierId !== null ||
+    filter.methods.length > 0 ||
+    filter.sources.length > 0 ||
+    filter.billStatuses.length > 0;
+
+  return Prisma.sql`
+    SELECT b.id, b.discount_amount
+    FROM bills b
+    JOIN table_sessions ts ON ts.id = b.table_session_id
+    JOIN tables t ON t.id = ts.table_id
+    WHERE b.branch_id = ${filter.branchId}::uuid
+      AND b.status = 'PAID'
+      AND b.discount_amount > 0
+      AND b.updated_at >= ${filter.start}
+      AND b.updated_at < ${filter.end}
+      AND ${paymentScoped ? Prisma.sql`FALSE` : Prisma.sql`TRUE`}
+      AND NOT EXISTS (SELECT 1 FROM payments np WHERE np.bill_id = b.id)
+      ${filter.waiterId ? Prisma.sql`AND ts.assigned_staff_user_id = ${filter.waiterId}::uuid` : Prisma.empty}
+      ${filter.tableId ? Prisma.sql`AND t.id = ${filter.tableId}::uuid` : Prisma.empty}
+      ${filter.zoneId ? Prisma.sql`AND t.zone_id = ${filter.zoneId}::uuid` : Prisma.empty}
+  `;
+}
+
+export function discountBillsSql(filter: BillFilter): Prisma.Sql {
+  return Prisma.sql`
+    SELECT e.id, e.discount_amount FROM (${eligibleBillsSql(filter)}) e
+    UNION ALL
+    ${discountOnlyBillsSql(filter)}
   `;
 }
 
@@ -646,7 +680,9 @@ export function periodRefundsSql(filter: BillFilter): Prisma.Sql {
 
   return Prisma.sql`
     SELECT
+      r.id AS refund_id,
       (r.amount - r.tip_amount) AS consumption,
+      COALESCE((SELECT SUM(ri.amount) FROM refund_items ri WHERE ri.refund_id = r.id), 0) AS items_consumption,
       r.tip_amount AS tip,
       r.completed_at,
       p.method::text AS method,

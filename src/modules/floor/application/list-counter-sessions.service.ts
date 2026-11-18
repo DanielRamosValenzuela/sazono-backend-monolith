@@ -72,6 +72,7 @@ export class ListCounterSessionsService {
           openedAt: session.openedAt.toISOString(),
           bill: {
             status: bill.status,
+            discount: bill.discountAmount.toString(),
             total: bill.totalAmount.toString(),
             paid: bill.totalAmount.minus(bill.remainingAmount).toString(),
             remaining: bill.remainingAmount.toString(),

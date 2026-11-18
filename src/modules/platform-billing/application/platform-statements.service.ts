@@ -71,7 +71,11 @@ type Figures = {
   refunds: Prisma.Decimal;
 };
 
-type BranchFigures = Figures & { branchId: string; name: string };
+type BranchFigures = Figures & {
+  branchId: string;
+  name: string;
+  discounts: Prisma.Decimal;
+};
 
 type GroupedFigures = Figures & { key: string };
 
@@ -82,6 +86,11 @@ type PaymentAggregateRow = {
 };
 
 type RefundAggregateRow = { key: string; refunds: Prisma.Decimal.Value };
+
+type DiscountAggregateRow = {
+  key: string;
+  discounts: Prisma.Decimal.Value;
+};
 
 type StoredBreakdown = {
   branches: StatementBranch[];
@@ -165,6 +174,7 @@ type LiveStatement = {
     gross: Prisma.Decimal;
     tips: Prisma.Decimal;
     refunds: Prisma.Decimal;
+    discounts: Prisma.Decimal;
     carryOver: Prisma.Decimal;
     net: Prisma.Decimal;
     fee: Prisma.Decimal;
@@ -520,6 +530,7 @@ export class PlatformStatementsService {
     }
 
     const totalsByBranch = new Map<string, Figures>();
+    const discountsByBranch = new Map<string, Prisma.Decimal>();
 
     for (const [timezone, group] of byTimezone) {
       const { start, end } = periodBounds(period, timezone);
@@ -550,6 +561,31 @@ export class PlatformStatementsService {
           GROUP BY r.branch_id
         `,
       );
+
+      const discounts = await this.prisma.$queryRaw<DiscountAggregateRow[]>(
+        Prisma.sql`
+          SELECT b.branch_id::text AS key,
+                 COALESCE(SUM(b.discount_amount), 0) AS discounts
+          FROM bills b
+          JOIN branches br ON br.id = b.branch_id
+          WHERE b.status = 'PAID'
+            AND b.discount_amount > 0
+            AND br.restaurant_id = ANY(${ids}::uuid[])
+            AND (
+              SELECT MAX(p.paid_at) FROM payments p
+              WHERE p.bill_id = b.id AND p.status = 'PAID'
+            ) >= ${start}
+            AND (
+              SELECT MAX(p.paid_at) FROM payments p
+              WHERE p.bill_id = b.id AND p.status = 'PAID'
+            ) < ${end}
+          GROUP BY b.branch_id
+        `,
+      );
+
+      for (const row of discounts) {
+        discountsByBranch.set(row.key, toDecimal(row.discounts));
+      }
 
       for (const row of payments) {
         const entry = totalsByBranch.get(row.key) ?? {
@@ -585,7 +621,12 @@ export class PlatformStatementsService {
       };
       result.set(branch.restaurantId, [
         ...(result.get(branch.restaurantId) ?? []),
-        { branchId: branch.id, name: branch.name, ...figures },
+        {
+          branchId: branch.id,
+          name: branch.name,
+          discounts: discountsByBranch.get(branch.id) ?? ZERO,
+          ...figures,
+        },
       ]);
     }
 
@@ -671,10 +712,11 @@ export class PlatformStatementsService {
     const gross = sumDecimals(branches.map((b) => b.gross));
     const tips = sumDecimals(branches.map((b) => b.tips));
     const refunds = sumDecimals(branches.map((b) => b.refunds));
+    const discounts = sumDecimals(branches.map((b) => b.discounts));
     const result = computeFee({
       gross,
       refunds,
-      discounts: ZERO,
+      discounts,
       carryOverIn: carryOver,
       feeBps: restaurant.platformFeeBps,
     });
@@ -685,6 +727,7 @@ export class PlatformStatementsService {
         gross,
         tips,
         refunds,
+        discounts,
         carryOver,
         net: result.netSales,
         fee: result.feeAmount,
@@ -703,7 +746,7 @@ export class PlatformStatementsService {
         grossSales: money(gross),
         tipsTotal: money(tips),
         refunds: money(refunds),
-        discounts: money(ZERO),
+        discounts: money(discounts),
         carryOver: money(carryOver),
         netSales: money(result.netSales),
         feeBps: restaurant.platformFeeBps,
@@ -895,7 +938,7 @@ export class PlatformStatementsService {
       ) VALUES (
         ${randomUUID()}::uuid, ${restaurant.id}::uuid, ${`${period}-01`}::date,
         ${money(figures.gross)}::numeric, ${money(figures.tips)}::numeric,
-        0::numeric, ${money(figures.refunds)}::numeric,
+        ${money(figures.discounts)}::numeric, ${money(figures.refunds)}::numeric,
         ${money(figures.carryOver)}::numeric, ${money(figures.net)}::numeric,
         ${restaurant.platformFeeBps}::int, ${figures.fee.toFixed(0)}::numeric,
         ${status}::"PlatformFeeStatementStatus",

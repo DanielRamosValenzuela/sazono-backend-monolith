@@ -162,6 +162,12 @@ describe('GetDailyZService', () => {
     };
     const dailyZ = {
       findDocumentRange: jest.fn().mockResolvedValue(range),
+      findDiscountTotals: jest.fn().mockResolvedValue({
+        amount: 0,
+        count: 0,
+        byReason: [],
+        byApprover: [],
+      }),
       findRefundTotals: jest.fn().mockResolvedValue({
         refunds: 0,
         amount: 0,
@@ -172,11 +178,12 @@ describe('GetDailyZService', () => {
       }),
       findCashSales: jest.fn().mockResolvedValue([]),
       findCashMovements: jest.fn().mockResolvedValue([]),
+      findCashSessions: jest.fn().mockResolvedValue([]),
     };
     const insights = {
       findMethodBreakdown: jest.fn().mockResolvedValue(methods),
     };
-    const reports = { findHierarchyLines: jest.fn().mockResolvedValue([]) };
+    const reports = { findSoldHierarchyLines: jest.fn().mockResolvedValue([]) };
     const service = new GetDailyZService(
       scopeService as never,
       reports as never,

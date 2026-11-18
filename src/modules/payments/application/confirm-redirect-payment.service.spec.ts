@@ -15,6 +15,21 @@ import type { PaymentGatewayRegistry } from '../infrastructure/payment-gateway-r
 import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 import type { PaymentGatewayPort } from './ports/payment-gateway.port';
 
+jest.mock('../../billing/application/lock-bill', () => ({
+  lockBill: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../billing/application/refresh-bill-discounts', () => ({
+  refreshBillDiscounts: jest
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new (jest.requireActual<{ Prisma: typeof Prisma }>(
+          '@prisma/client',
+        ).Prisma.Decimal)(0),
+      ),
+    ),
+}));
+
 describe('ConfirmRedirectPaymentService', () => {
   const attemptFindFirstMock = jest.fn();
   const attemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });
@@ -211,6 +226,18 @@ describe('ConfirmRedirectPaymentService', () => {
           tableSessionId: 'session-1',
           status: BillStatus.OPEN,
           subtotalAmount: new Prisma.Decimal(0),
+          discountAmount: new Prisma.Decimal(0),
+          tipAmount: new Prisma.Decimal(0),
+          taxAmount: new Prisma.Decimal(0),
+          totalAmount: new Prisma.Decimal(0),
+          remainingAmount: new Prisma.Decimal(0),
+        })
+        .mockResolvedValueOnce({
+          id: 'bill-1',
+          tableSessionId: 'session-1',
+          status: BillStatus.OPEN,
+          subtotalAmount: new Prisma.Decimal(0),
+          discountAmount: new Prisma.Decimal(0),
           tipAmount: new Prisma.Decimal(0),
           taxAmount: new Prisma.Decimal(0),
           totalAmount: new Prisma.Decimal(0),
@@ -221,6 +248,7 @@ describe('ConfirmRedirectPaymentService', () => {
           tableSessionId: 'session-1',
           status: BillStatus.OPEN,
           subtotalAmount: new Prisma.Decimal(11800),
+          discountAmount: new Prisma.Decimal(0),
           tipAmount: new Prisma.Decimal(0),
           taxAmount: new Prisma.Decimal(0),
           totalAmount: new Prisma.Decimal(11800),
@@ -360,6 +388,7 @@ describe('ConfirmRedirectPaymentService', () => {
         tableSessionId: 'session-1',
         status: BillStatus.PARTIALLY_PAID,
         subtotalAmount: new Prisma.Decimal(23600),
+        discountAmount: new Prisma.Decimal(0),
         tipAmount: new Prisma.Decimal(900),
         taxAmount: new Prisma.Decimal(0),
         totalAmount: new Prisma.Decimal(24500),
@@ -437,6 +466,7 @@ describe('ConfirmRedirectPaymentService', () => {
         id: 'bill-1',
         status: BillStatus.PAID,
         subtotalAmount: new Prisma.Decimal(11800),
+        discountAmount: new Prisma.Decimal(0),
         tipAmount: new Prisma.Decimal(0),
         taxAmount: new Prisma.Decimal(0),
         totalAmount: new Prisma.Decimal(11800),
@@ -665,6 +695,18 @@ describe('ConfirmRedirectPaymentService', () => {
           tableSessionId: 'session-5',
           status: BillStatus.OPEN,
           subtotalAmount: new Prisma.Decimal(0),
+          discountAmount: new Prisma.Decimal(0),
+          tipAmount: new Prisma.Decimal(0),
+          taxAmount: new Prisma.Decimal(0),
+          totalAmount: new Prisma.Decimal(0),
+          remainingAmount: new Prisma.Decimal(0),
+        })
+        .mockResolvedValueOnce({
+          id: 'bill-5',
+          tableSessionId: 'session-5',
+          status: BillStatus.OPEN,
+          subtotalAmount: new Prisma.Decimal(0),
+          discountAmount: new Prisma.Decimal(0),
           tipAmount: new Prisma.Decimal(0),
           taxAmount: new Prisma.Decimal(0),
           totalAmount: new Prisma.Decimal(0),
@@ -675,6 +717,7 @@ describe('ConfirmRedirectPaymentService', () => {
           tableSessionId: 'session-5',
           status: BillStatus.OPEN,
           subtotalAmount: new Prisma.Decimal(11800),
+          discountAmount: new Prisma.Decimal(0),
           tipAmount: new Prisma.Decimal(0),
           taxAmount: new Prisma.Decimal(0),
           totalAmount: new Prisma.Decimal(11800),

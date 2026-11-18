@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import {
   PaymentMethod,
   PaymentStatus,
@@ -7,15 +7,22 @@ import {
   RefundStatus,
   Role,
 } from '@prisma/client';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsOptional,
   IsUUID,
   Length,
   Matches,
+  Max,
+  Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 export const REFUND_MONEY_PATTERN = /^(0|[1-9]\d{0,9})$/;
@@ -123,6 +130,7 @@ export type RefundResponseDto = {
   requestedBy: RefundRequesterDto | null;
   approvedBy: RefundApproverDto | null;
   creditNoteStatus: string;
+  items: RefundItemResponseDto[];
   completedAt: string | null;
   createdAt: string;
 };
@@ -174,4 +182,95 @@ export type PaymentRefundsResponseDto = {
     canManageGateway: boolean;
   };
   refunds: RefundResponseDto[];
+};
+
+export class RefundItemLineDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  billItemId!: string;
+
+  @ApiProperty({ example: 1, minimum: 1 })
+  @IsInt()
+  @Min(1)
+  @Max(999)
+  quantity!: number;
+
+  @ApiPropertyOptional({
+    description: 'El producto ya se habia preparado (merma de cocina).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  kitchenWaste?: boolean;
+}
+
+export class PreviewRefundItemsDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  paymentId!: string;
+
+  @ApiProperty({ type: [RefundItemLineDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => RefundItemLineDto)
+  items!: RefundItemLineDto[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  refundTip?: boolean;
+}
+
+export class CreateRefundItemsDto extends OmitType(CreateRefundDto, [
+  'amount',
+  'tipAmount',
+] as const) {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  paymentId!: string;
+
+  @ApiProperty({ type: [RefundItemLineDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => RefundItemLineDto)
+  items!: RefundItemLineDto[];
+}
+
+export type RefundItemResponseDto = {
+  billItemId: string;
+  name: string;
+  quantity: number;
+  amount: string;
+  kitchenWaste: boolean;
+};
+
+export type RefundItemsPreviewLineDto = {
+  billItemId: string;
+  name: string;
+  quantity: number;
+  amount: string;
+  availableQuantity: number;
+};
+
+export type RefundItemsPreviewResponseDto = {
+  paymentId: string;
+  lines: RefundItemsPreviewLineDto[];
+  consumptionAmount: string;
+  tipAmount: string;
+  total: string;
+  payment: RefundPaymentStateDto;
+};
+
+export type BillRefundableItemDto = {
+  billItemId: string;
+  name: string;
+  quantity: number;
+  refundedQuantity: number;
+  availableQuantity: number;
+  unitRefundAmount: string;
+  netAmount: string;
+  refundedAmount: string;
 };

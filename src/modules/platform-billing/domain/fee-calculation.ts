@@ -46,10 +46,7 @@ export function periodBounds(
 }
 
 export function computeFee(input: FeeInput): FeeResult {
-  const netSales = input.gross
-    .minus(input.refunds)
-    .minus(input.discounts)
-    .plus(input.carryOverIn);
+  const netSales = input.gross.minus(input.refunds).plus(input.carryOverIn);
   const base = netSales.isNegative() ? new Prisma.Decimal(0) : netSales;
 
   return {

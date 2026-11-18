@@ -206,6 +206,7 @@ describe('ListCounterSessionsService', () => {
         bill: {
           id: 'b1',
           status: 'OPEN',
+          discountAmount: decimal('0'),
           totalAmount: decimal('4500'),
           remainingAmount: decimal('1000'),
         },

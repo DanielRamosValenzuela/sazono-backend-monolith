@@ -7,6 +7,7 @@ import {
   DailyZPrismaRepository,
   type DailyZCashMovementRecord,
   type DailyZCashSalesRecord,
+  type DailyZDiscountRecord,
   type DailyZDocumentRangeRecord,
   type DailyZRefundRecord,
 } from '../infrastructure/daily-z.prisma.repository';
@@ -18,6 +19,7 @@ import {
   ReportsPrismaRepository,
   type HierarchyLineRecord,
 } from '../infrastructure/reports.prisma.repository';
+import { buildCashSessionRows, type CashSessionRow } from './cash-session-rows';
 import { normalizePath } from './hierarchy-tree';
 import { ZERO, money, percent, toBillFilter } from './insights-shared';
 import { ReportScopeService } from './report-scope.service';
@@ -63,6 +65,18 @@ export type DailyZSales = {
   tipAmount: string;
   collected: string;
   discounts: string;
+  discountCount: number;
+  discountsByReason: Array<{
+    reasonCode: string;
+    count: number;
+    amount: string;
+  }>;
+  discountsByApprover: Array<{
+    staffUserId: string | null;
+    name: string | null;
+    count: number;
+    amount: string;
+  }>;
 };
 
 export type DailyZRefunds = {
@@ -92,7 +106,11 @@ export type DailyZResponse = {
   afterRefunds: DailyZAfterRefunds | null;
   byMethod: DailyZMethodRow[];
   byCategory: DailyZCategoryRow[];
-  cashClosing: { rows: DailyZCashRow[]; expectedCash: string };
+  cashClosing: {
+    rows: DailyZCashRow[];
+    expectedCash: string;
+    sessions: CashSessionRow[];
+  };
 };
 
 const sum = (values: Prisma.Decimal.Value[]) =>
@@ -104,6 +122,7 @@ const sum = (values: Prisma.Decimal.Value[]) =>
 export function buildDailyZSales(
   methods: MethodBreakdownRecord[],
   range: DailyZDocumentRangeRecord,
+  discountRecord: DailyZDiscountRecord | null = null,
 ): DailyZSales {
   const consumption = sum(methods.map((m) => m.amount));
   const tip = sum(methods.map((m) => m.tip));
@@ -121,7 +140,16 @@ export function buildDailyZSales(
     total: money(consumption),
     tipAmount: money(tip),
     collected: money(consumption.add(tip)),
-    discounts: '0',
+    discounts: money(new Prisma.Decimal(discountRecord?.amount ?? 0)),
+    discountCount: discountRecord?.count ?? 0,
+    discountsByReason: (discountRecord?.byReason ?? []).map((row) => ({
+      ...row,
+      amount: money(new Prisma.Decimal(row.amount)),
+    })),
+    discountsByApprover: (discountRecord?.byApprover ?? []).map((row) => ({
+      ...row,
+      amount: money(new Prisma.Decimal(row.amount)),
+    })),
   };
 }
 
@@ -334,7 +362,7 @@ export class GetDailyZService {
       cashierScoped: scope.cashierScoped,
     };
     const staffUserId = scope.cashierScoped ? scope.cashierId : null;
-    const [cashSales, movements] = await Promise.all([
+    const [cashSales, movements, sessionRecords] = await Promise.all([
       this.dailyZRepository.findCashSales(
         branchId,
         scope.start,
@@ -347,8 +375,17 @@ export class GetDailyZService {
         scope.end,
         staffUserId,
       ),
+      this.dailyZRepository.findCashSessions(
+        branchId,
+        scope.start,
+        scope.end,
+        staffUserId,
+      ),
     ]);
-    const cashClosing = buildDailyZCash(cashSales, movements, staffUserId);
+    const cashClosing = {
+      ...buildDailyZCash(cashSales, movements, staffUserId),
+      sessions: buildCashSessionRows(sessionRecords),
+    };
 
     if (scope.cashierScoped) {
       return {
@@ -363,16 +400,22 @@ export class GetDailyZService {
     }
 
     const filter = { ...toBillFilter(scope), cashierId: null, methods: [] };
-    const [methods, range, refundRecord, lines] = await Promise.all([
-      this.insightsRepository.findMethodBreakdown(filter),
-      this.dailyZRepository.findDocumentRange(filter),
-      this.dailyZRepository.findRefundTotals(branchId, scope.start, scope.end),
-      this.reportsRepository.findHierarchyLines({
-        ...filter,
-        includeModifiers: true,
-      }),
-    ]);
-    const sales = buildDailyZSales(methods, range);
+    const [methods, range, refundRecord, lines, discountRecord] =
+      await Promise.all([
+        this.insightsRepository.findMethodBreakdown(filter),
+        this.dailyZRepository.findDocumentRange(filter),
+        this.dailyZRepository.findRefundTotals(
+          branchId,
+          scope.start,
+          scope.end,
+        ),
+        this.reportsRepository.findSoldHierarchyLines({
+          ...filter,
+          includeModifiers: true,
+        }),
+        this.dailyZRepository.findDiscountTotals(filter),
+      ]);
+    const sales = buildDailyZSales(methods, range, discountRecord);
     const refunds = buildDailyZRefunds(refundRecord);
 
     return {

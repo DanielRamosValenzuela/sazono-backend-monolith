@@ -4,6 +4,7 @@ import { formatZonedDateTime } from '../../../common/time/restaurant-time';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import {
   ReportsPrismaRepository,
+  type RefundItemReportRecord,
   type RefundReportRecord,
   type RefundTotalRecord,
   type RefundsPageFilter,
@@ -49,7 +50,16 @@ export type RefundsReportQuery = ReportScopeQuery & {
   limit?: number;
 };
 
+export type RefundReportItem = {
+  billItemId: string;
+  name: string;
+  quantity: number;
+  amount: string;
+  kitchenWaste: boolean;
+};
+
 export type RefundsReportRow = {
+  items: RefundReportItem[];
   refundId: string;
   completedAt: string | null;
   billId: string;
@@ -160,6 +170,18 @@ function sortValueOf(
     : record.completed_at.toISOString();
 }
 
+export function buildRefundItems(
+  items: RefundItemReportRecord[] = [],
+): RefundReportItem[] {
+  return items.map((item) => ({
+    billItemId: item.bill_item_id,
+    name: item.name,
+    quantity: item.quantity,
+    amount: money(item.amount),
+    kitchenWaste: item.kitchen_waste,
+  }));
+}
+
 export function buildRefundsReportRow(
   record: RefundReportRecord,
 ): RefundsReportRow {
@@ -167,6 +189,7 @@ export function buildRefundsReportRow(
   const tip = new Prisma.Decimal(record.tip_amount);
 
   return {
+    items: buildRefundItems(record.items),
     refundId: record.id,
     completedAt: record.completed_at?.toISOString() ?? null,
     billId: record.bill_id,

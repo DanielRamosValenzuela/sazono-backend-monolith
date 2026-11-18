@@ -117,6 +117,7 @@ describe('PlatformStatementsService', () => {
       .mockReset()
       .mockResolvedValueOnce([{ key: 'branch-1', gross: '100000', tips: '0' }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ key: 'branch-1', gross: '10000', tips: '0' }])
       .mockResolvedValueOnce([{ key: 'branch-1', refunds: '30000' }])
       .mockResolvedValue([]);
@@ -134,7 +135,9 @@ describe('PlatformStatementsService', () => {
       .mockReset()
       .mockResolvedValueOnce([{ key: 'branch-1', gross: '100000', tips: '0' }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ key: 'branch-1', gross: '10000', tips: '0' }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ key: 'branch-1', refunds: '50000' }])

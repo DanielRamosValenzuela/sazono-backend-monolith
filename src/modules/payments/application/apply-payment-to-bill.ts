@@ -1,17 +1,15 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import {
-  BillStatus,
-  OrderItemStatus,
-  OrderStatus,
-  TableSessionStatus,
-} from '@prisma/client';
+import { BillStatus } from '@prisma/client';
+import { lockBill } from '../../billing/application/lock-bill';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
+import { settleBillIfFullyPaid } from './settle-bill-if-fully-paid';
 
 export type BillAfterPayment = {
   billId: string;
   status: BillStatus;
   subtotalAmount: Prisma.Decimal;
+  discountAmount: Prisma.Decimal;
   tipAmount: Prisma.Decimal;
   totalAmount: Prisma.Decimal;
   remainingAmount: Prisma.Decimal;
@@ -22,6 +20,8 @@ export async function applyPaymentToBill(
   paidAmount: Prisma.Decimal,
   tipDelta: Prisma.Decimal,
 ): Promise<BillAfterPayment> {
+  await lockBill(tx, billId);
+
   const bill = await tx.bill.findUniqueOrThrow({
     where: {
       id: billId,
@@ -32,6 +32,7 @@ export async function applyPaymentToBill(
   const { taxAmount, totalAmount } = computeBillTotals(
     bill.subtotalAmount,
     tipAmount,
+    bill.discountAmount,
   );
 
   const alreadyPaid = bill.totalAmount.sub(bill.remainingAmount);
@@ -61,32 +62,14 @@ export async function applyPaymentToBill(
   });
 
   if (remainingAmount.lte(0)) {
-    await tx.orderItem.updateMany({
-      where: {
-        order: { billId: bill.id, status: OrderStatus.READY },
-        status: { not: OrderItemStatus.CANCELLED },
-      },
-      data: { status: OrderItemStatus.DELIVERED },
-    });
-    await tx.order.updateMany({
-      where: { billId: bill.id, status: OrderStatus.READY },
-      data: { status: OrderStatus.DELIVERED },
-    });
-    await tx.tableSession.updateMany({
-      where: {
-        id: bill.tableSessionId,
-        status: TableSessionStatus.OPEN,
-      },
-      data: {
-        status: TableSessionStatus.PAYMENT_COMPLETED,
-      },
-    });
+    await settleBillIfFullyPaid(tx, bill);
   }
 
   return {
     billId: bill.id,
     status,
     subtotalAmount: bill.subtotalAmount,
+    discountAmount: bill.discountAmount,
     tipAmount,
     totalAmount,
     remainingAmount,

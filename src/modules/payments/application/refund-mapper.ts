@@ -8,6 +8,7 @@ import type {
 export const REFUND_INCLUDE = {
   requestedBy: { select: { id: true, firstName: true, lastName: true } },
   approvedBy: { select: { id: true, firstName: true, lastName: true } },
+  items: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.RefundInclude;
 
 export type RefundRecord = Prisma.RefundGetPayload<{
@@ -48,6 +49,13 @@ export function mapRefund(refund: RefundRecord): RefundResponseDto {
         }
       : null,
     creditNoteStatus: refund.creditNoteStatus,
+    items: refund.items.map((item) => ({
+      billItemId: item.billItemId,
+      name: item.nameSnapshot,
+      quantity: item.quantity,
+      amount: item.amount.toString(),
+      kitchenWaste: item.kitchenWaste,
+    })),
     completedAt: refund.completedAt?.toISOString() ?? null,
     createdAt: refund.createdAt.toISOString(),
   };

@@ -14,6 +14,21 @@ import { CreateWaiterOrderService } from './create-waiter-order.service';
 import type { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 
+jest.mock('../../billing/application/lock-bill', () => ({
+  lockBill: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../billing/application/refresh-bill-discounts', () => ({
+  refreshBillDiscounts: jest
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new (jest.requireActual<{ Prisma: typeof Prisma }>(
+          '@prisma/client',
+        ).Prisma.Decimal)(0),
+      ),
+    ),
+}));
+
 describe('CreateWaiterOrderService', () => {
   const tableSessionFindUniqueMock = jest.fn();
   const orderFindUniqueOrThrowMock = jest.fn();
@@ -136,7 +151,17 @@ describe('CreateWaiterOrderService', () => {
           order: { create: orderCreateMock },
           orderItem: { create: orderItemCreateMock },
           billItem: { createMany: billItemCreateManyMock },
-          bill: { update: billUpdateMock },
+          bill: {
+            update: billUpdateMock,
+            findUniqueOrThrow: jest.fn().mockResolvedValue({
+              id: 'bill-1',
+              tableSessionId: 'session-1',
+              subtotalAmount: new Prisma.Decimal(0),
+              tipAmount: new Prisma.Decimal(0),
+              totalAmount: new Prisma.Decimal(0),
+              remainingAmount: new Prisma.Decimal(0),
+            }),
+          },
           stationTicket: { create: stationTicketCreateMock },
           tableSession: { updateMany: tableSessionUpdateManyMock },
         }),
@@ -259,7 +284,17 @@ describe('CreateWaiterOrderService', () => {
           order: { create: orderCreateMock },
           orderItem: { create: orderItemCreateMock },
           billItem: { createMany: billItemCreateManyMock },
-          bill: { update: billUpdateMock },
+          bill: {
+            update: billUpdateMock,
+            findUniqueOrThrow: jest.fn().mockResolvedValue({
+              id: 'bill-1',
+              tableSessionId: 'session-1',
+              subtotalAmount: new Prisma.Decimal(0),
+              tipAmount: new Prisma.Decimal(0),
+              totalAmount: new Prisma.Decimal(0),
+              remainingAmount: new Prisma.Decimal(0),
+            }),
+          },
           stationTicket: { create: stationTicketCreateMock },
           tableSession: { updateMany: tableSessionUpdateManyMock },
         }),

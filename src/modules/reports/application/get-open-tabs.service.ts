@@ -42,6 +42,7 @@ export type OpenTabRow = {
   total: string;
   paid: string;
   pending: string;
+  discount: string;
   alert: boolean;
   closeReason: string | null;
   cancelledOrders: number | null;
@@ -110,6 +111,7 @@ export function buildOpenTabRow(
     total: money(record.total),
     paid: money(record.paid),
     pending: money(record.pending),
+    discount: money(record.discount ?? 0),
     alert: kind === 'open' && ageMinutes > OPEN_TAB_ALERT_MINUTES,
     closeReason: record.close_reason,
     cancelledOrders: record.cancelled_orders,

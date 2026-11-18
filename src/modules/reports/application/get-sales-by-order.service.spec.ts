@@ -241,18 +241,21 @@ describe('GetSalesByOrderService', () => {
   const findBillPageMock = jest.fn();
   const findMethodTotalsMock = jest.fn();
   const findRefundsByMethodMock = jest.fn();
+  const findDiscountOnlyTotalMock = jest.fn();
   const service = new GetSalesByOrderService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findBillPage: findBillPageMock,
       findMethodTotals: findMethodTotalsMock,
       findRefundsByMethod: findRefundsByMethodMock,
+      findDiscountOnlyTotal: findDiscountOnlyTotalMock,
     } as unknown as ReportsPrismaRepository,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     findRefundsByMethodMock.mockResolvedValue([]);
+    findDiscountOnlyTotalMock.mockResolvedValue(new Prisma.Decimal(0));
     resolveMock.mockResolvedValue(scope);
     findMethodTotalsMock.mockResolvedValue([
       { method: 'CASH', payments: 2, consumption: 12000, tip: 1000, bills: 3 },

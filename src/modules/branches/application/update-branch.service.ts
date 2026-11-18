@@ -126,6 +126,43 @@ export class UpdateBranchService {
           settingsUpdate.refundTipDefault = dto.settings.refundTipDefault;
         }
 
+        if (dto.settings.discountApprovalPercent !== undefined) {
+          settingsUpdate.discountApprovalPercent =
+            dto.settings.discountApprovalPercent;
+        }
+
+        if (dto.settings.discountApprovalAmount !== undefined) {
+          settingsUpdate.discountApprovalAmount =
+            dto.settings.discountApprovalAmount;
+        }
+
+        if (dto.settings.requireOpenCashSession !== undefined) {
+          settingsUpdate.requireOpenCashSession =
+            dto.settings.requireOpenCashSession;
+        }
+
+        const cashSettingsTouched =
+          dto.settings.requireOpenCashSession !== undefined;
+        const cashSettingsBefore = cashSettingsTouched
+          ? await tx.branchSettings.findUnique({
+              where: { branchId },
+              select: { requireOpenCashSession: true },
+            })
+          : null;
+
+        const discountSettingsTouched =
+          dto.settings.discountApprovalPercent !== undefined ||
+          dto.settings.discountApprovalAmount !== undefined;
+        const discountSettingsBefore = discountSettingsTouched
+          ? await tx.branchSettings.findUnique({
+              where: { branchId },
+              select: {
+                discountApprovalPercent: true,
+                discountApprovalAmount: true,
+              },
+            })
+          : null;
+
         const refundSettingsTouched =
           dto.settings.cashierRefundLimit !== undefined ||
           dto.settings.refundTipDefault !== undefined;
@@ -153,8 +190,73 @@ export class UpdateBranchService {
               dto.settings.tableAssignmentEnabled ?? false,
             cashierRefundLimit: dto.settings.cashierRefundLimit ?? null,
             refundTipDefault: dto.settings.refundTipDefault ?? false,
+            ...(dto.settings.discountApprovalPercent !== undefined
+              ? {
+                  discountApprovalPercent: dto.settings.discountApprovalPercent,
+                }
+              : {}),
+            ...(dto.settings.discountApprovalAmount !== undefined
+              ? { discountApprovalAmount: dto.settings.discountApprovalAmount }
+              : {}),
+            ...(dto.settings.requireOpenCashSession !== undefined
+              ? { requireOpenCashSession: dto.settings.requireOpenCashSession }
+              : {}),
           },
         });
+
+        if (cashSettingsTouched) {
+          const before = {
+            requireOpenCashSession:
+              cashSettingsBefore?.requireOpenCashSession ?? false,
+          };
+          const after = {
+            requireOpenCashSession: savedSettings.requireOpenCashSession,
+          };
+
+          if (JSON.stringify(before) !== JSON.stringify(after)) {
+            await this.auditService.record(tx, {
+              restaurantId: context.restaurantId,
+              branchId,
+              actorStaffUserId: context.staffUserId,
+              actorRole: Role.ADMIN,
+              action: 'BRANCH_CASH_SETTINGS_CHANGED',
+              entityType: 'BranchSettings',
+              entityId: branchId,
+              before,
+              after,
+            });
+          }
+        }
+
+        if (discountSettingsTouched) {
+          const toDiscountJson = (
+            value: {
+              discountApprovalPercent: Prisma.Decimal | null;
+              discountApprovalAmount: Prisma.Decimal | null;
+            } | null,
+          ) => ({
+            discountApprovalPercent:
+              value?.discountApprovalPercent?.toString() ?? null,
+            discountApprovalAmount:
+              value?.discountApprovalAmount?.toString() ?? null,
+          });
+          const before = toDiscountJson(discountSettingsBefore);
+          const after = toDiscountJson(savedSettings);
+
+          if (JSON.stringify(before) !== JSON.stringify(after)) {
+            await this.auditService.record(tx, {
+              restaurantId: context.restaurantId,
+              branchId,
+              actorStaffUserId: context.staffUserId,
+              actorRole: Role.ADMIN,
+              action: 'BRANCH_DISCOUNT_SETTINGS_CHANGED',
+              entityType: 'BranchSettings',
+              entityId: branchId,
+              before,
+              after,
+            });
+          }
+        }
 
         if (refundSettingsTouched) {
           const toJson = (

@@ -65,6 +65,10 @@ export class GetCurrentBillService {
       status: bill.status,
       subtotalAmount: bill.subtotalAmount.toString(),
       taxAmount: bill.taxAmount.toString(),
+      discountAmount: bill.discountAmount.toString(),
+      consumptionAmount: bill.subtotalAmount
+        .sub(bill.discountAmount)
+        .toString(),
       tipAmount: bill.tipAmount.toString(),
       totalAmount: bill.totalAmount.toString(),
       remainingAmount: bill.remainingAmount.toString(),

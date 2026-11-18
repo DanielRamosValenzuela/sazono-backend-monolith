@@ -98,6 +98,7 @@ export type OpenTabRecord = {
   total: Prisma.Decimal.Value;
   paid: Prisma.Decimal.Value;
   pending: Prisma.Decimal.Value;
+  discount?: Prisma.Decimal.Value;
   cancelled_orders: number | null;
   cancelled_amount: Prisma.Decimal.Value | null;
 };
@@ -497,6 +498,7 @@ export class ReportsInsightsPrismaRepository {
         COALESCE(b.total_amount, 0) AS total,
         COALESCE(b.total_amount - b.remaining_amount, 0) AS paid,
         COALESCE(b.remaining_amount, 0) AS pending,
+        COALESCE(b.discount_amount, 0) AS discount,
         ${cancelledColumns}
       FROM table_sessions ts
       JOIN tables t ON t.id = ts.table_id

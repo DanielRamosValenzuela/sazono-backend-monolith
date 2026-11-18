@@ -18,6 +18,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { CashModule } from './modules/cash/cash.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { FloorModule } from './modules/floor/floor.module';
 import { KitchenModule } from './modules/kitchen/kitchen.module';
@@ -87,6 +88,7 @@ import { StaffModule } from './modules/staff/staff.module';
     KitchenModule,
     BillingModule,
     PaymentsModule,
+    CashModule,
     PlatformBillingModule,
     AnalyticsModule,
     ReportsModule,

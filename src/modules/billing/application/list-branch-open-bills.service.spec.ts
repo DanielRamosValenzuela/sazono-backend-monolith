@@ -51,6 +51,7 @@ describe('ListBranchOpenBillsService', () => {
           id: 'bill-1',
           totalAmount: new Prisma.Decimal('11800'),
           remainingAmount: new Prisma.Decimal('11800'),
+          discountAmount: new Prisma.Decimal('0'),
         },
       },
       {
@@ -74,6 +75,7 @@ describe('ListBranchOpenBillsService', () => {
       billId: 'bill-1',
       totalAmount: '11800',
       remainingAmount: '11800',
+      discountAmount: '0',
     });
     expect(ensureAccessMock).toHaveBeenCalledWith(
       authUser,
@@ -111,6 +113,7 @@ describe('ListBranchOpenBillsService', () => {
           id: 'bill-3',
           totalAmount: new Prisma.Decimal('3000'),
           remainingAmount: new Prisma.Decimal('0'),
+          discountAmount: new Prisma.Decimal('0'),
         },
       },
     ]);

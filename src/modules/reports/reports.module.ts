@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
+import { GetCashSessionsReportService } from './application/get-cash-sessions-report.service';
 import { GetDailyZService } from './application/get-daily-z.service';
+import { GetDiscountsReportService } from './application/get-discounts-report.service';
 import { GetFilterOptionsService } from './application/get-filter-options.service';
 import { GetOrderDetailService } from './application/get-order-detail.service';
 import { GetRefundsReportService } from './application/get-refunds-report.service';
@@ -19,12 +21,22 @@ import { ReportScopeService } from './application/report-scope.service';
 import { DailyZPrismaRepository } from './infrastructure/daily-z.prisma.repository';
 import { ReportsInsightsPrismaRepository } from './infrastructure/reports-insights.prisma.repository';
 import { ReportsPrismaRepository } from './infrastructure/reports.prisma.repository';
+import { ReportsCashController } from './presentation/http/reports-cash.controller';
+import { ReportsDiscountsController } from './presentation/http/reports-discounts.controller';
+import { ReportsWasteController } from './presentation/http/reports-waste.controller';
+import { GetWasteReportService } from './application/get-waste-report.service';
 import { ReportsInsightsController } from './presentation/http/reports-insights.controller';
 import { ReportsController } from './presentation/http/reports.controller';
 
 @Module({
   imports: [AuthModule],
-  controllers: [ReportsController, ReportsInsightsController],
+  controllers: [
+    ReportsController,
+    ReportsInsightsController,
+    ReportsCashController,
+    ReportsDiscountsController,
+    ReportsWasteController,
+  ],
   providers: [
     GetSalesByOrderService,
     GetPaymentsReportService,
@@ -39,6 +51,9 @@ import { ReportsController } from './presentation/http/reports.controller';
     GetOpenTabsService,
     GetSummaryKpisService,
     GetDailyZService,
+    GetCashSessionsReportService,
+    GetDiscountsReportService,
+    GetWasteReportService,
     DailyZPrismaRepository,
     ReportsInsightsPrismaRepository,
     ReportScopeService,

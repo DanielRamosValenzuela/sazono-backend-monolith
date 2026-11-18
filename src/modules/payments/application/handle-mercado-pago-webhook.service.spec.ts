@@ -16,6 +16,21 @@ import type { ReconcileMercadoPagoRefundsService } from './reconcile-mercado-pag
 import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
 import type { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
 
+jest.mock('../../billing/application/lock-bill', () => ({
+  lockBill: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../billing/application/refresh-bill-discounts', () => ({
+  refreshBillDiscounts: jest
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new (jest.requireActual<{ Prisma: typeof Prisma }>(
+          '@prisma/client',
+        ).Prisma.Decimal)(0),
+      ),
+    ),
+}));
+
 describe('HandleMercadoPagoWebhookService', () => {
   const paymentWebhookEventFindUniqueMock = jest.fn();
   const paymentWebhookEventCreateMock = jest.fn();

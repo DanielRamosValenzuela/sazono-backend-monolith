@@ -3,11 +3,16 @@ import { Prisma } from '@prisma/client';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import {
   ReportsPrismaRepository,
+  type OrderDetailDiscountRecord,
   type OrderDetailHeaderRecord,
   type OrderDetailItemRecord,
   type OrderDetailPaymentRecord,
   type OrderDetailRefundRecord,
 } from '../infrastructure/reports.prisma.repository';
+import {
+  buildRefundItems,
+  type RefundReportItem,
+} from './get-refunds-report.service';
 import { UNCATEGORIZED_LABEL } from './hierarchy-tree';
 import {
   ReportScopeService,
@@ -40,10 +45,27 @@ export type OrderDetailItem = {
   modifiers: { name: string; priceDelta: string }[];
   modifiersTotal: string;
   lineTotal: string;
+  discount: string;
   notes: string | null;
   status: string;
   cancelled: boolean;
   counted: boolean;
+};
+
+export type OrderDetailDiscount = {
+  id: string;
+  billItemId: string | null;
+  itemName: string | null;
+  type: string;
+  value: string;
+  amount: string;
+  reasonCode: string;
+  reasonText: string;
+  appliedBy: string | null;
+  approvedBy: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  createdAt: string;
 };
 
 export type OrderDetailOrder = {
@@ -76,6 +98,7 @@ export type OrderDetailPayment = {
 };
 
 export type OrderDetailRefund = {
+  items: RefundReportItem[];
   id: string;
   paymentId: string;
   amount: string;
@@ -116,9 +139,12 @@ export type OrderDetailResponse = {
   items: OrderDetailItem[];
   payments: OrderDetailPayment[];
   refunds: OrderDetailRefund[];
+  discounts: OrderDetailDiscount[];
   totals: {
     itemsCount: number;
     itemsTotal: string;
+    discount: string;
+    consumption: string;
     excludedItemsTotal: string;
     billTotal: string;
     remaining: string;
@@ -181,6 +207,7 @@ function buildItem(record: OrderDetailItemRecord): OrderDetailItem {
     })),
     modifiersTotal: money(modifiersTotal),
     lineTotal: money(unitPrice.mul(record.quantity)),
+    discount: money(record.discount_amount ?? 0),
     notes: record.notes,
     status: record.status,
     cancelled,
@@ -229,6 +256,7 @@ function buildPayment(record: OrderDetailPaymentRecord): OrderDetailPayment {
 
 function buildRefund(record: OrderDetailRefundRecord): OrderDetailRefund {
   return {
+    items: buildRefundItems(record.items),
     id: record.id,
     paymentId: record.payment_id,
     amount: money(record.amount),
@@ -267,6 +295,7 @@ export function buildOrderDetail(
   paymentRecords: OrderDetailPaymentRecord[],
   timeZone: string,
   refundRecords: OrderDetailRefundRecord[] = [],
+  discountRecords: OrderDetailDiscountRecord[] = [],
 ): OrderDetailResponse {
   const items = itemRecords.map(buildItem);
   const payments = paymentRecords.map(buildPayment);
@@ -284,7 +313,8 @@ export function buildOrderDetail(
   const excludedTotal = sum(
     items.filter((item) => !item.counted).map((item) => item.lineTotal),
   );
-  const difference = itemsTotal.sub(paidAmount);
+  const discountTotal = new Prisma.Decimal(header.discount_amount ?? 0);
+  const difference = itemsTotal.sub(discountTotal).sub(paidAmount);
   const orders = new Map<string, OrderDetailOrder>();
 
   for (const record of itemRecords) {
@@ -336,11 +366,28 @@ export function buildOrderDetail(
     items,
     payments,
     refunds: refundRecords.map(buildRefund),
+    discounts: discountRecords.map((record) => ({
+      id: record.id,
+      billItemId: record.bill_item_id,
+      itemName: record.item_name,
+      type: record.type,
+      value: new Prisma.Decimal(record.value).toString(),
+      amount: money(record.amount),
+      reasonCode: record.reason_code,
+      reasonText: record.reason_text,
+      appliedBy: record.applied_by_name,
+      approvedBy: record.approved_by_name,
+      voidedAt: record.voided_at?.toISOString() ?? null,
+      voidReason: record.void_reason,
+      createdAt: record.created_at.toISOString(),
+    })),
     totals: {
       itemsCount: items
         .filter((item) => item.counted)
         .reduce((total, item) => total + item.quantity, 0),
       itemsTotal: money(itemsTotal),
+      discount: money(discountTotal),
+      consumption: money(itemsTotal.sub(discountTotal)),
       excludedItemsTotal: money(excludedTotal),
       billTotal: money(header.total_amount),
       remaining: money(header.remaining_amount),
@@ -411,6 +458,7 @@ export class GetOrderDetailService {
       records.payments,
       access.timeZone,
       records.refunds,
+      records.discounts,
     );
   }
 }

@@ -221,7 +221,8 @@ export class RefundGatewayService {
     refund: Pick<
       GatewayRefundRecord,
       'paymentId' | 'billId' | 'amount' | 'tipAmount'
-    >,
+    > &
+      Partial<Pick<GatewayRefundRecord, 'items'>>,
   ): Promise<boolean> {
     const amount = refund.amount.toFixed(2);
     const tip = refund.tipAmount.toFixed(2);
@@ -241,6 +242,19 @@ export class RefundGatewayService {
       return false;
     }
 
+    for (const item of refund.items ?? []) {
+      const changed = await tx.$executeRaw(Prisma.sql`
+        UPDATE bill_items
+        SET refunded_quantity = refunded_quantity + ${item.quantity}, updated_at = now()
+        WHERE id = ${item.billItemId}::uuid
+          AND refunded_quantity + ${item.quantity} <= quantity
+      `);
+
+      if (changed === 0) {
+        return false;
+      }
+    }
+
     await tx.bill.update({
       where: { id: refund.billId },
       data: { refundedAmount: { increment: refund.amount } },
@@ -254,7 +268,8 @@ export class RefundGatewayService {
     refund: Pick<
       GatewayRefundRecord,
       'paymentId' | 'billId' | 'amount' | 'tipAmount'
-    >,
+    > &
+      Partial<Pick<GatewayRefundRecord, 'items'>>,
   ): Promise<void> {
     const amount = refund.amount.toFixed(2);
     const tip = refund.tipAmount.toFixed(2);
@@ -273,6 +288,14 @@ export class RefundGatewayService {
       throw new Error(
         `No se pudo liberar la reserva del reembolso sobre el pago ${refund.paymentId}.`,
       );
+    }
+
+    for (const item of refund.items ?? []) {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE bill_items
+        SET refunded_quantity = GREATEST(refunded_quantity - ${item.quantity}, 0), updated_at = now()
+        WHERE id = ${item.billItemId}::uuid
+      `);
     }
 
     await tx.bill.update({

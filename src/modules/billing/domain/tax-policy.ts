@@ -3,18 +3,28 @@ export const TAX_INCLUDED_IN_PRICE = true;
 
 export type BillTotals = {
   taxAmount: Prisma.Decimal;
+  discountAmount: Prisma.Decimal;
+  consumptionAmount: Prisma.Decimal;
   totalAmount: Prisma.Decimal;
 };
 
 export function computeBillTotals(
   subtotalAmount: Prisma.Decimal,
   tipAmount: Prisma.Decimal,
+  discountAmount: Prisma.Decimal = new Prisma.Decimal(0),
 ): BillTotals {
   const taxAmount = new Prisma.Decimal(0);
+  const clamped = Prisma.Decimal.min(
+    Prisma.Decimal.max(discountAmount, 0),
+    subtotalAmount,
+  );
+  const consumptionAmount = subtotalAmount.sub(clamped);
 
   return {
     taxAmount,
-    totalAmount: subtotalAmount.add(tipAmount).add(taxAmount),
+    discountAmount: clamped,
+    consumptionAmount,
+    totalAmount: consumptionAmount.add(tipAmount).add(taxAmount),
   };
 }
 

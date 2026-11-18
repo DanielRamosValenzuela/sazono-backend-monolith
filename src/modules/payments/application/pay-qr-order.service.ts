@@ -12,7 +12,10 @@ import {
   TableStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { applyOrderChargeToBill } from '../../orders/application/apply-order-charge-to-bill';
+import {
+  applyOrderChargeToBill,
+  computeOrderChargeDelta,
+} from '../../orders/application/apply-order-charge-to-bill';
 import { routeOrderToStations } from '../../orders/application/route-order-to-stations';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import { buildCheckoutFromDto } from './build-checkout-from-dto';
@@ -105,9 +108,14 @@ export class PayQrOrderService {
 
     await assertNoPaymentInReview(this.prisma, order.billId);
 
-    const orderAmount = order.orderItems.reduce(
-      (total, item) => total.add(item.priceSnapshot.mul(item.quantity)),
-      new Prisma.Decimal(0),
+    const orderAmount = await computeOrderChargeDelta(
+      this.prisma,
+      order.billId,
+      order.orderItems.map((item) => ({
+        orderItemId: item.id,
+        price: item.priceSnapshot,
+        quantity: item.quantity,
+      })),
     );
     const paidAmount = orderAmount.add(tipDelta);
     const currency = order.branch.restaurant.currency;

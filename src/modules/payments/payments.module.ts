@@ -35,6 +35,7 @@ import { ReconcileMercadoPagoRefundsService } from './application/reconcile-merc
 import { ReconcileGatewayRefundsService } from './application/reconcile-gateway-refunds.service';
 import { RefundGatewayService } from './application/refund-gateway.service';
 import { RefundPaymentService } from './application/refund-payment.service';
+import { RefundItemsService } from './application/refund-items.service';
 import { ReconcileMercadoPagoPaymentsService } from './application/reconcile-mercado-pago-payments.service';
 import { ReconcileTransbankPaymentsService } from './application/reconcile-transbank-payments.service';
 import { ResumePaymentAccountService } from './application/resume-payment-account.service';
@@ -61,6 +62,7 @@ import { PaymentWebhooksController } from './presentation/http/payment-webhooks.
 import { QrPaymentsController } from './presentation/http/qr-payments.controller';
 import { RefundActionsController } from './presentation/http/refund-actions.controller';
 import { RefundsController } from './presentation/http/refunds.controller';
+import { RefundItemsController } from './presentation/http/refund-items.controller';
 
 @Module({
   imports: [AuthModule, AuditModule, DiscoveryModule],
@@ -70,6 +72,7 @@ import { RefundsController } from './presentation/http/refunds.controller';
     PaymentAccountsController,
     PaymentWebhooksController,
     RefundsController,
+    RefundItemsController,
     RefundActionsController,
   ],
   providers: [
@@ -93,6 +96,7 @@ import { RefundsController } from './presentation/http/refunds.controller';
     PayBillService,
     ListBillPaymentsService,
     RefundPaymentService,
+    RefundItemsService,
     RefundGatewayService,
     ManageGatewayRefundService,
     ReconcileGatewayRefundsService,

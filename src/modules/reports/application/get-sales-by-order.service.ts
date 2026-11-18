@@ -233,6 +233,8 @@ export function buildSalesByOrderRow(
     payments.map((payment) => methodKeyOf(payment.method)),
   );
 
+  const discount = new Prisma.Decimal(bill.discount_amount ?? 0);
+
   return {
     billId: bill.id,
     closedAt: bill.closed_at.toISOString(),
@@ -245,8 +247,8 @@ export function buildSalesByOrderRow(
     cashier: cashiers.length > 0 ? cashiers.join(', ') : null,
     guests: bill.guest_count,
     paymentStatus: distinctMethods.size > 1 ? 'Mixto' : 'Pagado',
-    total: money(total),
-    discounts: '0',
+    total: money(total.add(discount)),
+    discounts: money(discount),
     payable: money(total),
     tip: money(tip),
     paymentsCount: payments.length,
@@ -268,6 +270,7 @@ export function buildSalesByOrderTotals(
   billCount: number,
   methodTotals: MethodTotalRecord[],
   allRefundsByMethod: RefundsByMethodRecord[] | null = null,
+  discountOnlyAmount: Prisma.Decimal = ZERO,
 ): SalesByOrderTotals {
   const sums = emptyMethodSums();
   const rowRefunds = emptyMethodSums();
@@ -277,6 +280,9 @@ export function buildSalesByOrderTotals(
   let rowsRefunded = ZERO;
   let rowsTipRefunded = ZERO;
   let paymentsCount = 0;
+  const discounts = new Prisma.Decimal(methodTotals[0]?.discounts ?? 0).add(
+    discountOnlyAmount,
+  );
 
   for (const record of methodTotals) {
     const key = methodKeyOf(record.method);
@@ -324,8 +330,8 @@ export function buildSalesByOrderTotals(
   return {
     bills: billCount,
     paymentsCount,
-    total: money(total),
-    discounts: '0',
+    total: money(total.add(discounts)),
+    discounts: money(discounts),
     payable: money(total),
     tip: money(tip),
     refunded: money(refunded),
@@ -483,7 +489,7 @@ export class GetSalesByOrderService {
     const filter = this.toFilter(scope, query);
     const limit = Math.min(query.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
 
-    const [page, methodTotals, otherPeriod] = await Promise.all([
+    const [page, methodTotals, otherPeriod, discountOnly] = await Promise.all([
       this.loadPage(
         filter,
         decodeCursor(query.cursor, CURSOR_KINDS[filter.orderBy]),
@@ -491,6 +497,7 @@ export class GetSalesByOrderService {
       ),
       this.reportsRepository.findMethodTotals(filter),
       this.loadAllRefunds(filter),
+      this.reportsRepository.findDiscountOnlyTotal(filter),
     ]);
 
     return {
@@ -505,6 +512,7 @@ export class GetSalesByOrderService {
         methodTotals[0]?.bills ?? 0,
         methodTotals,
         otherPeriod,
+        discountOnly,
       ),
       nextCursor: page.nextCursor,
       limit,
@@ -518,14 +526,16 @@ export class GetSalesByOrderService {
   ): Promise<CsvDownload> {
     const scope = await this.resolveScope(authUser, branchId, query, true);
     const filter = this.toFilter(scope, query);
-    const [methodTotals, otherPeriod] = await Promise.all([
+    const [methodTotals, otherPeriod, discountOnly] = await Promise.all([
       this.reportsRepository.findMethodTotals(filter),
       this.loadAllRefunds(filter),
+      this.reportsRepository.findDiscountOnlyTotal(filter),
     ]);
     const totals = buildSalesByOrderTotals(
       methodTotals[0]?.bills ?? 0,
       methodTotals,
       otherPeriod,
+      discountOnly,
     );
 
     return {

@@ -36,7 +36,9 @@ describe('ReportsPrismaRepository.findHierarchyLines', () => {
   it('counts the price snapshot as is when modifiers are included, because it already holds them', async () => {
     const query = await run(true);
 
-    expect(query.sql).toContain('SUM(oi.price_snapshot * oi.quantity)');
+    expect(query.sql).toContain(
+      'SUM(oi.price_snapshot * oi.quantity - COALESCE(bi.discount_amount, 0))',
+    );
     expect(query.sql).not.toContain('mods.delta) * oi.quantity');
   });
 
@@ -44,7 +46,56 @@ describe('ReportsPrismaRepository.findHierarchyLines', () => {
     const query = await run(false);
 
     expect(query.sql).toContain(
-      'SUM((oi.price_snapshot - mods.delta) * oi.quantity)',
+      'SUM((oi.price_snapshot - mods.delta) * oi.quantity - COALESCE(bi.discount_amount, 0))',
+    );
+  });
+
+  it('adds refunded items as negative lines per product from succeeded refunds', async () => {
+    await run(true);
+    const refundQuery = queryRawMock.mock.calls
+      .map((call) => call[0] as Prisma.Sql)
+      .find((query) => query.sql.includes('FROM refund_items ri'));
+
+    expect(refundQuery).toBeDefined();
+    expect(refundQuery?.sql).toContain(
+      '-COALESCE(SUM(ri.amount - 0), 0) AS amount',
+    );
+    expect(refundQuery?.sql).toContain("r.status = 'SUCCEEDED'");
+    expect(refundQuery?.sql).toContain(
+      'GROUP BY ri.category_path_snapshot, ri.name_snapshot, ps.name',
+    );
+  });
+
+  it('subtracts the modifier share of refunded units when modifiers are excluded', async () => {
+    await run(false);
+    const refundQuery = queryRawMock.mock.calls
+      .map((call) => call[0] as Prisma.Sql)
+      .find((query) => query.sql.includes('FROM refund_items ri'));
+
+    expect(refundQuery?.sql).toContain(
+      '-COALESCE(SUM(ri.amount - ri.quantity * mods.delta), 0) AS amount',
+    );
+    expect(refundQuery?.sql).toContain(
+      'WHERE m.order_item_id = ri.order_item_id',
+    );
+  });
+
+  it('exposes sold lines without refund lines', async () => {
+    queryRawMock.mockResolvedValue([]);
+    await repository.findSoldHierarchyLines({
+      ...EMPTY_FILTERS,
+      branchId: '11111111-1111-4111-8111-111111111111',
+      start,
+      end,
+      timeZone: 'America/Santiago',
+      cashierId: null,
+      methods: [],
+      includeModifiers: true,
+    });
+
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
+    expect((queryRawMock.mock.calls[0][0] as Prisma.Sql).sql).not.toContain(
+      'refund_items',
     );
   });
 

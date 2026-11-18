@@ -21,6 +21,12 @@ export class BillResponseDto {
   taxAmount!: string;
 
   @ApiProperty({ example: '0' })
+  discountAmount!: string;
+
+  @ApiProperty({ example: '0', description: 'subtotal - descuento' })
+  consumptionAmount!: string;
+
+  @ApiProperty({ example: '0' })
   tipAmount!: string;
 
   @ApiProperty({ example: '0' })
@@ -69,6 +75,9 @@ export class BranchOpenBillResponseDto {
 
   @ApiProperty({ format: 'uuid' })
   billId!: string;
+
+  @ApiProperty({ example: '0' })
+  discountAmount!: string;
 
   @ApiProperty({ example: '0' })
   totalAmount!: string;

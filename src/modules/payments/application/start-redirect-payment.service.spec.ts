@@ -29,6 +29,7 @@ describe('StartRedirectPaymentService', () => {
     order: { findUnique: orderFindUniqueMock },
     tableSession: { findFirst: tableSessionFindFirstMock },
     billSplitParticipant: { findFirst: billSplitParticipantFindFirstMock },
+    billDiscount: { findMany: jest.fn().mockResolvedValue([]) },
     paymentAttempt: {
       create: attemptCreateMock,
       update: attemptUpdateMock,

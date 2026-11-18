@@ -51,6 +51,7 @@ export class ListBranchOpenBillsService {
         sessionStatus: session.status,
         sessionOpenedAt: session.openedAt.toISOString(),
         billId: session.bill!.id,
+        discountAmount: session.bill!.discountAmount.toString(),
         totalAmount: session.bill!.totalAmount.toString(),
         remainingAmount: session.bill!.remainingAmount.toString(),
       }));

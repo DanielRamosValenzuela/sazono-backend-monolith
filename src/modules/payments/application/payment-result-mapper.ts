@@ -25,6 +25,7 @@ export function mapPaymentResult(
       billId: billAfterPayment.billId,
       status: billAfterPayment.status,
       subtotalAmount: billAfterPayment.subtotalAmount.toString(),
+      discountAmount: billAfterPayment.discountAmount.toString(),
       tipAmount: billAfterPayment.tipAmount.toString(),
       totalAmount: billAfterPayment.totalAmount.toString(),
       remainingAmount: billAfterPayment.remainingAmount.toString(),

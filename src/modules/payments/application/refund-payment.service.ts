@@ -28,12 +28,16 @@ import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import {
   computeRefundBreakdown,
   computeRefundNet,
+  computeRefundable,
 } from '../domain/refund-amounts';
 import { resolveRefundMode } from '../domain/refund-mode';
 import type {
   CreateRefundDto,
   RefundResultResponseDto,
 } from '../presentation/http/dto/refunds.dto';
+import { computeLineRefundAmount } from '../domain/refund-items';
+import { lockBill } from '../../billing/application/lock-bill';
+import { findOpenCashSessionId } from './find-open-cash-session';
 import { RefundGatewayService } from './refund-gateway.service';
 import {
   ACTIVE_ORDER_STATUSES,
@@ -46,6 +50,26 @@ import {
 export type RefundRequestMeta = {
   ip: string | null;
   userAgent: string | null;
+};
+
+export type ItemsRefundPlan = {
+  billId: string;
+  items: { billItemId: string; quantity: number; kitchenWaste?: boolean }[];
+};
+
+export type PlannedRefundLine = {
+  billItemId: string;
+  orderItemId: string | null;
+  menuItemId: string | null;
+  preparationStationId: string | null;
+  name: string;
+  categoryPath: string[];
+  quantity: number;
+  previousRefundedQuantity: number;
+  discountAmount: Prisma.Decimal;
+  availableQuantity: number;
+  amount: Prisma.Decimal;
+  kitchenWaste: boolean;
 };
 
 const APPROVAL_FAILURE_WINDOW_MS = 15 * 60 * 1000;
@@ -84,6 +108,7 @@ export class RefundPaymentService {
     idempotencyKey: string,
     dto: CreateRefundDto,
     requestMeta: RefundRequestMeta,
+    plan?: ItemsRefundPlan,
   ): Promise<RefundResultResponseDto> {
     const context = await this.branchAccessService.ensureAccess(
       authUser,
@@ -93,9 +118,9 @@ export class RefundPaymentService {
     );
     const isAdmin = context.roles.includes(Role.ADMIN);
     const requestedByRole = isAdmin ? Role.ADMIN : Role.CASHIER;
-    const amount = new Prisma.Decimal(dto.amount);
+    let amount = new Prisma.Decimal(dto.amount);
 
-    if (amount.lte(0)) {
+    if (!plan && amount.lte(0)) {
       throw new BadRequestException({
         message: 'El monto debe ser mayor a cero.',
         code: 'REFUND_AMOUNT_INVALID',
@@ -107,6 +132,13 @@ export class RefundPaymentService {
     if (!payment) {
       throw new NotFoundException({
         message: 'El pago indicado no existe en esta sucursal.',
+        code: 'PAYMENT_NOT_FOUND',
+      });
+    }
+
+    if (plan && payment.billId !== plan.billId) {
+      throw new NotFoundException({
+        message: 'El pago indicado no pertenece a esta cuenta.',
         code: 'PAYMENT_NOT_FOUND',
       });
     }
@@ -132,10 +164,11 @@ export class RefundPaymentService {
       where: { branchId },
     });
     const refundTip = dto.refundTip ?? settings?.refundTipDefault ?? false;
-    const explicitTip =
+    let explicitTip =
       refundTip && dto.tipAmount !== undefined
         ? new Prisma.Decimal(dto.tipAmount)
         : undefined;
+    let plannedLines: PlannedRefundLine[] = [];
     const fingerprint = createHash('sha256')
       .update(
         [
@@ -145,6 +178,10 @@ export class RefundPaymentService {
           dto.reasonCode,
           dto.reasonText.trim(),
           ...(dto.registerAsManual ? ['manual'] : []),
+          ...(plan?.items ?? []).map(
+            (item) =>
+              `${item.billItemId}:${item.quantity}:${item.kitchenWaste ? 1 : 0}`,
+          ),
         ].join('|'),
       )
       .digest('hex');
@@ -153,6 +190,14 @@ export class RefundPaymentService {
 
     if (existing) {
       return this.replay(existing, context.staffUserId, fingerprint);
+    }
+
+    if (plan) {
+      const planned = await this.planItems(payment, plan, refundTip);
+
+      plannedLines = planned.lines;
+      amount = planned.amount;
+      explicitTip = refundTip ? planned.tipAmount : undefined;
     }
 
     const mode = resolveRefundMode({
@@ -179,8 +224,8 @@ export class RefundPaymentService {
       amount,
       refundTip,
       tipAmount:
-        dto.tipAmount === undefined
-          ? undefined
+        plan || dto.tipAmount === undefined
+          ? explicitTip
           : new Prisma.Decimal(dto.tipAmount),
     });
 
@@ -269,6 +314,10 @@ export class RefundPaymentService {
 
     try {
       outcome = await this.prisma.$transaction(async (tx) => {
+        if (plannedLines.length > 0) {
+          await lockBill(tx, payment.billId);
+        }
+
         if (limit !== null && !approvedByStaffUserId) {
           await tx.$executeRaw(
             Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`refund-limit:${context.staffUserId}:${branchId}`}))`,
@@ -327,6 +376,27 @@ export class RefundPaymentService {
           consumptionAmount,
         );
 
+        for (const line of plannedLines) {
+          const changed = await tx.$executeRaw(Prisma.sql`
+            UPDATE bill_items
+            SET refunded_quantity = refunded_quantity + ${line.quantity},
+                updated_at = now()
+            WHERE id = ${line.billItemId}::uuid
+              AND status::text = 'OPEN'
+              AND refunded_quantity = ${line.previousRefundedQuantity}
+              AND discount_amount = ${line.discountAmount.toFixed(2)}::numeric
+              AND refunded_quantity + ${line.quantity} <= quantity
+          `);
+
+          if (changed === 0) {
+            throw new ConflictException({
+              message:
+                'Las cantidades reembolsables de la cuenta cambiaron. Recarga e intenta de nuevo.',
+              code: 'REFUND_ITEMS_CONFLICT',
+            });
+          }
+        }
+
         const refund = await tx.refund.create({
           data: {
             restaurantId: context.restaurantId,
@@ -352,6 +422,23 @@ export class RefundPaymentService {
               ? 'PENDING'
               : 'NOT_REQUIRED',
             completedAt: isGateway ? null : now,
+            ...(plannedLines.length > 0
+              ? {
+                  items: {
+                    create: plannedLines.map((line) => ({
+                      billItemId: line.billItemId,
+                      orderItemId: line.orderItemId,
+                      menuItemId: line.menuItemId,
+                      preparationStationId: line.preparationStationId,
+                      nameSnapshot: line.name,
+                      categoryPathSnapshot: line.categoryPath,
+                      quantity: line.quantity,
+                      amount: line.amount,
+                      kitchenWaste: line.kitchenWaste,
+                    })),
+                  },
+                }
+              : {}),
           },
           include: REFUND_INCLUDE,
         });
@@ -365,6 +452,19 @@ export class RefundPaymentService {
         let cashMovementId: string | null = null;
 
         if (method === RefundMethod.CASH_MANUAL) {
+          const cashSessionId = await findOpenCashSessionId(
+            tx,
+            branchId,
+            context.staffUserId,
+          );
+
+          if (!cashSessionId && settings?.requireOpenCashSession) {
+            throw new ConflictException({
+              message: 'Debes abrir tu caja antes de registrar este reembolso.',
+              code: 'CASH_SESSION_REQUIRED',
+            });
+          }
+
           const movement = await tx.cashMovement.create({
             data: {
               branchId,
@@ -373,6 +473,7 @@ export class RefundPaymentService {
               reason: reasonText,
               paymentId: payment.id,
               refundId: refund.id,
+              cashSessionId,
               staffUserId: context.staffUserId,
             },
             select: { id: true },
@@ -419,6 +520,17 @@ export class RefundPaymentService {
             paymentRefundedTipAmount: refundedTipAmount.toString(),
             billRefundedAmount: bill.refundedAmount.toString(),
             cashMovementId,
+            ...(plannedLines.length > 0
+              ? {
+                  items: plannedLines.map((line) => ({
+                    billItemId: line.billItemId,
+                    name: line.name,
+                    quantity: line.quantity,
+                    amount: line.amount.toString(),
+                    kitchenWaste: line.kitchenWaste,
+                  })),
+                }
+              : {}),
             orders: orders.map((order) => ({
               id: order.id,
               status: order.status,
@@ -525,6 +637,135 @@ export class RefundPaymentService {
       billActiveOrders: outcome.activeOrders,
       idempotentReplay: false,
     };
+  }
+
+  async planItems(
+    payment: Prisma.PaymentGetPayload<object>,
+    plan: ItemsRefundPlan,
+    refundTip: boolean,
+  ): Promise<{
+    lines: PlannedRefundLine[];
+    amount: Prisma.Decimal;
+    consumptionAmount: Prisma.Decimal;
+    tipAmount: Prisma.Decimal;
+  }> {
+    const ids = plan.items.map((item) => item.billItemId);
+
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException({
+        message: 'Una linea no puede repetirse en la solicitud.',
+        code: 'REFUND_ITEMS_DUPLICATED',
+      });
+    }
+
+    const billItems = await this.prisma.billItem.findMany({
+      where: { id: { in: ids }, billId: plan.billId, status: 'OPEN' },
+      include: {
+        orderItem: {
+          select: {
+            menuItemId: true,
+            preparationStationId: true,
+            nameSnapshot: true,
+            categoryPathSnapshot: true,
+          },
+        },
+        refundItems: {
+          where: { refund: { status: { not: RefundStatus.FAILED } } },
+          select: { amount: true },
+        },
+      },
+    });
+    const byId = new Map(billItems.map((item) => [item.id, item]));
+    const lines: PlannedRefundLine[] = [];
+
+    for (const requested of plan.items) {
+      const item = byId.get(requested.billItemId);
+
+      if (!item) {
+        throw new NotFoundException({
+          message: 'Una de las lineas no existe en esta cuenta.',
+          code: 'BILL_ITEM_NOT_FOUND',
+        });
+      }
+
+      const availableQuantity = item.quantity - item.refundedQuantity;
+
+      if (requested.quantity > availableQuantity) {
+        throw new ConflictException({
+          message: `No quedan ${requested.quantity} unidades reembolsables de ${item.description}.`,
+          code: 'REFUND_ITEM_QUANTITY_EXCEEDED',
+          billItemId: item.id,
+          availableQuantity,
+        });
+      }
+
+      const refundedAmount = item.refundItems.reduce(
+        (sum, refundItem) => sum.add(refundItem.amount),
+        new Prisma.Decimal(0),
+      );
+
+      lines.push({
+        billItemId: item.id,
+        orderItemId: item.orderItemId,
+        menuItemId: item.orderItem?.menuItemId ?? null,
+        preparationStationId: item.orderItem?.preparationStationId ?? null,
+        name: item.orderItem?.nameSnapshot ?? item.description,
+        categoryPath: item.orderItem?.categoryPathSnapshot ?? [],
+        quantity: requested.quantity,
+        previousRefundedQuantity: item.refundedQuantity,
+        discountAmount: item.discountAmount,
+        availableQuantity,
+        amount: computeLineRefundAmount({
+          quantity: item.quantity,
+          refundedQuantity: item.refundedQuantity,
+          netAmount: item.totalPrice.sub(item.discountAmount),
+          refundedAmount,
+          requested: requested.quantity,
+        }),
+        kitchenWaste: requested.kitchenWaste ?? false,
+      });
+    }
+
+    const consumptionAmount = lines.reduce(
+      (sum, line) => sum.add(line.amount),
+      new Prisma.Decimal(0),
+    );
+    const refundable = computeRefundable(payment);
+    const paymentConsumption = payment.amount.sub(payment.tipAmount);
+    let tipAmount = new Prisma.Decimal(0);
+
+    if (refundTip && paymentConsumption.gt(0)) {
+      tipAmount = Prisma.Decimal.min(
+        refundable.tip,
+        consumptionAmount
+          .mul(payment.tipAmount)
+          .div(paymentConsumption)
+          .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP),
+      );
+    }
+
+    if (consumptionAmount.gt(refundable.consumption)) {
+      throw new ConflictException({
+        message: `Los productos suman mas de lo reembolsable de este pago (maximo ${refundable.consumption.toString()}).`,
+        code: 'REFUND_ITEMS_EXCEED_PAYMENT',
+        refundable: {
+          total: refundable.total.toString(),
+          consumption: refundable.consumption.toString(),
+          tip: refundable.tip.toString(),
+        },
+      });
+    }
+
+    const amount = consumptionAmount.add(tipAmount);
+
+    if (amount.lte(0)) {
+      throw new BadRequestException({
+        message: 'El monto a reembolsar debe ser mayor a cero.',
+        code: 'REFUND_AMOUNT_INVALID',
+      });
+    }
+
+    return { lines, amount, consumptionAmount, tipAmount };
   }
 
   private loadPayment(branchId: string, paymentId: string) {

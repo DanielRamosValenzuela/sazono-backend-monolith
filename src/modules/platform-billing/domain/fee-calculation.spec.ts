@@ -40,7 +40,7 @@ describe('computeFee', () => {
     );
   });
 
-  it('subtracts refunds and discounts', () => {
+  it('subtracts refunds and ignores informational discounts', () => {
     const result = computeFee({
       ...base,
       gross: D(100_000),
@@ -48,8 +48,8 @@ describe('computeFee', () => {
       discounts: D(10_000),
     });
 
-    expect(result.netSales.toString()).toBe('60000');
-    expect(result.feeAmount.toString()).toBe('600');
+    expect(result.netSales.toString()).toBe('70000');
+    expect(result.feeAmount.toString()).toBe('700');
   });
 
   it('charges zero and carries a negative base to the next month', () => {

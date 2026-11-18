@@ -260,12 +260,14 @@ describe('GetSalesByOrderService with refunds', () => {
   const findBillPageMock = jest.fn();
   const findMethodTotalsMock = jest.fn();
   const findRefundsByMethodMock = jest.fn();
+  const findDiscountOnlyTotalMock = jest.fn();
   const service = new GetSalesByOrderService(
     { resolve: resolveMock } as unknown as ReportScopeService,
     {
       findBillPage: findBillPageMock,
       findMethodTotals: findMethodTotalsMock,
       findRefundsByMethod: findRefundsByMethodMock,
+      findDiscountOnlyTotal: findDiscountOnlyTotalMock,
     } as unknown as ReportsPrismaRepository,
   );
 

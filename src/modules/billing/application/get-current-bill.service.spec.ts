@@ -22,6 +22,7 @@ describe('GetCurrentBillService', () => {
       tipAmount: Prisma.Decimal;
       totalAmount: Prisma.Decimal;
       remainingAmount: Prisma.Decimal;
+      discountAmount: Prisma.Decimal;
       openedAt: Date;
       closedAt: Date | null;
       closeReason: string | null;
@@ -66,6 +67,7 @@ describe('GetCurrentBillService', () => {
         tipAmount: new Prisma.Decimal('0'),
         totalAmount: new Prisma.Decimal('10000'),
         remainingAmount: new Prisma.Decimal('10000'),
+        discountAmount: new Prisma.Decimal('0'),
         openedAt: new Date('2026-07-03T12:00:00.000Z'),
         closedAt: null,
         closeReason: null,
@@ -116,6 +118,7 @@ describe('GetCurrentBillService', () => {
       tipAmount: new Prisma.Decimal('0'),
       totalAmount: new Prisma.Decimal('0'),
       remainingAmount: new Prisma.Decimal('0'),
+      discountAmount: new Prisma.Decimal('0'),
       openedAt: new Date('2026-07-03T12:00:00.000Z'),
       closedAt: null,
       closeReason: null,

@@ -45,8 +45,11 @@ type Overrides = {
   settings?: {
     cashierRefundLimit: Prisma.Decimal | null;
     refundTipDefault: boolean;
+    requireOpenCashSession?: boolean;
   } | null;
   orders?: Array<{ id: string; status: OrderStatus }>;
+  billItems?: Array<Record<string, unknown>>;
+  itemUpdateResult?: number;
   gatewayFinalStatus?: RefundStatus;
   dayTotal?: Prisma.Decimal;
   lockedDayTotal?: Prisma.Decimal;
@@ -96,6 +99,14 @@ function build(overrides: Overrides = {}) {
   let seq = 0;
 
   const queryRaw = jest.fn((sql: Prisma.Sql) => {
+    if (sql.sql.includes('cash_sessions')) {
+      return Promise.resolve([]);
+    }
+
+    if (sql.sql.includes('FROM bills')) {
+      return Promise.resolve([{ '?column?': 1 }]);
+    }
+
     const [amount, tip] = sql.values as [string, string];
     const nextAmount = state.refundedAmount.add(amount);
     const nextTip = state.refundedTipAmount.add(tip);
@@ -125,47 +136,61 @@ function build(overrides: Overrides = {}) {
 
   const tx = {
     $queryRaw: queryRaw,
-    $executeRaw: jest.fn().mockResolvedValue(1),
+    $executeRaw: jest.fn().mockResolvedValue(overrides.itemUpdateResult ?? 1),
     refund: {
       aggregate: jest.fn().mockResolvedValue({
         _sum: {
           amount: overrides.lockedDayTotal ?? overrides.dayTotal ?? null,
         },
       }),
-      create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
-        const duplicate = refunds.find(
-          (row) => row.idempotencyKey === data.idempotencyKey,
-        );
+      create: jest.fn(
+        ({
+          data,
+        }: {
+          data: Record<string, unknown> & {
+            items?: { create: Record<string, unknown>[] };
+          };
+        }) => {
+          const duplicate = refunds.find(
+            (row) => row.idempotencyKey === data.idempotencyKey,
+          );
 
-        if (duplicate) {
-          throw new Prisma.PrismaClientKnownRequestError('dup', {
-            code: 'P2002',
-            clientVersion: 'test',
-          });
-        }
+          if (duplicate) {
+            throw new Prisma.PrismaClientKnownRequestError('dup', {
+              code: 'P2002',
+              clientVersion: 'test',
+            });
+          }
 
-        seq += 1;
-        const row = {
-          id: `refund-${seq}`,
-          createdAt: NOW,
-          updatedAt: NOW,
-          requestedBy: {
-            id: data.requestedByStaffUserId,
-            firstName: 'Caro',
-            lastName: 'Cajera',
-          },
-          approvedBy: data.approvedByStaffUserId
-            ? {
-                id: data.approvedByStaffUserId,
-                firstName: 'Ada',
-                lastName: 'Admin',
-              }
-            : null,
-          ...data,
-        };
-        refunds.push(row);
-        return Promise.resolve(row);
-      }),
+          seq += 1;
+          const row = {
+            id: `refund-${seq}`,
+            createdAt: NOW,
+            updatedAt: NOW,
+            requestedBy: {
+              id: data.requestedByStaffUserId,
+              firstName: 'Caro',
+              lastName: 'Cajera',
+            },
+            approvedBy: data.approvedByStaffUserId
+              ? {
+                  id: data.approvedByStaffUserId,
+                  firstName: 'Ada',
+                  lastName: 'Admin',
+                }
+              : null,
+            ...data,
+            items: (data.items?.create ?? []).map(
+              (item: Record<string, unknown>, index: number) => ({
+                id: `ri-${index}`,
+                ...item,
+              }),
+            ),
+          };
+          refunds.push(row);
+          return Promise.resolve(row);
+        },
+      ),
     },
     bill: {
       update: jest.fn(
@@ -198,6 +223,9 @@ function build(overrides: Overrides = {}) {
     payment: {
       findFirst: jest.fn(() => Promise.resolve(currentPayment())),
       findUniqueOrThrow: jest.fn(() => Promise.resolve(currentPayment())),
+    },
+    billItem: {
+      findMany: jest.fn().mockResolvedValue(overrides.billItems ?? []),
     },
     branchSettings: {
       findUnique: jest
@@ -375,6 +403,7 @@ describe('RefundPaymentService', () => {
           role: 'CASHIER',
         },
         approvedBy: null,
+        items: [],
       });
       expect(result.payment.refundable).toEqual({
         total: '0',
@@ -518,6 +547,21 @@ describe('RefundPaymentService', () => {
         refundable: { total: '8000', consumption: '7000', tip: '1000' },
       });
       expect(ctx.prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('requires an open cash session for a cash refund when the branch demands it', async () => {
+      const ctx = build({
+        settings: {
+          cashierRefundLimit: null,
+          refundTipDefault: false,
+          requireOpenCashSession: true,
+        },
+      });
+
+      const { code } = await codeOf(run(ctx));
+
+      expect(code).toBe('CASH_SESSION_REQUIRED');
+      expect(ctx.cashMovements).toHaveLength(0);
     });
 
     it('rejects a zero amount', async () => {
@@ -1368,5 +1412,213 @@ describe('RefundPaymentService', () => {
       expect(code).toBe('REFUND_EXCEEDS_REFUNDABLE');
       expect(ctx.dispatch).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('RefundPaymentService by item', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const line = (overrides: Record<string, unknown> = {}) => ({
+    id: 'line-1',
+    description: 'Pizza',
+    orderItemId: 'oi-1',
+    quantity: 2,
+    refundedQuantity: 0,
+    totalPrice: d(18000),
+    discountAmount: d(1800),
+    orderItem: {
+      menuItemId: 'menu-1',
+      preparationStationId: 'station-1',
+      nameSnapshot: 'Pizza',
+      categoryPathSnapshot: ['Comida', 'Pizzas'],
+    },
+    refundItems: [],
+    ...overrides,
+  });
+
+  const runItems = (
+    ctx: ReturnType<typeof build>,
+    items: { billItemId: string; quantity: number; kitchenWaste?: boolean }[],
+    body: Partial<CreateRefundDto> = {},
+    billId = 'bill-1',
+  ) =>
+    ctx.service.execute(
+      authUser,
+      'branch-1',
+      'payment-1',
+      'key-aaaa-0001',
+      dto({ amount: '0', ...body }),
+      meta,
+      { billId, items },
+    );
+
+  it('refunds one unit net of the line discount and stores the snapshot', async () => {
+    const ctx = build({ billItems: [line()] });
+    const result = await runItems(ctx, [
+      { billItemId: 'line-1', quantity: 1, kitchenWaste: true },
+    ]);
+
+    expect(result.refund.amount).toBe('8100');
+    expect(result.refund.items).toEqual([
+      {
+        billItemId: 'line-1',
+        name: 'Pizza',
+        quantity: 1,
+        amount: '8100',
+        kitchenWaste: true,
+      },
+    ]);
+    expect(ctx.state.refundedAmount.toString()).toBe('8100');
+    expect(ctx.tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(ctx.refunds[0]).toMatchObject({
+      items: [
+        expect.objectContaining({
+          categoryPathSnapshot: ['Comida', 'Pizzas'],
+          preparationStationId: 'station-1',
+        }),
+      ],
+    });
+  });
+
+  it('closes the last unit with what is left of the line', async () => {
+    const ctx = build({
+      billItems: [
+        line({
+          quantity: 3,
+          refundedQuantity: 2,
+          totalPrice: d(10000),
+          discountAmount: d(0),
+          refundItems: [{ amount: d(6667) }],
+        }),
+      ],
+    });
+    const result = await runItems(ctx, [{ billItemId: 'line-1', quantity: 1 }]);
+
+    expect(result.refund.amount).toBe('3333');
+  });
+
+  it('adds a proportional tip when refundTip is set', async () => {
+    const ctx = build({
+      billItems: [line({ discountAmount: d(0), totalPrice: d(10000) })],
+    });
+    const result = await runItems(
+      ctx,
+      [{ billItemId: 'line-1', quantity: 2 }],
+      { refundTip: true },
+    );
+
+    expect(result.refund.tipAmount).toBe('1000');
+    expect(result.refund.amount).toBe('11000');
+  });
+
+  it('rejects when the products exceed what the payment can refund', async () => {
+    const ctx = build({
+      billItems: [
+        line({ quantity: 1, totalPrice: d(10500), discountAmount: d(0) }),
+      ],
+    });
+    const { code } = await codeOf(
+      runItems(ctx, [{ billItemId: 'line-1', quantity: 1 }]),
+    );
+
+    expect(code).toBe('REFUND_ITEMS_EXCEED_PAYMENT');
+    expect(ctx.refunds).toHaveLength(0);
+  });
+
+  it('rejects more units than the line has left', async () => {
+    const ctx = build({ billItems: [line({ refundedQuantity: 1 })] });
+    const { code } = await codeOf(
+      runItems(ctx, [{ billItemId: 'line-1', quantity: 2 }]),
+    );
+
+    expect(code).toBe('REFUND_ITEM_QUANTITY_EXCEEDED');
+  });
+
+  it('rejects a line that is not in the bill', async () => {
+    const ctx = build({ billItems: [] });
+    const { code } = await codeOf(
+      runItems(ctx, [{ billItemId: 'line-9', quantity: 1 }]),
+    );
+
+    expect(code).toBe('BILL_ITEM_NOT_FOUND');
+  });
+
+  it('rejects repeated lines', async () => {
+    const ctx = build({ billItems: [line()] });
+    const { code } = await codeOf(
+      runItems(ctx, [
+        { billItemId: 'line-1', quantity: 1 },
+        { billItemId: 'line-1', quantity: 1 },
+      ]),
+    );
+
+    expect(code).toBe('REFUND_ITEMS_DUPLICATED');
+  });
+
+  it('fails when another refund took the units first', async () => {
+    const ctx = build({ billItems: [line()], itemUpdateResult: 0 });
+    const { code } = await codeOf(
+      runItems(ctx, [{ billItemId: 'line-1', quantity: 1 }]),
+    );
+
+    expect(code).toBe('REFUND_ITEMS_CONFLICT');
+  });
+
+  it('locks the bill before touching the lines and guards on the planned discount', async () => {
+    const ctx = build({ billItems: [line()] });
+
+    await runItems(ctx, [{ billItemId: 'line-1', quantity: 1 }]);
+
+    const lockCall = ctx.queryRaw.mock.calls.findIndex(([sql]) =>
+      sql.sql.includes('FROM bills'),
+    );
+    const update = ctx.tx.$executeRaw.mock.calls[0] as [Prisma.Sql];
+
+    expect(lockCall).toBeGreaterThanOrEqual(0);
+    expect(ctx.queryRaw.mock.invocationCallOrder[lockCall]).toBeLessThan(
+      ctx.tx.$executeRaw.mock.invocationCallOrder[0],
+    );
+    expect(update[0].sql).toContain('discount_amount =');
+    expect(update[0].values).toContain('1800.00');
+  });
+
+  it('does not accept a payment from another bill', async () => {
+    const ctx = build({ billItems: [line()] });
+    const { code } = await codeOf(
+      runItems(ctx, [{ billItemId: 'line-1', quantity: 1 }], {}, 'bill-2'),
+    );
+
+    expect(code).toBe('PAYMENT_NOT_FOUND');
+  });
+
+  it('replays the same key without touching the lines again', async () => {
+    const ctx = build({ billItems: [line()] });
+    const items = [{ billItemId: 'line-1', quantity: 1 }];
+
+    await runItems(ctx, items);
+    const replay = await runItems(ctx, items);
+
+    expect(replay.idempotentReplay).toBe(true);
+    expect(ctx.refunds).toHaveLength(1);
+    expect(ctx.tx.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a different fingerprint when the items change', async () => {
+    const ctx = build({ billItems: [line()] });
+
+    await runItems(ctx, [{ billItemId: 'line-1', quantity: 1 }]);
+    const { code } = await codeOf(
+      runItems(ctx, [
+        { billItemId: 'line-1', quantity: 1, kitchenWaste: true },
+      ]),
+    );
+
+    expect(code).toBe('REFUND_IDEMPOTENCY_KEY_REUSED');
   });
 });

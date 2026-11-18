@@ -126,6 +126,9 @@ describe('ListBranchesService', () => {
           tableAssignmentEnabled: false,
           cashierRefundLimit: null,
           refundTipDefault: false,
+          requireOpenCashSession: false,
+          discountApprovalPercent: null,
+          discountApprovalAmount: null,
         },
       },
       {
@@ -143,6 +146,9 @@ describe('ListBranchesService', () => {
           tableAssignmentEnabled: false,
           cashierRefundLimit: null,
           refundTipDefault: false,
+          requireOpenCashSession: false,
+          discountApprovalPercent: '10',
+          discountApprovalAmount: null,
         },
       },
     ]);

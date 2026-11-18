@@ -172,6 +172,9 @@ export class BillSummaryResponseDto {
   @ApiProperty({ example: '23600' })
   subtotalAmount!: string;
 
+  @ApiProperty({ example: '0' })
+  discountAmount!: string;
+
   @ApiProperty({ example: '1000' })
   tipAmount!: string;
 

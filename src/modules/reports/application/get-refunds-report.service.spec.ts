@@ -96,6 +96,7 @@ describe('buildRefundsReportRow', () => {
     const row = buildRefundsReportRow(record());
 
     expect(row).toEqual({
+      items: [],
       refundId: R1,
       completedAt: '2026-07-16T03:30:00.000Z',
       billId: '66666666-6666-4666-8666-666666666666',
@@ -122,6 +123,32 @@ describe('buildRefundsReportRow', () => {
       creditNoteFolio: null,
       billHasActiveOrders: true,
     });
+  });
+
+  it('maps the refunded items', () => {
+    const row = buildRefundsReportRow(
+      record({
+        items: [
+          {
+            bill_item_id: 'bi-1',
+            name: 'Pizza',
+            quantity: 2,
+            amount: '6000.00',
+            kitchen_waste: true,
+          },
+        ],
+      }),
+    );
+
+    expect(row.items).toEqual([
+      {
+        billItemId: 'bi-1',
+        name: 'Pizza',
+        quantity: 2,
+        amount: '6000',
+        kitchenWaste: true,
+      },
+    ]);
   });
 
   it('labels an unclassified payment method', () => {

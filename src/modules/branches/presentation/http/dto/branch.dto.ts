@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -80,6 +81,41 @@ class UpdateBranchSettingsDto {
   @IsOptional()
   @IsBoolean()
   refundTipDefault?: boolean;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 10,
+    description:
+      'Descuento acumulado de la cuenta (en porcentaje) sobre el cual se exige el PIN de un administrador. Null desactiva este umbral.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  discountApprovalPercent?: number | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 5000,
+    description:
+      'Descuento acumulado de la cuenta (en pesos) sobre el cual se exige el PIN de un administrador. Null desactiva este umbral.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(9999999999)
+  discountApprovalAmount?: number | null;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Exige una caja abierta para cobrar en efectivo, mover efectivo y devolver efectivo.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  requireOpenCashSession?: boolean;
 }
 
 export class UpdateBranchDto {
@@ -137,6 +173,15 @@ class BranchSettingsResponseDto {
 
   @ApiProperty()
   refundTipDefault!: boolean;
+
+  @ApiProperty({ nullable: true, required: false })
+  discountApprovalPercent!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  discountApprovalAmount!: string | null;
+
+  @ApiProperty()
+  requireOpenCashSession!: boolean;
 }
 
 export class BranchResponseDto {

@@ -341,6 +341,9 @@ export class CounterSessionBillDto {
   @ApiProperty({ enum: BillStatus, enumName: 'BillStatus' })
   status!: BillStatus;
 
+  @ApiProperty({ example: '0.00' })
+  discount!: string;
+
   @ApiProperty({ example: '4500.00' })
   total!: string;
 
