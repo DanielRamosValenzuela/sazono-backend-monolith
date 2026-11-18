@@ -1,5 +1,8 @@
 import { Prisma } from '@prisma/client';
-import type { GatewayChargeContext } from '../../application/ports/payment-gateway.port';
+import type {
+  GatewayChargeContext,
+  GatewayRefundContext,
+} from '../../application/ports/payment-gateway.port';
 import type { MercadoPagoConfigService } from './mercado-pago-config.service';
 
 const createMock = jest.fn();
@@ -9,6 +12,11 @@ const orderCreateMock = jest.fn();
 const orderGetMock = jest.fn();
 const orderCancelMock = jest.fn();
 const orderSearchMock = jest.fn();
+const orderRefundMock = jest.fn();
+const refundTotalMock = jest.fn();
+const refundCreateMock = jest.fn();
+const refundListMock = jest.fn();
+const paymentRefundClientMock = jest.fn();
 const mercadoPagoConfigMock = jest.fn();
 const paymentClientMock = jest.fn();
 const orderClientMock = jest.fn();
@@ -17,6 +25,7 @@ jest.mock('mercadopago', () => ({
   MercadoPagoConfig: mercadoPagoConfigMock,
   Payment: paymentClientMock,
   Order: orderClientMock,
+  PaymentRefund: paymentRefundClientMock,
 }));
 
 import { MercadoPagoGatewayAdapter } from './mercado-pago-gateway.adapter';
@@ -55,6 +64,12 @@ describe('MercadoPagoGatewayAdapter', () => {
       get: orderGetMock,
       cancel: orderCancelMock,
       search: orderSearchMock,
+      refund: orderRefundMock,
+    }));
+    paymentRefundClientMock.mockImplementation(() => ({
+      total: refundTotalMock,
+      create: refundCreateMock,
+      list: refundListMock,
     }));
     mercadoPagoConfig = {
       timeoutMs: 15000,
@@ -234,6 +249,8 @@ describe('MercadoPagoGatewayAdapter', () => {
       rawStatusDetail: undefined,
       amount: '11800',
       currency: 'CLP',
+      refunds: [],
+      chargedBack: false,
       paymentMethod: 'MERCADO_PAGO',
       gatewayMeta: {
         transactionId: '128',
@@ -474,6 +491,8 @@ describe('MercadoPagoGatewayAdapter', () => {
         amount: '11800',
         currency: 'CLP',
         externalReference: 'attempt-7',
+        refunds: [],
+        chargedBack: false,
         paymentMethod: 'MERCADO_PAGO',
         gatewayMeta: {
           transactionId: null,
@@ -521,6 +540,194 @@ describe('MercadoPagoGatewayAdapter', () => {
       orderGetMock.mockRejectedValue(new Error('not found'));
 
       expect(await adapter.getPayment('ORD8', credentials)).toBeNull();
+    });
+  });
+
+  describe('refunds', () => {
+    const refundContext: GatewayRefundContext = {
+      restaurantId: 'restaurant-1',
+      refundId: 'refund-1',
+      idempotencyKey: 'refund-1',
+      providerReference: 'ORD1',
+      amount: new Prisma.Decimal(11800),
+      paymentAmount: new Prisma.Decimal(11800),
+      alreadyRefundedAmount: new Prisma.Decimal(0),
+      currency: 'CLP',
+      credentials,
+      gatewayMeta: { transactionId: 'PAY1' },
+    };
+
+    const useOrdersMode = () => {
+      (mercadoPagoConfig as unknown as { apiMode: string }).apiMode = 'orders';
+    };
+
+    it('refunds the whole order without a body in orders mode', async () => {
+      useOrdersMode();
+      orderRefundMock.mockResolvedValue({
+        status: 'refunded',
+        transactions: {
+          refunds: [{ id: 'REF1', amount: '11800', status: 'approved' }],
+        },
+      });
+
+      const outcome = await adapter.refund(refundContext);
+
+      expect(orderRefundMock).toHaveBeenCalledTimes(1);
+      const call = orderRefundMock.mock.calls[0] as [Record<string, unknown>];
+      expect(call[0].id).toBe('ORD1');
+      expect(call[0].body).toBeUndefined();
+      expect(call[0].requestOptions).toEqual({ idempotencyKey: 'refund-1' });
+      expect(outcome).toMatchObject({
+        kind: 'REFUNDED',
+        providerRefundReference: 'REF1',
+      });
+    });
+
+    it('sends transactions with id and amount for a partial refund', async () => {
+      useOrdersMode();
+      orderRefundMock.mockResolvedValue({
+        status: 'processed',
+        transactions: {
+          refunds: [{ id: 'REF2', amount: '3000', status: 'approved' }],
+        },
+      });
+
+      const outcome = await adapter.refund({
+        ...refundContext,
+        amount: new Prisma.Decimal(3000),
+      });
+
+      expect(orderRefundMock).toHaveBeenCalledWith({
+        id: 'ORD1',
+        body: { transactions: [{ id: 'PAY1', amount: '3000' }] },
+        requestOptions: { idempotencyKey: 'refund-1' },
+      });
+      expect(outcome.kind).toBe('REFUNDED');
+    });
+
+    it('resolves the transaction id with Order.get when gatewayMeta lacks it', async () => {
+      useOrdersMode();
+      orderGetMock.mockResolvedValue({
+        id: 'ORD1',
+        transactions: { payments: [{ id: 'PAY9' }] },
+      });
+      orderRefundMock.mockResolvedValue({
+        transactions: {
+          refunds: [{ id: 'REF3', amount: '3000', status: 'approved' }],
+        },
+      });
+
+      await adapter.refund({
+        ...refundContext,
+        amount: new Prisma.Decimal(3000),
+        gatewayMeta: null,
+      });
+
+      expect(orderGetMock).toHaveBeenCalledWith({ id: 'ORD1' });
+      expect(orderRefundMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: { transactions: [{ id: 'PAY9', amount: '3000' }] },
+        }),
+      );
+    });
+
+    it('rejects a partial refund when the transaction id cannot be resolved', async () => {
+      useOrdersMode();
+      orderGetMock.mockRejectedValue(new Error('boom'));
+
+      const outcome = await adapter.refund({
+        ...refundContext,
+        amount: new Prisma.Decimal(3000),
+        gatewayMeta: null,
+      });
+
+      expect(outcome).toMatchObject({ kind: 'REJECTED', retryable: false });
+      expect(orderRefundMock).not.toHaveBeenCalled();
+    });
+
+    it('answers PENDING while the refund is in process', async () => {
+      useOrdersMode();
+      orderRefundMock.mockResolvedValue({
+        transactions: {
+          refunds: [{ id: 'REF4', amount: '11800', status: 'in_process' }],
+        },
+      });
+
+      expect(await adapter.refund(refundContext)).toMatchObject({
+        kind: 'PENDING',
+        providerRefundReference: 'REF4',
+      });
+    });
+
+    it('maps a 4xx error to a non retryable rejection and 5xx or network errors to AMBIGUOUS', async () => {
+      useOrdersMode();
+      orderRefundMock.mockRejectedValueOnce({ status: 400, message: 'nope' });
+      expect(await adapter.refund(refundContext)).toMatchObject({
+        kind: 'REJECTED',
+        retryable: false,
+      });
+
+      orderRefundMock.mockRejectedValueOnce({ status: 503 });
+      expect((await adapter.refund(refundContext)).kind).toBe('AMBIGUOUS');
+
+      orderRefundMock.mockRejectedValueOnce(new Error('socket hang up'));
+      expect((await adapter.refund(refundContext)).kind).toBe('AMBIGUOUS');
+    });
+
+    it('uses the Payment refund client with the refund id as idempotency key in payments mode', async () => {
+      refundTotalMock.mockResolvedValue({ id: 77, status: 'approved' });
+      refundCreateMock.mockResolvedValue({
+        id: 78,
+        amount: 3000,
+        status: 'approved',
+      });
+
+      const total = await adapter.refund({
+        ...refundContext,
+        providerReference: '555',
+      });
+      const partial = await adapter.refund({
+        ...refundContext,
+        providerReference: '555',
+        amount: new Prisma.Decimal(3000),
+      });
+
+      expect(refundTotalMock).toHaveBeenCalledWith({
+        payment_id: '555',
+        requestOptions: { idempotencyKey: 'refund-1' },
+      });
+      expect(refundCreateMock).toHaveBeenCalledWith({
+        payment_id: '555',
+        body: { amount: 3000 },
+        requestOptions: { idempotencyKey: 'refund-1' },
+      });
+      expect(total.kind).toBe('REFUNDED');
+      expect(partial).toMatchObject({
+        kind: 'REFUNDED',
+        providerRefundReference: '78',
+      });
+    });
+
+    it('reports the refund state from the order refunds', async () => {
+      useOrdersMode();
+      orderGetMock.mockResolvedValue({
+        transactions: {
+          refunds: [{ id: 'REF1', amount: '11800', status: 'approved' }],
+        },
+      });
+      expect((await adapter.getRefundState(refundContext)).kind).toBe(
+        'REFUNDED',
+      );
+
+      orderGetMock.mockResolvedValue({ transactions: { refunds: [] } });
+      expect((await adapter.getRefundState(refundContext)).kind).toBe(
+        'NOT_REFUNDED',
+      );
+
+      orderGetMock.mockRejectedValue(new Error('down'));
+      expect((await adapter.getRefundState(refundContext)).kind).toBe(
+        'UNKNOWN',
+      );
     });
   });
 });

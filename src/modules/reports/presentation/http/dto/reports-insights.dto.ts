@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, OmitType, PickType } from '@nestjs/swagger';
-import { IsIn, IsOptional } from 'class-validator';
+import { IsIn, IsOptional, Matches } from 'class-validator';
 import { STAFF_ROLES } from '../../../application/get-sales-by-staff.service';
 import { KPI_COMPARES } from '../../../application/get-summary-kpis.service';
 import {
@@ -71,4 +71,15 @@ export class OpenTabsQueryDto extends PickType(ReportCommonFilterDto, [
   @IsOptional()
   @IsIn(['json', 'csv'])
   format?: 'json' | 'csv';
+}
+
+export class DailyZQueryDto {
+  @ApiPropertyOptional({
+    example: '2026-11-17',
+    description:
+      'Dia del Z (YYYY-MM-DD en la zona horaria del restaurante). Para CASHIER se ignora y se fuerza hoy.',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date?: string;
 }

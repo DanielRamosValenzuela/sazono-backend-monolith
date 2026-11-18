@@ -1,9 +1,13 @@
-﻿import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { BillStatus, Prisma, Role, TableSessionStatus } from '@prisma/client';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { GetCurrentBillService } from './get-current-bill.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
+
+jest.mock('./allocate-bill-number', () => ({
+  allocateBillNumber: jest.fn().mockResolvedValue(7),
+}));
 
 describe('GetCurrentBillService', () => {
   const findUniqueMock = jest.fn();
@@ -31,6 +35,8 @@ describe('GetCurrentBillService', () => {
     bill: {
       create: createBillMock,
     },
+    $transaction: (callback: (tx: unknown) => unknown) =>
+      callback({ bill: { create: createBillMock } }),
   } as unknown as PrismaService;
 
   const ensureAccessMock = jest.fn();
@@ -129,12 +135,14 @@ describe('GetCurrentBillService', () => {
       data: {
         tableSessionId: string;
         branchId: string;
+        number: number;
         status: BillStatus;
       };
     };
 
     expect(createBillArgs.data.tableSessionId).toBe('session-legacy');
     expect(createBillArgs.data.branchId).toBe('branch-1');
+    expect(createBillArgs.data.number).toBe(7);
     expect(createBillArgs.data.status).toBe(BillStatus.OPEN);
     expect(result.billId).toBe('bill-created');
   });

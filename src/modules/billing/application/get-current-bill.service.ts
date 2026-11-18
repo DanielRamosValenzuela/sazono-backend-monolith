@@ -1,9 +1,10 @@
-﻿import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { BillStatus, Role, TableSessionStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import type { BillResponseDto } from '../presentation/http/dto/billing.dto';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { allocateBillNumber } from './allocate-bill-number';
 
 @Injectable()
 export class GetCurrentBillService {
@@ -40,13 +41,16 @@ export class GetCurrentBillService {
       (tableSession.status === TableSessionStatus.CLOSED ||
       tableSession.status === TableSessionStatus.ABANDONED
         ? null
-        : await this.prisma.bill.create({
-            data: {
-              tableSessionId: tableSession.id,
-              branchId: tableSession.branchId,
-              status: BillStatus.OPEN,
-            },
-          }));
+        : await this.prisma.$transaction(async (tx) =>
+            tx.bill.create({
+              data: {
+                tableSessionId: tableSession.id,
+                branchId: tableSession.branchId,
+                number: await allocateBillNumber(tx, tableSession.branchId),
+                status: BillStatus.OPEN,
+              },
+            }),
+          ));
 
     if (!bill) {
       throw new BadRequestException(

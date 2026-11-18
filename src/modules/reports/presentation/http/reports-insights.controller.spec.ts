@@ -1,3 +1,4 @@
+import type { GetDailyZService } from '../../application/get-daily-z.service';
 import 'reflect-metadata';
 import { StreamableFile } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
@@ -53,6 +54,7 @@ describe('ReportsInsightsController', () => {
     services.tips as unknown as GetTipsReportService,
     services.tabs as unknown as GetOpenTabsService,
     services.kpis as unknown as GetSummaryKpisService,
+    { execute: jest.fn() } as unknown as GetDailyZService,
   );
   const calls: [
     string,

@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PaymentGatewayProvider, PaymentMethod } from '@prisma/client';
-import { MercadoPagoConfig, Order, Payment } from 'mercadopago';
+import { PaymentGatewayProvider, PaymentMethod, Prisma } from '@prisma/client';
+import { MercadoPagoConfig, Order, Payment, PaymentRefund } from 'mercadopago';
+import {
+  mapRemoteRefundOutcome,
+  resolveRemoteRefundState,
+} from '../../domain/gateway-refund-state';
 import { PaymentGatewayAdapter } from '../../domain/payment-gateway-adapter.decorator';
 import {
   MERCADOPAGO_PROVIDER_NAME,
@@ -16,6 +20,10 @@ import type {
   GatewayPaymentDetails,
   GatewayPaymentSnapshot,
   GatewayPendingChargeOutcome,
+  GatewayRefundContext,
+  GatewayRefundOutcome,
+  GatewayRefundState,
+  GatewayRemoteRefund,
   PaymentGatewayPort,
 } from '../../application/ports/payment-gateway.port';
 
@@ -25,6 +33,13 @@ const PENDING_FALLBACK_FAILURE_REASON =
   'El pago quedo en revision y fue cancelado por seguridad. Intenta con otro medio de pago.';
 const MISSING_CHECKOUT_PAYLOAD_FAILURE_REASON =
   'Falta el token de la tarjeta para completar el pago con Mercado Pago.';
+
+const MISSING_TRANSACTION_FAILURE_REASON =
+  'No pudimos identificar el pago dentro de Mercado Pago. Registra el reembolso como manual.';
+const REFUND_REJECTED_FAILURE_REASON =
+  'Mercado Pago no acepto el reembolso. Revisa que la cuenta de Mercado Pago del restaurante tenga saldo disponible o registralo como manual.';
+const REFUND_UNAUTHORIZED_FAILURE_REASON =
+  'La cuenta de Mercado Pago del restaurante no tiene permiso para reembolsar. Vuelve a conectarla o registra el reembolso como manual.';
 
 type MercadoPagoOrderResponse = Awaited<ReturnType<Order['create']>>;
 
@@ -153,6 +168,8 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
         amount: response.transaction_amount?.toString(),
         currency: response.currency_id,
         externalReference: response.external_reference ?? undefined,
+        refunds: this.mapPaymentRefunds(response.refunds ?? []),
+        chargedBack: response.status === 'charged_back',
         ...this.buildPaymentApiDetails(response),
       };
     } catch (error) {
@@ -275,6 +292,8 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
         amount: response.total_amount,
         currency: response.currency,
         externalReference: response.external_reference ?? undefined,
+        refunds: this.mapOrderRefunds(response),
+        chargedBack: (response.transactions?.chargebacks?.length ?? 0) > 0,
         ...this.buildOrderDetails(response),
       };
     } catch (error) {
@@ -401,6 +420,251 @@ export class MercadoPagoGatewayAdapter implements PaymentGatewayPort {
 
       return null;
     }
+  }
+
+  async refund(context: GatewayRefundContext): Promise<GatewayRefundOutcome> {
+    try {
+      return this.mercadoPagoConfig.apiMode === 'orders'
+        ? await this.refundOrder(context)
+        : await this.refundPayment(context);
+    } catch (error) {
+      return this.buildRefundErrorOutcome(error);
+    }
+  }
+
+  async getRefundState(
+    context: GatewayRefundContext,
+  ): Promise<GatewayRefundState> {
+    try {
+      const refunds =
+        this.mercadoPagoConfig.apiMode === 'orders'
+          ? await this.listOrderRefunds(context)
+          : await this.listPaymentRefunds(context);
+
+      return {
+        ...resolveRemoteRefundState({
+          refunds,
+          alreadyRefundedAmount: context.alreadyRefundedAmount,
+          amount: context.amount,
+          providerRefundReference: context.providerRefundReference,
+        }),
+        raw: { refunds },
+      };
+    } catch (error) {
+      this.logger.warn(this.describeError(error, 'getRefundState'));
+
+      return { kind: 'UNKNOWN' };
+    }
+  }
+
+  private isFullRefund(context: GatewayRefundContext): boolean {
+    return (
+      context.alreadyRefundedAmount.isZero() &&
+      context.amount.eq(context.paymentAmount)
+    );
+  }
+
+  private async refundOrder(
+    context: GatewayRefundContext,
+  ): Promise<GatewayRefundOutcome> {
+    const orderClient = this.buildOrderClient(context.credentials);
+    const amount = toOrderAmount(context.amount, context.currency);
+    let body:
+      { transactions: Array<{ id: string; amount: string }> } | undefined;
+
+    if (!this.isFullRefund(context)) {
+      const transactionId = await this.resolveTransactionId(
+        orderClient,
+        context,
+      );
+
+      if (!transactionId) {
+        return {
+          kind: 'REJECTED',
+          retryable: false,
+          code: 'MISSING_TRANSACTION_ID',
+          failureReason: MISSING_TRANSACTION_FAILURE_REASON,
+        };
+      }
+
+      body = { transactions: [{ id: transactionId, amount }] };
+    }
+
+    const response = await orderClient.refund({
+      id: context.providerReference,
+      ...(body ? { body } : {}),
+      requestOptions: { idempotencyKey: context.idempotencyKey },
+    });
+    const refunds = this.mapOrderRefunds(response);
+    const own = [...refunds]
+      .reverse()
+      .find((refund) => new Prisma.Decimal(refund.amount).eq(context.amount));
+
+    return this.buildRefundOutcome(own, {
+      orderStatus: response.status ?? null,
+      refunds,
+    });
+  }
+
+  private async refundPayment(
+    context: GatewayRefundContext,
+  ): Promise<GatewayRefundOutcome> {
+    const refundClient = new PaymentRefund(
+      this.buildSdkConfig(context.credentials),
+    );
+    const requestOptions = { idempotencyKey: context.idempotencyKey };
+    const response = this.isFullRefund(context)
+      ? await refundClient.total({
+          payment_id: context.providerReference,
+          requestOptions,
+        })
+      : await refundClient.create({
+          payment_id: context.providerReference,
+          body: { amount: toGatewayAmount(context.amount, context.currency) },
+          requestOptions,
+        });
+    const own: GatewayRemoteRefund | undefined =
+      response.id === undefined
+        ? undefined
+        : {
+            reference: String(response.id),
+            amount: String(response.amount ?? context.amount.toString()),
+            outcome: mapRemoteRefundOutcome(response.status),
+          };
+
+    return this.buildRefundOutcome(own, { status: response.status ?? null });
+  }
+
+  private buildRefundOutcome(
+    own: GatewayRemoteRefund | undefined,
+    raw: Prisma.InputJsonObject,
+  ): GatewayRefundOutcome {
+    if (own?.outcome === 'APPROVED') {
+      return { kind: 'REFUNDED', providerRefundReference: own.reference, raw };
+    }
+
+    if (own?.outcome === 'REJECTED') {
+      return {
+        kind: 'REJECTED',
+        retryable: false,
+        code: 'REFUND_REJECTED',
+        failureReason: REFUND_REJECTED_FAILURE_REASON,
+        raw,
+      };
+    }
+
+    return { kind: 'PENDING', providerRefundReference: own?.reference, raw };
+  }
+
+  private async resolveTransactionId(
+    orderClient: Order,
+    context: GatewayRefundContext,
+  ): Promise<string | null> {
+    const stored = context.gatewayMeta?.transactionId;
+
+    if (typeof stored === 'string' && stored.length > 0) {
+      return stored;
+    }
+
+    try {
+      const order = await orderClient.get({ id: context.providerReference });
+
+      return order.transactions?.payments?.[0]?.id ?? null;
+    } catch (error) {
+      this.logger.warn(this.describeError(error, 'refund-resolve-transaction'));
+
+      return null;
+    }
+  }
+
+  private mapOrderRefunds(
+    response: MercadoPagoOrderResponse,
+  ): GatewayRemoteRefund[] {
+    return (response.transactions?.refunds ?? []).flatMap((refund) =>
+      refund.id === undefined
+        ? []
+        : [
+            {
+              reference: refund.id,
+              amount: refund.amount ?? '0',
+              outcome: mapRemoteRefundOutcome(refund.status),
+            },
+          ],
+    );
+  }
+
+  private mapPaymentRefunds(
+    refunds: Array<{ id?: number; amount?: number; status?: string }>,
+  ): GatewayRemoteRefund[] {
+    return refunds.flatMap((refund) =>
+      refund.id === undefined
+        ? []
+        : [
+            {
+              reference: String(refund.id),
+              amount: String(refund.amount ?? 0),
+              outcome: mapRemoteRefundOutcome(refund.status),
+            },
+          ],
+    );
+  }
+
+  private async listOrderRefunds(
+    context: GatewayRefundContext,
+  ): Promise<GatewayRemoteRefund[]> {
+    const order = await this.buildOrderClient(context.credentials).get({
+      id: context.providerReference,
+    });
+
+    return this.mapOrderRefunds(order);
+  }
+
+  private async listPaymentRefunds(
+    context: GatewayRefundContext,
+  ): Promise<GatewayRemoteRefund[]> {
+    const refunds = await new PaymentRefund(
+      this.buildSdkConfig(context.credentials),
+    ).list({ payment_id: context.providerReference });
+
+    return this.mapPaymentRefunds(refunds);
+  }
+
+  private buildRefundErrorOutcome(error: unknown): GatewayRefundOutcome {
+    this.logger.error(this.describeError(error, 'refund'));
+    const payload =
+      error && typeof error === 'object'
+        ? (error as { status?: unknown; message?: unknown })
+        : {};
+    const status = typeof payload.status === 'number' ? payload.status : null;
+    const raw = {
+      status,
+      message:
+        typeof payload.message === 'string'
+          ? payload.message.slice(0, 300)
+          : null,
+    };
+
+    if (status === null || this.isAmbiguousOrderError(error)) {
+      return { kind: 'AMBIGUOUS', raw };
+    }
+
+    if (status === 401 || status === 403) {
+      return {
+        kind: 'REJECTED',
+        retryable: false,
+        code: 'UNAUTHORIZED',
+        failureReason: REFUND_UNAUTHORIZED_FAILURE_REASON,
+        raw,
+      };
+    }
+
+    return {
+      kind: 'REJECTED',
+      retryable: status === 429,
+      code: `HTTP_${status}`,
+      failureReason: REFUND_REJECTED_FAILURE_REASON,
+      raw,
+    };
   }
 
   private buildSdkConfig(credentials: GatewayCredentials): MercadoPagoConfig {

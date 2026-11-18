@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
+import { GetDailyZService } from './application/get-daily-z.service';
 import { GetFilterOptionsService } from './application/get-filter-options.service';
 import { GetOrderDetailService } from './application/get-order-detail.service';
 import { GetRefundsReportService } from './application/get-refunds-report.service';
@@ -15,6 +16,7 @@ import { GetSalesByTimeService } from './application/get-sales-by-time.service';
 import { GetSummaryKpisService } from './application/get-summary-kpis.service';
 import { GetTipsReportService } from './application/get-tips-report.service';
 import { ReportScopeService } from './application/report-scope.service';
+import { DailyZPrismaRepository } from './infrastructure/daily-z.prisma.repository';
 import { ReportsInsightsPrismaRepository } from './infrastructure/reports-insights.prisma.repository';
 import { ReportsPrismaRepository } from './infrastructure/reports.prisma.repository';
 import { ReportsInsightsController } from './presentation/http/reports-insights.controller';
@@ -36,6 +38,8 @@ import { ReportsController } from './presentation/http/reports.controller';
     GetTipsReportService,
     GetOpenTabsService,
     GetSummaryKpisService,
+    GetDailyZService,
+    DailyZPrismaRepository,
     ReportsInsightsPrismaRepository,
     ReportScopeService,
     ReportsPrismaRepository,

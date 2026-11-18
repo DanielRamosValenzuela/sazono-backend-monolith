@@ -201,6 +201,10 @@ class EnvironmentVariables {
   @Min(0)
   PAYMENTS_APPLICATION_FEE_BPS = 0;
 
+  @Transform(({ value }) => toBoolean(value, true))
+  @IsBoolean()
+  PLATFORM_FEE_SCHEDULER_ENABLED = true;
+
   @IsIn(['payments', 'orders'])
   MERCADOPAGO_API_MODE: 'payments' | 'orders' = 'payments';
 
@@ -253,6 +257,30 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   TRANSBANK_RECONCILIATION_MIN_AGE_MINUTES = 10;
+
+  @Transform(({ value }) => toBoolean(value, true))
+  @IsBoolean()
+  REFUND_RECONCILIATION_ENABLED = true;
+
+  @Transform(({ value }) => toNumber(value, 2 * 60 * 1000))
+  @IsInt()
+  @Min(1000)
+  REFUND_RECONCILIATION_INTERVAL_MS = 2 * 60 * 1000;
+
+  @Transform(({ value }) => toNumber(value, 2))
+  @IsInt()
+  @Min(1)
+  REFUND_RECONCILIATION_MIN_AGE_MINUTES = 2;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  REFUND_RECONCILIATION_MAX_ATTEMPTS = 10;
+
+  @Transform(({ value }) => toNumber(value, 48))
+  @IsInt()
+  @Min(1)
+  REFUND_RECONCILIATION_MAX_AGE_HOURS = 48;
 
   @Transform(({ value }) => toNumber(value, 10))
   @IsInt()

@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -18,6 +18,7 @@ import type {
   CloseTableSessionDto,
   TableSessionResponseDto,
 } from '../presentation/http/dto/floor.dto';
+import { allocateBillNumber } from '../../billing/application/allocate-bill-number';
 
 @Injectable()
 export class CloseTableSessionService {
@@ -65,6 +66,7 @@ export class CloseTableSessionService {
           data: {
             tableSessionId: existingSession.id,
             branchId: existingSession.branchId,
+            number: await allocateBillNumber(tx, existingSession.branchId),
             status: BillStatus.OPEN,
           },
         }));

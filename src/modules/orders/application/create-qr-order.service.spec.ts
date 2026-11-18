@@ -10,6 +10,10 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateQrOrderService } from './create-qr-order.service';
 import type { OrderableMenuItemResolverService } from './orderable-menu-item-resolver.service';
 
+jest.mock('../../billing/application/allocate-bill-number', () => ({
+  allocateBillNumber: jest.fn().mockResolvedValue(7),
+}));
+
 describe('CreateQrOrderService', () => {
   const tableFindUniqueMock = jest.fn();
   const orderFindUniqueOrThrowMock = jest.fn();

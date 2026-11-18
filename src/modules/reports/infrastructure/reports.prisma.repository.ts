@@ -112,6 +112,9 @@ export type BillRowRecord = {
   id: string;
   closed_at: Date;
   ticket_number: number | null;
+  bill_number?: number | null;
+  receipt_type?: string | null;
+  receipt_folio?: number | null;
   guest_count: number | null;
   table_name: string | null;
   zone_name: string | null;
@@ -363,6 +366,9 @@ export class ReportsPrismaRepository {
         pg.id::text AS id,
         pg.closed_at,
         pg.ticket_number,
+        pg.bill_number,
+        pg.receipt_type,
+        pg.receipt_folio,
         pg.guest_count,
         pg.table_name,
         pg.zone_name,

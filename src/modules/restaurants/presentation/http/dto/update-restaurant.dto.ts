@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -48,6 +49,37 @@ export class UpdateRestaurantDto {
   @IsString()
   @IsNotEmpty()
   legalName?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'RUT del contribuyente (se valida el digito verificador y se guarda como 12.345.678-5). Envia null para limpiar.',
+    example: '76.086.428-5',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  taxId?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Giro comercial. Envia null para limpiar.',
+    example: 'Restaurantes y servicios moviles de comida',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  businessActivity?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Direccion legal (casa matriz). Envia null para limpiar.',
+    example: 'Av. Providencia 1234, Providencia, Santiago',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  legalAddress?: string | null;
 
   @ApiPropertyOptional({ example: 'es' })
   @IsOptional()

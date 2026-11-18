@@ -1,4 +1,4 @@
-﻿import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import {
   BillStatus,
   Prisma,
@@ -11,6 +11,10 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { CloseTableSessionService } from './close-table-session.service';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
+
+jest.mock('../../billing/application/allocate-bill-number', () => ({
+  allocateBillNumber: jest.fn().mockResolvedValue(7),
+}));
 
 type TransactionClient = {
   bill: {

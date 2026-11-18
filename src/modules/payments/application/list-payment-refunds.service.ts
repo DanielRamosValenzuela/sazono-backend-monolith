@@ -4,7 +4,10 @@ import { BranchAccessService } from '../../../common/branch-access/branch-access
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { zonedDateKey } from '../../../common/time/restaurant-time';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
-import { resolveRefundMode } from '../domain/refund-mode';
+import {
+  resolveRefundMode,
+  supportsGatewayRefund,
+} from '../domain/refund-mode';
 import type { PaymentRefundsResponseDto } from '../presentation/http/dto/refunds.dto';
 import {
   REFUND_INCLUDE,
@@ -14,6 +17,15 @@ import {
 
 const ROLE_NOT_ALLOWED_MESSAGE =
   'Tu rol puede ver los reembolsos pero no registrarlos.';
+
+function readInstallments(gatewayMeta: unknown): number | null {
+  const value =
+    gatewayMeta && typeof gatewayMeta === 'object'
+      ? (gatewayMeta as Record<string, unknown>).installments
+      : null;
+
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 @Injectable()
 export class ListPaymentRefundsService {
@@ -98,6 +110,9 @@ export class ListPaymentRefundsService {
         status: payment.status,
         consumptionAmount: payment.amount.sub(payment.tipAmount).toString(),
         paidAt: payment.paidAt?.toISOString() ?? null,
+        disputed: payment.disputed ?? false,
+        installments: readInstallments(payment.gatewayMeta),
+        gatewayRefundSupported: supportsGatewayRefund(payment),
       },
       settings: {
         cashierRefundLimit: settings?.cashierRefundLimit?.toString() ?? null,
@@ -110,18 +125,21 @@ export class ListPaymentRefundsService {
               method: mode.method,
               deniedCode: null,
               deniedMessage: null,
+              canManageGateway: isAdmin,
             }
           : {
               allowed: false,
               method: mode.method,
               deniedCode: mode.code,
               deniedMessage: mode.message,
+              canManageGateway: isAdmin,
             }
         : {
             allowed: false,
             method: null,
             deniedCode: 'REFUND_ROLE_NOT_ALLOWED',
             deniedMessage: ROLE_NOT_ALLOWED_MESSAGE,
+            canManageGateway: false,
           },
       refunds: refunds.map(mapRefund),
     };

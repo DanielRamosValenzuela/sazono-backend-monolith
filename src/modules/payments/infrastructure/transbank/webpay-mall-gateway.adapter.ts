@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PaymentGatewayProvider } from '@prisma/client';
+import { PaymentGatewayProvider, Prisma } from '@prisma/client';
 import { Options, TransactionDetail, WebpayPlus } from 'transbank-sdk';
 import { PaymentGatewayAdapter } from '../../domain/payment-gateway-adapter.decorator';
 import { buildTransbankBuyOrder } from '../../domain/transbank-buy-order';
@@ -16,6 +16,9 @@ import type {
   GatewayCredentials,
   GatewayPaymentDetails,
   GatewayPaymentSnapshot,
+  GatewayRefundContext,
+  GatewayRefundOutcome,
+  GatewayRefundState,
   PaymentGatewayPort,
 } from '../../application/ports/payment-gateway.port';
 
@@ -24,6 +27,11 @@ const NETWORK_ERROR_FAILURE_REASON =
   'No pudimos comunicarnos con la pasarela de pago. Intenta nuevamente.';
 const MISSING_CHILD_COMMERCE_CODE_FAILURE_REASON =
   'Este restaurante no tiene un codigo de comercio Transbank configurado.';
+
+const MISSING_REFUND_META_FAILURE_REASON =
+  'Este pago no tiene los datos de Transbank necesarios para reembolsar desde Sazono. Registralo como manual.';
+const REFUND_REJECTED_FAILURE_REASON =
+  'Transbank no acepto el reembolso. Puede estar fuera de plazo, ser una venta en cuotas o no tener saldo disponible. Si ya lo devolviste por otra via, registralo como manual.';
 
 type TransbankCreateResponse = {
   token: string;
@@ -198,6 +206,213 @@ export class WebpayMallGatewayAdapter implements PaymentGatewayPort {
 
       return null;
     }
+  }
+
+  async refund(context: GatewayRefundContext): Promise<GatewayRefundOutcome> {
+    const meta = this.readRefundMeta(context);
+
+    if (!meta) {
+      return {
+        kind: 'REJECTED',
+        retryable: false,
+        code: 'MISSING_GATEWAY_META',
+        failureReason: MISSING_REFUND_META_FAILURE_REASON,
+      };
+    }
+
+    const installments = Number(context.gatewayMeta?.installments ?? 0);
+    const isTotal =
+      context.alreadyRefundedAmount.isZero() &&
+      context.amount.eq(context.paymentAmount);
+
+    if (installments > 1 && !isTotal) {
+      return {
+        kind: 'REJECTED',
+        retryable: false,
+        code: 'INSTALLMENTS_PARTIAL_BLOCKED',
+        failureReason: `Este pago se hizo en ${installments} cuotas y Transbank solo permite anularlo por el total. Reembolsa el monto completo o registralo como manual.`,
+      };
+    }
+
+    let amount: number;
+
+    try {
+      amount = toTransbankAmount(context.amount, context.currency);
+    } catch {
+      return {
+        kind: 'REJECTED',
+        retryable: false,
+        code: 'INVALID_AMOUNT',
+        failureReason:
+          'El monto no es valido para Transbank: debe ser un numero entero de pesos.',
+      };
+    }
+
+    const transaction = this.buildTransaction();
+
+    try {
+      const response: unknown = await transaction.refund(
+        context.providerReference,
+        meta.buyOrder,
+        meta.childCommerceCode,
+        amount,
+      );
+
+      return this.buildRefundOutcome(response);
+    } catch (error) {
+      this.logger.error(this.describeError(error, 'refund'));
+      const failure = this.parseFailure(error);
+
+      if (failure.httpStatus !== null && failure.httpStatus < 500) {
+        return {
+          kind: 'REJECTED',
+          retryable: failure.httpStatus === 429,
+          code: `HTTP_${failure.httpStatus}`,
+          failureReason: REFUND_REJECTED_FAILURE_REASON,
+          raw: { httpStatus: failure.httpStatus, message: failure.detail },
+        };
+      }
+
+      return this.resolveAmbiguousRefund(context, failure);
+    }
+  }
+
+  async getRefundState(
+    context: GatewayRefundContext,
+  ): Promise<GatewayRefundState> {
+    try {
+      const response: unknown = await this.buildTransaction().status(
+        context.providerReference,
+      );
+
+      return this.classifyBalance(context, response);
+    } catch (error) {
+      this.logger.warn(this.describeError(error, 'getRefundState'));
+
+      return { kind: 'UNKNOWN' };
+    }
+  }
+
+  private async resolveAmbiguousRefund(
+    context: GatewayRefundContext,
+    failure: { httpStatus: number | null; detail: string },
+  ): Promise<GatewayRefundOutcome> {
+    const raw = { httpStatus: failure.httpStatus, message: failure.detail };
+    const state = await this.getRefundState(context);
+
+    if (state.kind === 'REFUNDED') {
+      return {
+        kind: 'REFUNDED',
+        raw: { ...raw, statusCheck: state.raw ?? null },
+      };
+    }
+
+    return { kind: 'AMBIGUOUS', raw: { ...raw, statusCheck: state.kind } };
+  }
+
+  private classifyBalance(
+    context: GatewayRefundContext,
+    response: unknown,
+  ): GatewayRefundState {
+    if (!isTransbankCommitResponse(response)) {
+      return { kind: 'UNKNOWN' };
+    }
+
+    const childCode = context.gatewayMeta?.childCommerceCode;
+    const detail =
+      response.details.find((item) => item.commerce_code === childCode) ??
+      response.details[0];
+    const raw = {
+      status: detail.status,
+      balance: detail.balance ?? null,
+    };
+    const before = context.paymentAmount.sub(context.alreadyRefundedAmount);
+
+    if (typeof detail.balance !== 'number') {
+      return { kind: 'UNKNOWN', raw };
+    }
+
+    const balance = new Prisma.Decimal(detail.balance);
+
+    if (balance.eq(before.sub(context.amount))) {
+      return { kind: 'REFUNDED', raw };
+    }
+
+    return balance.eq(before)
+      ? { kind: 'NOT_REFUNDED', raw }
+      : { kind: 'UNKNOWN', raw };
+  }
+
+  private buildRefundOutcome(response: unknown): GatewayRefundOutcome {
+    if (!response || typeof response !== 'object') {
+      return { kind: 'AMBIGUOUS' };
+    }
+
+    const body = response as Record<string, unknown>;
+    const raw = {
+      type: typeof body.type === 'string' ? body.type : null,
+      balance: typeof body.balance === 'number' ? body.balance : null,
+      nullifiedAmount:
+        typeof body.nullified_amount === 'number'
+          ? body.nullified_amount
+          : null,
+      authorizationCode:
+        typeof body.authorization_code === 'string'
+          ? body.authorization_code
+          : null,
+      authorizationDate:
+        typeof body.authorization_date === 'string'
+          ? body.authorization_date
+          : null,
+      responseCode:
+        typeof body.response_code === 'number' ? body.response_code : null,
+    };
+
+    if (
+      (body.type === 'REVERSED' || body.type === 'NULLIFIED') &&
+      (body.response_code === undefined || body.response_code === 0)
+    ) {
+      return { kind: 'REFUNDED', raw };
+    }
+
+    if (typeof body.response_code === 'number' && body.response_code !== 0) {
+      return {
+        kind: 'REJECTED',
+        retryable: false,
+        code: `RESPONSE_${body.response_code}`,
+        failureReason: REFUND_REJECTED_FAILURE_REASON,
+        raw,
+      };
+    }
+
+    return { kind: 'AMBIGUOUS', raw };
+  }
+
+  private readRefundMeta(
+    context: GatewayRefundContext,
+  ): { buyOrder: string; childCommerceCode: string } | null {
+    const buyOrder = context.gatewayMeta?.buy_order;
+    const childCommerceCode =
+      context.gatewayMeta?.childCommerceCode ??
+      context.credentials.childCommerceCode;
+
+    return typeof buyOrder === 'string' &&
+      buyOrder.length > 0 &&
+      typeof childCommerceCode === 'string' &&
+      childCommerceCode.length > 0
+      ? { buyOrder, childCommerceCode }
+      : null;
+  }
+
+  private parseFailure(error: unknown): {
+    httpStatus: number | null;
+    detail: string;
+  } {
+    const message = error instanceof Error ? error.message : '';
+    const match = /status code (\d{3})/.exec(message);
+    const detail = message.split('\n').slice(1).join(' ').trim().slice(0, 300);
+
+    return { httpStatus: match ? Number(match[1]) : null, detail };
   }
 
   private buildOutcomeFromCommitResponse(

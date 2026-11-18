@@ -30,6 +30,10 @@ import { PayQrBillService } from './application/pay-qr-bill.service';
 import { PayQrOrderService } from './application/pay-qr-order.service';
 import { OFFLINE_PAYMENT_RECORDER } from './application/ports/offline-payment-recorder.port';
 import { PAYMENT_GATEWAY_RESOLVER } from './application/ports/payment-gateway-resolver.port';
+import { ManageGatewayRefundService } from './application/manage-gateway-refund.service';
+import { ReconcileMercadoPagoRefundsService } from './application/reconcile-mercado-pago-refunds.service';
+import { ReconcileGatewayRefundsService } from './application/reconcile-gateway-refunds.service';
+import { RefundGatewayService } from './application/refund-gateway.service';
 import { RefundPaymentService } from './application/refund-payment.service';
 import { ReconcileMercadoPagoPaymentsService } from './application/reconcile-mercado-pago-payments.service';
 import { ReconcileTransbankPaymentsService } from './application/reconcile-transbank-payments.service';
@@ -47,6 +51,7 @@ import { OfflinePaymentRecorderAdapter } from './infrastructure/offline-payment-
 import { PaymentGatewayRegistry } from './infrastructure/payment-gateway-registry.service';
 import { PaymentGatewayResolverService } from './infrastructure/payment-gateway-resolver.service';
 import { ReconcileMercadoPagoPaymentsScheduler } from './infrastructure/mercado-pago/reconcile-mercado-pago-payments.scheduler';
+import { ReconcileGatewayRefundsScheduler } from './infrastructure/reconcile-gateway-refunds.scheduler';
 import { ReconcileTransbankPaymentsScheduler } from './infrastructure/transbank/reconcile-transbank-payments.scheduler';
 import { TransbankConfigService } from './infrastructure/transbank/transbank-config.service';
 import { WebpayMallGatewayAdapter } from './infrastructure/transbank/webpay-mall-gateway.adapter';
@@ -54,6 +59,7 @@ import { PaymentAccountsController } from './presentation/http/payment-accounts.
 import { PaymentsController } from './presentation/http/payments.controller';
 import { PaymentWebhooksController } from './presentation/http/payment-webhooks.controller';
 import { QrPaymentsController } from './presentation/http/qr-payments.controller';
+import { RefundActionsController } from './presentation/http/refund-actions.controller';
 import { RefundsController } from './presentation/http/refunds.controller';
 
 @Module({
@@ -64,6 +70,7 @@ import { RefundsController } from './presentation/http/refunds.controller';
     PaymentAccountsController,
     PaymentWebhooksController,
     RefundsController,
+    RefundActionsController,
   ],
   providers: [
     {
@@ -86,6 +93,11 @@ import { RefundsController } from './presentation/http/refunds.controller';
     PayBillService,
     ListBillPaymentsService,
     RefundPaymentService,
+    RefundGatewayService,
+    ManageGatewayRefundService,
+    ReconcileGatewayRefundsService,
+    ReconcileMercadoPagoRefundsService,
+    ReconcileGatewayRefundsScheduler,
     ListPaymentRefundsService,
     CreateBillSplitService,
     GetCurrentBillSplitService,

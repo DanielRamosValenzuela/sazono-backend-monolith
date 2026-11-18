@@ -131,6 +131,7 @@ describe('ListPaymentRefundsService', () => {
       method: 'CASH_MANUAL',
       deniedCode: null,
       deniedMessage: null,
+      canManageGateway: true,
     });
     expect(result.refunds).toHaveLength(1);
     expect(result.refunds[0]).toMatchObject({
@@ -140,17 +141,15 @@ describe('ListPaymentRefundsService', () => {
     });
   });
 
-  it('never exposes provider raw data, failure reason or the fingerprint', async () => {
+  it('never exposes provider raw data or the fingerprint', async () => {
     const ctx = build([Role.ADMIN]);
 
     const result = await ctx.service.execute(authUser, 'branch-1', 'payment-1');
     const serialized = JSON.stringify(result);
 
     expect(serialized).not.toContain('providerRaw');
-    expect(serialized).not.toContain('failureReason');
     expect(serialized).not.toContain('requestFingerprint');
     expect(serialized).not.toContain('secret');
-    expect(serialized).not.toContain('internal');
   });
 
   it('shows a cashier only the refunds he registered', async () => {
@@ -251,6 +250,7 @@ describe('ListPaymentRefundsService', () => {
       method: null,
       deniedCode: 'REFUND_ROLE_NOT_ALLOWED',
       deniedMessage: 'Tu rol puede ver los reembolsos pero no registrarlos.',
+      canManageGateway: false,
     });
   });
 

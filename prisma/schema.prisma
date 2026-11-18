@@ -229,6 +229,12 @@ model Restaurant {
   timezone           String                     @default("America/Santiago")
   currency           String                     @default("CLP")
   status             RestaurantStatus           @default(ACTIVE)
+  platformFeeBps     Int                        @default(100) @map("platform_fee_bps")
+  taxId              String?                    @map("tax_id")
+  businessActivity   String?                    @map("business_activity")
+  legalAddress       String?                    @map("legal_address")
+  feeStatements      PlatformFeeStatement[]
+  taxDocuments       TaxDocument[]
   branches           Branch[]
   staffUsers         StaffUser[]
   paymentAccounts    RestaurantPaymentAccount[]
@@ -259,6 +265,8 @@ model Branch {
   modifierGroups      ModifierGroup[]
   refunds             Refund[]
   cashMovements       CashMovement[]
+  taxDocuments        TaxDocument[]
+  billSequence        Int                   @default(0) @map("bill_sequence")
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
   stationTickets      StationTicket[]
@@ -608,6 +616,7 @@ model Bill {
   tableSessionId        String           @unique @map("table_session_id") @db.Uuid
   branchId              String           @map("branch_id") @db.Uuid
   status                BillStatus       @default(OPEN)
+  number                Int?
   subtotalAmount        Decimal          @default(0) @map("subtotal_amount") @db.Decimal(12, 2)
   taxAmount             Decimal          @default(0) @map("tax_amount") @db.Decimal(12, 2)
   tipAmount             Decimal          @default(0) @map("tip_amount") @db.Decimal(12, 2)
@@ -627,9 +636,11 @@ model Bill {
   payments              Payment[]
   paymentAttempts       PaymentAttempt[]
   refunds               Refund[]
+  taxDocuments          TaxDocument[]
   createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  @@unique([branchId, number])
   @@index([branchId, status])
   @@index([branchId, closedAt])
   @@map("bills")
@@ -808,6 +819,7 @@ model Payment {
   gatewayMeta            Json?                 @map("gateway_meta")
   refundedAmount         Decimal               @default(0) @map("refunded_amount") @db.Decimal(12, 2)
   refundedTipAmount      Decimal               @default(0) @map("refunded_tip_amount") @db.Decimal(12, 2)
+  disputed               Boolean               @default(false)
   bill                   Bill                  @relation(fields: [billId], references: [id], onDelete: Cascade)
   billSplitParticipant   BillSplitParticipant? @relation(fields: [billSplitParticipantId], references: [id], onDelete: SetNull)
   paymentAttempt         PaymentAttempt?       @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
@@ -1009,6 +1021,7 @@ model Refund {
   requestedBy             StaffUser?    @relation("RefundRequestedBy", fields: [requestedByStaffUserId], references: [id], onDelete: Restrict)
   approvedBy              StaffUser?    @relation("RefundApprovedBy", fields: [approvedByStaffUserId], references: [id], onDelete: Restrict)
   cashMovement            CashMovement?
+  taxDocument             TaxDocument?
   createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt               DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -1060,4 +1073,94 @@ model AuditLog {
   @@index([restaurantId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+enum PlatformFeeStatementStatus {
+  DRAFT
+  ISSUED
+  PAID
+  WAIVED
+  VOID
+}
+
+model PlatformFeeStatement {
+  id           String                     @id @default(uuid()) @db.Uuid
+  restaurantId String                     @map("restaurant_id") @db.Uuid
+  periodMonth  DateTime                   @map("period_month") @db.Date
+  grossSales   Decimal                    @default(0) @map("gross_sales") @db.Decimal(14, 2)
+  tipsTotal    Decimal                    @default(0) @map("tips_total") @db.Decimal(14, 2)
+  discounts    Decimal                    @default(0) @db.Decimal(14, 2)
+  refundsTotal Decimal                    @default(0) @map("refunds_total") @db.Decimal(14, 2)
+  carryOverIn  Decimal                    @default(0) @map("carry_over_in") @db.Decimal(14, 2)
+  netSales     Decimal                    @default(0) @map("net_sales") @db.Decimal(14, 2)
+  feeBps       Int                        @map("fee_bps")
+  feeAmount    Decimal                    @default(0) @map("fee_amount") @db.Decimal(12, 0)
+  status       PlatformFeeStatementStatus @default(DRAFT)
+  breakdown    Json?
+  notes        String?
+  generatedAt  DateTime                   @default(now()) @map("generated_at") @db.Timestamptz(3)
+  issuedAt     DateTime?                  @map("issued_at") @db.Timestamptz(3)
+  paidAt       DateTime?                  @map("paid_at") @db.Timestamptz(3)
+  restaurant   Restaurant                 @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  createdAt    DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([restaurantId, periodMonth])
+  @@index([periodMonth, status])
+  @@map("platform_fee_statements")
+}
+
+enum TaxDocumentType {
+  BOLETA_AFECTA
+  BOLETA_EXENTA
+  NOTA_CREDITO
+}
+
+enum TaxDocumentStatus {
+  PENDING
+  ISSUED
+  REJECTED
+  VOIDED
+}
+
+model TaxDocument {
+  id                  String            @id @default(uuid()) @db.Uuid
+  restaurantId        String            @map("restaurant_id") @db.Uuid
+  branchId            String            @map("branch_id") @db.Uuid
+  billId              String            @map("bill_id") @db.Uuid
+  paymentId           String?           @map("payment_id") @db.Uuid
+  refundId            String?           @unique @map("refund_id") @db.Uuid
+  type                TaxDocumentType
+  status              TaxDocumentStatus @default(PENDING)
+  folio               Int?
+  issuedAt            DateTime?         @map("issued_at") @db.Timestamptz(3)
+  netAmount           Decimal           @default(0) @map("net_amount") @db.Decimal(12, 2)
+  exemptAmount        Decimal           @default(0) @map("exempt_amount") @db.Decimal(12, 2)
+  vatAmount           Decimal           @default(0) @map("vat_amount") @db.Decimal(12, 2)
+  tipAmount           Decimal           @default(0) @map("tip_amount") @db.Decimal(12, 2)
+  totalAmount         Decimal           @default(0) @map("total_amount") @db.Decimal(12, 2)
+  referenceDocumentId String?           @map("reference_document_id") @db.Uuid
+  referenceCode       Int?              @map("reference_code")
+  reason              String?
+  provider            String?
+  providerDocId       String?           @map("provider_doc_id")
+  pdfUrl              String?           @map("pdf_url")
+  timbre              String?
+  siiTrackId          String?           @map("sii_track_id")
+  receiverRut         String?           @map("receiver_rut")
+  receiverName        String?           @map("receiver_name")
+  rawResponse         Json?             @map("raw_response")
+  restaurant          Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  branch              Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  bill                Bill              @relation(fields: [billId], references: [id], onDelete: Restrict)
+  refund              Refund?           @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  referenceDocument   TaxDocument?      @relation("TaxDocumentReference", fields: [referenceDocumentId], references: [id], onDelete: Restrict)
+  referencedBy        TaxDocument[]     @relation("TaxDocumentReference")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([branchId, type, folio])
+  @@index([billId])
+  @@index([restaurantId, issuedAt])
+  @@map("tax_documents")
 }

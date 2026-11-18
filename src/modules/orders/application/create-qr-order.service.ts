@@ -19,6 +19,7 @@ import type {
   CreateQrOrderDto,
   OrderResponseDto,
 } from '../presentation/http/dto/orders.dto';
+import { allocateBillNumber } from '../../billing/application/allocate-bill-number';
 
 @Injectable()
 export class CreateQrOrderService {
@@ -83,6 +84,7 @@ export class CreateQrOrderService {
               data: {
                 tableSessionId: existingSession.id,
                 branchId: table.branchId,
+                number: await allocateBillNumber(tx, table.branchId),
                 status: BillStatus.OPEN,
               },
             })
@@ -100,6 +102,7 @@ export class CreateQrOrderService {
           data: {
             tableSessionId: createdSession.id,
             branchId: table.branchId,
+            number: await allocateBillNumber(tx, table.branchId),
             status: BillStatus.OPEN,
           },
         });

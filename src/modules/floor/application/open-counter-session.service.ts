@@ -18,6 +18,7 @@ import type {
   OpenCounterSessionDto,
 } from '../presentation/http/dto/floor.dto';
 import { EnsureCounterTableService } from './ensure-counter-table.service';
+import { allocateBillNumber } from '../../billing/application/allocate-bill-number';
 
 const ALL_TICKETS_TAKEN_MESSAGE =
   'Hay demasiados tickets de mesa virtual activos. Cierra algunos antes de abrir otro.';
@@ -81,6 +82,7 @@ export class OpenCounterSessionService {
           data: {
             tableSessionId: createdSession.id,
             branchId: dto.branchId,
+            number: await allocateBillNumber(tx, dto.branchId),
             status: BillStatus.OPEN,
           },
         });

@@ -34,6 +34,7 @@ import type {
   CreateRefundDto,
   RefundResultResponseDto,
 } from '../presentation/http/dto/refunds.dto';
+import { RefundGatewayService } from './refund-gateway.service';
 import {
   ACTIVE_ORDER_STATUSES,
   REFUND_INCLUDE,
@@ -73,6 +74,7 @@ export class RefundPaymentService {
     private readonly branchAccessService: BranchAccessService,
     private readonly authService: AuthService,
     private readonly auditService: AuditService,
+    private readonly refundGateway: RefundGatewayService,
   ) {}
 
   async execute(
@@ -142,6 +144,7 @@ export class RefundPaymentService {
           explicitTip?.toFixed(2) ?? '',
           dto.reasonCode,
           dto.reasonText.trim(),
+          ...(dto.registerAsManual ? ['manual'] : []),
         ].join('|'),
       )
       .digest('hex');
@@ -152,7 +155,13 @@ export class RefundPaymentService {
       return this.replay(existing, context.staffUserId, fingerprint);
     }
 
-    const mode = resolveRefundMode({ payment, isAdmin, now, timeZone });
+    const mode = resolveRefundMode({
+      payment,
+      isAdmin,
+      now,
+      timeZone,
+      registerAsManual: dto.registerAsManual,
+    });
 
     if (!mode.allowed) {
       if (mode.code === 'REFUND_PAYMENT_NOT_PAID') {
@@ -253,6 +262,7 @@ export class RefundPaymentService {
     }
 
     const method = mode.method;
+    const isGateway = method === RefundMethod.GATEWAY;
     const reasonText = dto.reasonText.trim();
 
     let outcome: RefundTransactionOutcome;
@@ -327,7 +337,7 @@ export class RefundPaymentService {
             tipAmount,
             netAmount,
             vatAmount,
-            status: RefundStatus.SUCCEEDED,
+            status: isGateway ? RefundStatus.PENDING : RefundStatus.SUCCEEDED,
             method,
             reasonCode: dto.reasonCode,
             reasonText,
@@ -341,7 +351,7 @@ export class RefundPaymentService {
             creditNoteStatus: consumptionAmount.gt(0)
               ? 'PENDING'
               : 'NOT_REQUIRED',
-            completedAt: now,
+            completedAt: isGateway ? null : now,
           },
           include: REFUND_INCLUDE,
         });
@@ -380,8 +390,9 @@ export class RefundPaymentService {
           branchId,
           actorStaffUserId: context.staffUserId,
           actorRole: requestedByRole,
-          action:
-            method === RefundMethod.CASH_MANUAL
+          action: isGateway
+            ? 'REFUND_REQUESTED'
+            : method === RefundMethod.CASH_MANUAL
               ? 'REFUND_SUCCEEDED'
               : 'REFUND_REGISTERED_MANUAL',
           entityType: 'Refund',
@@ -485,6 +496,19 @@ export class RefundPaymentService {
           'El saldo reembolsable del pago cambio. Recarga e intenta de nuevo.',
         code: 'REFUND_CONFLICT',
       });
+    }
+
+    if (isGateway) {
+      const settled = await this.refundGateway.dispatch(outcome.refund.id, {
+        staffUserId: context.staffUserId,
+        role: requestedByRole,
+        ip: requestMeta.ip,
+        userAgent: requestMeta.userAgent,
+      });
+
+      if (settled) {
+        return this.refundGateway.toResult(settled, false);
+      }
     }
 
     return {

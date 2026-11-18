@@ -343,12 +343,24 @@ export function eligibleBillsSql(filter: BillFilter): Prisma.Sql {
       agg.method_count,
       COALESCE(LPAD(ts.ticket_number::text, 10, '0'), UPPER(RIGHT(b.id::text, 6))) COLLATE "C" AS order_key,
       ts.ticket_number,
+      b.number AS bill_number,
+      rc.receipt_type,
+      rc.receipt_folio,
       ts.guest_count,
       t.name AS table_name,
       z.name AS zone_name,
       NULLIF(TRIM(CONCAT(wu.first_name, ' ', wu.last_name)), '') AS waiter_name
     FROM bills b
     JOIN table_sessions ts ON ts.id = b.table_session_id
+    LEFT JOIN LATERAL (
+      SELECT td.type::text AS receipt_type, td.folio AS receipt_folio
+      FROM tax_documents td
+      WHERE td.bill_id = b.id
+        AND td.type IN ('BOLETA_AFECTA', 'BOLETA_EXENTA')
+        AND td.status = 'ISSUED'
+      ORDER BY td.issued_at DESC NULLS LAST, td.id DESC
+      LIMIT 1
+    ) rc ON TRUE
     JOIN tables t ON t.id = ts.table_id
     LEFT JOIN table_zones z ON z.id = t.zone_id
     LEFT JOIN staff_users wu ON wu.id = ts.assigned_staff_user_id

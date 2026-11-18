@@ -112,3 +112,72 @@ describe('resolveRefundMode', () => {
     ).toBe(true);
   });
 });
+
+describe('resolveRefundMode gateway', () => {
+  const now = new Date('2026-11-20T18:00:00Z');
+  const gatewayBase = {
+    ...base,
+    provider: 'MERCADO_PAGO',
+    method: PaymentMethod.MERCADO_PAGO,
+    providerReference: 'ORD1',
+  };
+
+  it('uses the gateway for a Mercado Pago payment with a reference, admin only', () => {
+    expect(
+      resolveRefundMode({
+        payment: gatewayBase,
+        isAdmin: true,
+        now,
+        timeZone: TZ,
+      }),
+    ).toEqual({ allowed: true, method: RefundMethod.GATEWAY });
+    expect(
+      resolveRefundMode({
+        payment: gatewayBase,
+        isAdmin: false,
+        now,
+        timeZone: TZ,
+      }),
+    ).toMatchObject({ allowed: false, code: 'REFUND_ADMIN_ONLY' });
+  });
+
+  it('needs buy order and child commerce code for Transbank', () => {
+    const transbank = {
+      ...gatewayBase,
+      provider: 'TRANSBANK',
+      method: PaymentMethod.CREDIT_CARD,
+    };
+
+    expect(
+      resolveRefundMode({
+        payment: transbank,
+        isAdmin: true,
+        now,
+        timeZone: TZ,
+      }),
+    ).toEqual({ allowed: true, method: RefundMethod.MANUAL_EXTERNAL });
+    expect(
+      resolveRefundMode({
+        payment: {
+          ...transbank,
+          gatewayMeta: { buy_order: 'sz-1', childCommerceCode: '5970' },
+        },
+        isAdmin: true,
+        now,
+        timeZone: TZ,
+      }),
+    ).toEqual({ allowed: true, method: RefundMethod.GATEWAY });
+  });
+
+  it('keeps manual external when the admin registers it as manual', () => {
+    expect(
+      resolveRefundMode({
+        payment: gatewayBase,
+        isAdmin: true,
+        now,
+        timeZone: TZ,
+        registerAsManual: true,
+      }),
+    ).toEqual({ allowed: true, method: RefundMethod.MANUAL_EXTERNAL });
+  });
+});

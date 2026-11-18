@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { normalizeRut } from '../../billing/domain/chilean-rut';
 import type { RestaurantSummaryResponseDto } from '../presentation/http/dto/list-restaurants.dto';
 import type { UpdateRestaurantDto } from '../presentation/http/dto/update-restaurant.dto';
 
@@ -25,6 +26,26 @@ export class UpdateRestaurantService {
 
     if (dto.legalName !== undefined) {
       data.legalName = dto.legalName;
+    }
+
+    if (dto.taxId !== undefined) {
+      const taxId = dto.taxId?.trim() ? normalizeRut(dto.taxId) : null;
+
+      if (dto.taxId?.trim() && taxId === null) {
+        throw new BadRequestException(
+          'El RUT no es valido: revisa el numero y el digito verificador.',
+        );
+      }
+
+      data.taxId = taxId;
+    }
+
+    if (dto.businessActivity !== undefined) {
+      data.businessActivity = dto.businessActivity?.trim() || null;
+    }
+
+    if (dto.legalAddress !== undefined) {
+      data.legalAddress = dto.legalAddress?.trim() || null;
     }
 
     if (dto.slug !== undefined) {

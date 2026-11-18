@@ -1,5 +1,7 @@
 import { PaymentMethod, PaymentStatus, RefundMethod } from '@prisma/client';
 import { zonedDateKey } from '../../../common/time/restaurant-time';
+import { MERCADOPAGO_PROVIDER_NAME } from './mercado-pago-status';
+import { TRANSBANK_PROVIDER_NAME } from './transbank-status';
 
 export type RefundModeDeniedCode =
   'REFUND_PAYMENT_NOT_PAID' | 'REFUND_ADMIN_ONLY' | 'REFUND_CASHIER_DAY_LIMIT';
@@ -19,7 +21,10 @@ export type RefundModeInput = {
     method: PaymentMethod | null;
     paidAt: Date | null;
     createdAt: Date;
+    providerReference?: string | null;
+    gatewayMeta?: unknown;
   };
+  registerAsManual?: boolean;
   isAdmin: boolean;
   now: Date;
   timeZone: string;
@@ -33,6 +38,33 @@ export type RefundModeResult =
       message: string;
       method: RefundMethod | null;
     };
+
+export function supportsGatewayRefund(payment: {
+  provider: string;
+  providerReference?: string | null;
+  gatewayMeta?: unknown;
+}): boolean {
+  if (!payment.providerReference) {
+    return false;
+  }
+
+  if (payment.provider === MERCADOPAGO_PROVIDER_NAME) {
+    return true;
+  }
+
+  if (payment.provider !== TRANSBANK_PROVIDER_NAME) {
+    return false;
+  }
+
+  const meta = payment.gatewayMeta;
+
+  return (
+    !!meta &&
+    typeof meta === 'object' &&
+    typeof (meta as Record<string, unknown>).buy_order === 'string' &&
+    typeof (meta as Record<string, unknown>).childCommerceCode === 'string'
+  );
+}
 
 export function resolveRefundMode(input: RefundModeInput): RefundModeResult {
   const { payment, isAdmin, now, timeZone } = input;
@@ -54,9 +86,11 @@ export function resolveRefundMode(input: RefundModeInput): RefundModeResult {
     payment.provider === 'MANUAL' && payment.method === PaymentMethod.CASH;
   const method = isCash
     ? RefundMethod.CASH_MANUAL
-    : RefundMethod.MANUAL_EXTERNAL;
+    : !input.registerAsManual && supportsGatewayRefund(payment)
+      ? RefundMethod.GATEWAY
+      : RefundMethod.MANUAL_EXTERNAL;
 
-  if (method === RefundMethod.MANUAL_EXTERNAL && !isAdmin) {
+  if (method !== RefundMethod.CASH_MANUAL && !isAdmin) {
     return deny('REFUND_ADMIN_ONLY', method);
   }
 

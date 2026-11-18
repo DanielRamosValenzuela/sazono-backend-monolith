@@ -260,3 +260,12 @@ Orden de despliegue (crítico): verificar en QA `SELECT count(*) FROM payments W
 ## Verificación
 
 Specs de dominio (`refund-amounts`, `refund-mode`), servicios (`refund-payment`, `list-payment-refunds`), controlador, DTO, auditoría, `verifyStaffPin`, `ensureAccess(..., { fresh: true })`, ajustes de sucursal, `cancel-order`, y los reportes (forma del SQL, servicios, controlador, DTO, dashboard). Además se ejecutaron en PGlite (Postgres en WASM, fuera del repositorio) la migración completa dos veces, los `CHECK`, los triggers, la sentencia atómica del PIN, el `UPDATE` condicional con el servicio real y todas las consultas de reportes con reembolsos sembrados sobre 4 rangos y 14 combinaciones de filtros, comprobando las invariantes de arriba contra sumas independientes. PGlite tiene una sola conexión: la carrera real entre dos solicitudes se cubre por la semántica del `UPDATE` (el segundo ve la fila ya actualizada y recibe cero filas) y por una prueba unitaria que simula esa segunda solicitud.
+
+
+## Reembolso por pasarela (M6)
+
+Los pagos `TRANSBANK` y `MERCADO_PAGO` con lo necesario para reembolsar (MP: `providerReference`; Transbank: `providerReference` más `gatewayMeta.buy_order` y `gatewayMeta.childCommerceCode`) se reembolsan por defecto con `method = GATEWAY`. Solo ADMIN (el cajero recibe 403 `REFUND_ADMIN_ONLY`). El body admite `registerAsManual: true` (solo ADMIN) para mantener el comportamiento `MANUAL_EXTERNAL` de M4. Los pagos históricos sin datos de pasarela siguen siendo manuales.
+
+Flujo: TX1 reserva el saldo igual que antes y crea el `Refund` en `PENDING` (sin movimiento de caja; auditoría `REFUND_REQUESTED`); después, fuera de toda transacción, se llama a la pasarela con `refund.id` como clave de idempotencia; TX2 deja `SUCCEEDED` (auditoría `REFUND_SUCCEEDED`), o `FAILED` liberando la reserva en la misma transacción (`REFUND_FAILED`), o lo deja `PENDING` si el resultado es ambiguo. La respuesta de `POST /refunds` expone `refund.status` (`PENDING`, `SUCCEEDED`, `FAILED`, `REQUIRES_MANUAL_REVIEW`) y `refund.failureReason`.
+
+Endpoints nuevos (solo ADMIN, auditados): `POST /v1/refunds/:id/retry` y `POST /v1/refunds/:id/mark-manual`. Detalle completo, contratos, conciliación y webhook en `docs/35-reembolsos-por-pasarela.md`.

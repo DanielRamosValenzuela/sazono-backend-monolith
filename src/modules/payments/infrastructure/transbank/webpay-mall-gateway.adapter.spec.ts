@@ -1,10 +1,14 @@
 import { Prisma } from '@prisma/client';
-import type { GatewayChargeContext } from '../../application/ports/payment-gateway.port';
+import type {
+  GatewayChargeContext,
+  GatewayRefundContext,
+} from '../../application/ports/payment-gateway.port';
 import type { TransbankConfigService } from './transbank-config.service';
 
 const createMock = jest.fn();
 const commitMock = jest.fn();
 const statusMock = jest.fn();
+const refundMock = jest.fn();
 const mallTransactionMock = jest.fn();
 const optionsMock = jest.fn();
 const transactionDetailMock = jest.fn();
@@ -61,6 +65,7 @@ describe('WebpayMallGatewayAdapter', () => {
       create: createMock,
       commit: commitMock,
       status: statusMock,
+      refund: refundMock,
     }));
     transbankConfig = {
       mallCommerceCode: '597055555535',
@@ -305,5 +310,151 @@ describe('WebpayMallGatewayAdapter', () => {
     const snapshot = await adapter.getPayment('token-abc', credentials);
 
     expect(snapshot).toBeNull();
+  });
+
+  describe('refunds', () => {
+    const refundContext: GatewayRefundContext = {
+      restaurantId: 'restaurant-1',
+      refundId: 'refund-1',
+      idempotencyKey: 'refund-1',
+      providerReference: 'tok-1',
+      amount: new Prisma.Decimal(11800),
+      paymentAmount: new Prisma.Decimal(11800),
+      alreadyRefundedAmount: new Prisma.Decimal(0),
+      currency: 'CLP',
+      credentials,
+      gatewayMeta: {
+        buy_order: 'sz-abc',
+        childCommerceCode: '597055555536',
+        installments: 0,
+      },
+    };
+
+    const statusWithBalance = (balance: number) => ({
+      buy_order: 'parent',
+      details: [
+        {
+          amount: 11800,
+          status: 'AUTHORIZED',
+          response_code: 0,
+          commerce_code: '597055555536',
+          buy_order: 'sz-abc',
+          balance,
+        },
+      ],
+    });
+
+    it('calls refund with token, child buy order, child commerce code and integer amount', async () => {
+      refundMock.mockResolvedValue({
+        type: 'REVERSED',
+        response_code: 0,
+        balance: 0,
+      });
+
+      const outcome = await adapter.refund(refundContext);
+
+      expect(refundMock).toHaveBeenCalledWith(
+        'tok-1',
+        'sz-abc',
+        '597055555536',
+        11800,
+      );
+      expect(outcome).toMatchObject({
+        kind: 'REFUNDED',
+        raw: { type: 'REVERSED' },
+      });
+    });
+
+    it('treats NULLIFIED as refunded and keeps the balance in the raw payload', async () => {
+      refundMock.mockResolvedValue({
+        type: 'NULLIFIED',
+        response_code: 0,
+        balance: 8800,
+        nullified_amount: 3000,
+      });
+
+      const outcome = await adapter.refund({
+        ...refundContext,
+        amount: new Prisma.Decimal(3000),
+      });
+
+      expect(outcome).toMatchObject({
+        kind: 'REFUNDED',
+        raw: { type: 'NULLIFIED', balance: 8800 },
+      });
+    });
+
+    it('blocks a partial refund on a sale in installments without calling Transbank', async () => {
+      const outcome = await adapter.refund({
+        ...refundContext,
+        amount: new Prisma.Decimal(3000),
+        gatewayMeta: { ...refundContext.gatewayMeta, installments: 3 },
+      });
+
+      expect(outcome).toMatchObject({
+        kind: 'REJECTED',
+        retryable: false,
+        code: 'INSTALLMENTS_PARTIAL_BLOCKED',
+      });
+      expect(refundMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the payment has no buy order or child commerce code', async () => {
+      const outcome = await adapter.refund({
+        ...refundContext,
+        gatewayMeta: null,
+        credentials: {},
+      });
+
+      expect(outcome).toMatchObject({ kind: 'REJECTED', retryable: false });
+      expect(refundMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects on an HTTP 4xx answer without checking the status', async () => {
+      refundMock.mockRejectedValue(
+        new Error('Request failed with status code 422\nfuera de plazo\n'),
+      );
+
+      const outcome = await adapter.refund(refundContext);
+
+      expect(outcome).toMatchObject({ kind: 'REJECTED', code: 'HTTP_422' });
+      expect(statusMock).not.toHaveBeenCalled();
+    });
+
+    it('checks the balance after a timeout and never calls refund twice', async () => {
+      refundMock.mockRejectedValue(new Error('timeout of 15000ms exceeded'));
+      statusMock.mockResolvedValue(statusWithBalance(0));
+
+      const outcome = await adapter.refund(refundContext);
+
+      expect(statusMock).toHaveBeenCalledWith('tok-1');
+      expect(refundMock).toHaveBeenCalledTimes(1);
+      expect(outcome.kind).toBe('REFUNDED');
+    });
+
+    it('stays AMBIGUOUS after a timeout when the balance did not move or the status fails', async () => {
+      refundMock.mockRejectedValue(new Error('timeout of 15000ms exceeded'));
+      statusMock.mockResolvedValueOnce(statusWithBalance(11800));
+      expect((await adapter.refund(refundContext)).kind).toBe('AMBIGUOUS');
+
+      statusMock.mockRejectedValueOnce(new Error('down'));
+      expect((await adapter.refund(refundContext)).kind).toBe('AMBIGUOUS');
+      expect(refundMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('classifies the state from the previous expected balance', async () => {
+      const context = {
+        ...refundContext,
+        amount: new Prisma.Decimal(3000),
+        alreadyRefundedAmount: new Prisma.Decimal(2000),
+      };
+
+      statusMock.mockResolvedValueOnce(statusWithBalance(6800));
+      expect((await adapter.getRefundState(context)).kind).toBe('REFUNDED');
+      statusMock.mockResolvedValueOnce(statusWithBalance(9800));
+      expect((await adapter.getRefundState(context)).kind).toBe('NOT_REFUNDED');
+      statusMock.mockResolvedValueOnce(statusWithBalance(1));
+      expect((await adapter.getRefundState(context)).kind).toBe('UNKNOWN');
+    });
   });
 });

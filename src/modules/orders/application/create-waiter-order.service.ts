@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BillStatus,
@@ -21,6 +21,7 @@ import type {
   CreateWaiterOrderDto,
   OrderResponseDto,
 } from '../presentation/http/dto/orders.dto';
+import { allocateBillNumber } from '../../billing/application/allocate-bill-number';
 
 @Injectable()
 export class CreateWaiterOrderService {
@@ -78,6 +79,7 @@ export class CreateWaiterOrderService {
           data: {
             tableSessionId: tableSession.id,
             branchId: tableSession.branchId,
+            number: await allocateBillNumber(tx, tableSession.branchId),
             status: BillStatus.OPEN,
           },
         }));

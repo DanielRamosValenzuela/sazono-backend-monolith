@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -18,6 +18,7 @@ import type {
   OpenTableSessionDto,
   TableSessionResponseDto,
 } from '../presentation/http/dto/floor.dto';
+import { allocateBillNumber } from '../../billing/application/allocate-bill-number';
 
 @Injectable()
 export class OpenTableSessionService {
@@ -106,6 +107,7 @@ export class OpenTableSessionService {
           data: {
             tableSessionId: createdSession.id,
             branchId: table.branchId,
+            number: await allocateBillNumber(tx, table.branchId),
             status: BillStatus.OPEN,
           },
         });

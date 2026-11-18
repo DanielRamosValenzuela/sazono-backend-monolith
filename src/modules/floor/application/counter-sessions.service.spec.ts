@@ -9,6 +9,10 @@ import { ListCounterSessionsService } from './list-counter-sessions.service';
 import { RenameCounterSessionService } from './rename-counter-session.service';
 import type { EnsureCounterTableService } from './ensure-counter-table.service';
 
+jest.mock('../../billing/application/allocate-bill-number', () => ({
+  allocateBillNumber: jest.fn().mockResolvedValue(7),
+}));
+
 const authUser = {
   sub: 'auth-1',
   profileType: LoginProfileType.STAFF,

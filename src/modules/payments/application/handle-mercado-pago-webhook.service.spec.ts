@@ -12,6 +12,7 @@ import { HandleMercadoPagoWebhookService } from './handle-mercado-pago-webhook.s
 import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 import type { PaymentGatewayPort } from './ports/payment-gateway.port';
 import type { ConfirmRedirectPaymentService } from './confirm-redirect-payment.service';
+import type { ReconcileMercadoPagoRefundsService } from './reconcile-mercado-pago-refunds.service';
 import type { MercadoPagoConfigService } from '../infrastructure/mercado-pago/mercado-pago-config.service';
 import type { RestaurantPaymentAccountRepository } from '../infrastructure/mercado-pago/restaurant-payment-account.repository';
 
@@ -76,6 +77,11 @@ describe('HandleMercadoPagoWebhookService', () => {
     apiMode: 'payments',
   } as unknown as { apiMode: 'payments' | 'orders' };
 
+  const reconcileRefundsExecuteMock = jest.fn();
+  const reconcileMercadoPagoRefundsService = {
+    execute: reconcileRefundsExecuteMock,
+  } as unknown as ReconcileMercadoPagoRefundsService;
+
   let service: HandleMercadoPagoWebhookService;
 
   beforeEach(() => {
@@ -103,6 +109,7 @@ describe('HandleMercadoPagoWebhookService', () => {
       failPaymentService,
       confirmRedirectPaymentService,
       mercadoPagoConfig as unknown as MercadoPagoConfigService,
+      reconcileMercadoPagoRefundsService,
     );
   });
 
@@ -451,6 +458,31 @@ describe('HandleMercadoPagoWebhookService', () => {
         });
       },
     );
+
+    it('delegates refunded and charged_back snapshots to the refund reconciliation', async () => {
+      mercadoPagoConfig.apiMode = 'orders';
+      paymentWebhookEventFindUniqueMock.mockResolvedValue(null);
+      paymentAttemptFindFirstMock.mockResolvedValue({
+        ...orderAttempt,
+        status: PaymentAttemptStatus.SUCCEEDED,
+      });
+      billFindUniqueMock.mockResolvedValue(billWithBranch);
+      paymentAttemptUpdateMock.mockResolvedValue({});
+      const snapshot = {
+        providerReference: 'ORD01TEST',
+        outcome: 'PENDING',
+        rawStatus: 'refunded',
+        refunds: [{ reference: 'REF1', amount: '1000', outcome: 'APPROVED' }],
+      };
+      getPaymentMock.mockResolvedValue(snapshot);
+
+      await service.execute({
+        body: { id: 602, type: 'order', data: { id: 'ORD01TEST' } },
+        dataId: 'ORD01TEST',
+      });
+
+      expect(reconcileRefundsExecuteMock).toHaveBeenCalledWith(snapshot);
+    });
 
     it('does not change an already SUCCEEDED attempt when a reversal arrives', async () => {
       mercadoPagoConfig.apiMode = 'orders';

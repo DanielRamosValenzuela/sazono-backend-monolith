@@ -16,6 +16,10 @@ import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../../../auth/guards/profile-type.guard';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
 import {
+  GetDailyZService,
+  type DailyZResponse,
+} from '../../application/get-daily-z.service';
+import {
   GetOpenTabsService,
   type OpenTabsResponse,
 } from '../../application/get-open-tabs.service';
@@ -41,6 +45,7 @@ import {
   type TipsResponse,
 } from '../../application/get-tips-report.service';
 import {
+  DailyZQueryDto,
   InsightsQueryDto,
   OpenTabsQueryDto,
   SalesByStaffQueryDto,
@@ -66,6 +71,7 @@ export class ReportsInsightsController {
     private readonly getTipsReportService: GetTipsReportService,
     private readonly getOpenTabsService: GetOpenTabsService,
     private readonly getSummaryKpisService: GetSummaryKpisService,
+    private readonly getDailyZService: GetDailyZService,
   ) {}
 
   @Get('branches/:branchId/sales-by-method')
@@ -196,5 +202,20 @@ export class ReportsInsightsController {
     }
 
     return this.getSummaryKpisService.execute(authUser, branchId, query);
+  }
+
+  @Get('branches/:branchId/daily-z')
+  @UseGuards(JwtAuthGuard, ProfileTypeGuard)
+  @RequireProfileType(LoginProfileType.STAFF)
+  @ApiOperation({
+    summary:
+      'Z diario: rango de folios internos, neto, exento, IVA, propinas, reembolsos (base nota de credito), por medio de pago, por categoria y cierre de caja por cajero. CASHIER solo recibe su propio cierre de caja de hoy.',
+  })
+  getDailyZ(
+    @CurrentAuthUser() authUser: JwtPayload,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Query() query: DailyZQueryDto,
+  ): Promise<DailyZResponse> {
+    return this.getDailyZService.execute(authUser, branchId, query.date);
   }
 }

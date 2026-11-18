@@ -76,6 +76,14 @@ export class CreateRefundDto {
   })
   tipAmount?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Solo ADMIN. En pagos de pasarela registra el reembolso como hecho fuera de Sazono (sin llamar a la pasarela).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  registerAsManual?: boolean;
+
   @ApiPropertyOptional({ format: 'uuid' })
   @ValidateIf((dto: CreateRefundDto) => isPresent(dto.approverPin))
   @IsUUID()
@@ -111,6 +119,7 @@ export type RefundResponseDto = {
   method: RefundMethod;
   reasonCode: RefundReason;
   reasonText: string;
+  failureReason: string | null;
   requestedBy: RefundRequesterDto | null;
   approvedBy: RefundApproverDto | null;
   creditNoteStatus: string;
@@ -149,6 +158,9 @@ export type PaymentRefundsResponseDto = {
     status: PaymentStatus;
     consumptionAmount: string;
     paidAt: string | null;
+    disputed: boolean;
+    installments: number | null;
+    gatewayRefundSupported: boolean;
   };
   settings: {
     cashierRefundLimit: string | null;
@@ -159,6 +171,7 @@ export type PaymentRefundsResponseDto = {
     method: RefundMethod | null;
     deniedCode: string | null;
     deniedMessage: string | null;
+    canManageGateway: boolean;
   };
   refunds: RefundResponseDto[];
 };

@@ -21,6 +21,8 @@ import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthService } from '../../auth/auth.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
 import type { CreateRefundDto } from '../presentation/http/dto/refunds.dto';
+import { mapRefund, type RefundRecord } from './refund-mapper';
+import type { RefundGatewayService } from './refund-gateway.service';
 import { RefundPaymentService } from './refund-payment.service';
 
 const d = (value: number | string) => new Prisma.Decimal(value);
@@ -33,6 +35,8 @@ type Overrides = {
     refundedAmount: Prisma.Decimal;
     refundedTipAmount: Prisma.Decimal;
     provider: string;
+    providerReference: string | null;
+    gatewayMeta: Record<string, unknown> | null;
     method: PaymentMethod | null;
     status: PaymentStatus;
     paidAt: Date | null;
@@ -43,6 +47,7 @@ type Overrides = {
     refundTipDefault: boolean;
   } | null;
   orders?: Array<{ id: string; status: OrderStatus }>;
+  gatewayFinalStatus?: RefundStatus;
   dayTotal?: Prisma.Decimal;
   lockedDayTotal?: Prisma.Decimal;
 };
@@ -60,6 +65,8 @@ function build(overrides: Overrides = {}) {
     amount: overrides.payment?.amount ?? d(11000),
     tipAmount: overrides.payment?.tipAmount ?? d(1000),
     provider: overrides.payment?.provider ?? 'MANUAL',
+    providerReference: overrides.payment?.providerReference ?? null,
+    gatewayMeta: overrides.payment?.gatewayMeta ?? null,
     method:
       overrides.payment?.method === undefined
         ? PaymentMethod.CASH
@@ -246,15 +253,41 @@ function build(overrides: Overrides = {}) {
   });
   const verifyStaffPin = jest.fn().mockResolvedValue('OK');
 
+  const dispatch = jest.fn((id: string) => {
+    const row = refunds.find((item) => item.id === id);
+
+    if (row && overrides.gatewayFinalStatus) {
+      row.status = overrides.gatewayFinalStatus;
+    }
+
+    return Promise.resolve(row);
+  });
+  const toResult = jest.fn((refund: Record<string, unknown>, replay: boolean) =>
+    Promise.resolve({
+      refund: mapRefund(refund as unknown as RefundRecord),
+      payment: {} as never,
+      cashToHandOver: null,
+      billActiveOrders: 0,
+      idempotentReplay: replay,
+    }),
+  );
+  const refundGateway = {
+    dispatch,
+    toResult,
+  } as unknown as RefundGatewayService;
+
   const service = new RefundPaymentService(
     prisma as unknown as PrismaService,
     { ensureAccess } as unknown as BranchAccessService,
     { verifyStaffPin } as unknown as AuthService,
     new AuditService(prisma as unknown as PrismaService),
+    refundGateway,
   );
 
   return {
     service,
+    dispatch,
+    toResult,
     prisma,
     tx,
     refunds,
@@ -768,6 +801,8 @@ describe('RefundPaymentService', () => {
         refundedAmount: d(0),
         refundedTipAmount: d(0),
         provider: 'MANUAL',
+        providerReference: null,
+        gatewayMeta: null,
         method: PaymentMethod.CASH,
         status: PaymentStatus.PAID,
         paidAt: new Date('2026-11-20T15:00:00.000Z'),
@@ -1214,6 +1249,124 @@ describe('RefundPaymentService', () => {
       expect(ctx.refunds).toHaveLength(0);
       expect(ctx.queryRaw).not.toHaveBeenCalled();
       expect(actions(ctx)).toEqual(['REFUND_DENIED']);
+    });
+  });
+
+  describe('gateway refunds', () => {
+    const gatewayPayment = {
+      provider: 'MERCADO_PAGO',
+      method: PaymentMethod.MERCADO_PAGO,
+      providerReference: 'ORD01',
+    };
+
+    it('reserves the balance, creates a PENDING GATEWAY refund and dispatches it outside the transaction', async () => {
+      const ctx = build({
+        roles: [Role.ADMIN],
+        payment: gatewayPayment,
+        gatewayFinalStatus: RefundStatus.SUCCEEDED,
+      });
+
+      const result = await run(ctx);
+
+      const created = (
+        ctx.tx.refund.create.mock.calls[0] as [
+          { data: Record<string, unknown> },
+        ]
+      )[0].data;
+      expect(created).toMatchObject({
+        method: RefundMethod.GATEWAY,
+        status: RefundStatus.PENDING,
+        completedAt: null,
+        provider: 'MERCADO_PAGO',
+      });
+      expect(ctx.state.refundedAmount.toString()).toBe('3000');
+      expect(ctx.cashMovements).toHaveLength(0);
+      expect(actions(ctx)).toEqual(['REFUND_REQUESTED']);
+      expect(ctx.dispatch).toHaveBeenCalledWith(
+        'refund-1',
+        expect.objectContaining({ staffUserId: 'staff-1', role: Role.ADMIN }),
+      );
+      expect(result.refund.status).toBe(RefundStatus.SUCCEEDED);
+      expect(result.cashToHandOver).toBeNull();
+    });
+
+    it('answers PENDING when the gateway call stays ambiguous and keeps the reservation', async () => {
+      const ctx = build({ roles: [Role.ADMIN], payment: gatewayPayment });
+
+      const result = await run(ctx);
+
+      expect(result.refund.status).toBe(RefundStatus.PENDING);
+      expect(ctx.state.refundedAmount.toString()).toBe('3000');
+    });
+
+    it('answers FAILED with the reason when the gateway rejects it', async () => {
+      const ctx = build({
+        roles: [Role.ADMIN],
+        payment: gatewayPayment,
+        gatewayFinalStatus: RefundStatus.FAILED,
+      });
+
+      const result = await run(ctx);
+
+      expect(result.refund.status).toBe(RefundStatus.FAILED);
+    });
+
+    it('rejects a cashier on a gateway payment with 403 and never reserves anything', async () => {
+      const ctx = build({ payment: gatewayPayment });
+
+      const { error, code } = await codeOf(run(ctx));
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(code).toBe('REFUND_ADMIN_ONLY');
+      expect(ctx.dispatch).not.toHaveBeenCalled();
+      expect(ctx.queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('registers as manual external without calling the gateway when the admin asks for it', async () => {
+      const ctx = build({ roles: [Role.ADMIN], payment: gatewayPayment });
+
+      const result = await run(ctx, dto({ registerAsManual: true }));
+
+      expect(result.refund.method).toBe(RefundMethod.MANUAL_EXTERNAL);
+      expect(result.refund.status).toBe(RefundStatus.SUCCEEDED);
+      expect(ctx.dispatch).not.toHaveBeenCalled();
+      expect(actions(ctx)).toEqual(['REFUND_REGISTERED_MANUAL']);
+    });
+
+    it('treats a Transbank payment without gateway meta as manual external', async () => {
+      const ctx = build({
+        roles: [Role.ADMIN],
+        payment: { provider: 'TRANSBANK', providerReference: 'tok' },
+      });
+
+      const result = await run(ctx);
+
+      expect(result.refund.method).toBe(RefundMethod.MANUAL_EXTERNAL);
+      expect(ctx.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('replays the same key without a second reservation or gateway call', async () => {
+      const ctx = build({ roles: [Role.ADMIN], payment: gatewayPayment });
+      await run(ctx);
+
+      const replay = await run(ctx);
+
+      expect(replay.idempotentReplay).toBe(true);
+      expect(ctx.refunds).toHaveLength(1);
+      expect(ctx.dispatch).toHaveBeenCalledTimes(1);
+      expect(ctx.state.refundedAmount.toString()).toBe('3000');
+    });
+
+    it('does not let two concurrent gateway refunds exceed the payment amount', async () => {
+      const ctx = build({ roles: [Role.ADMIN], payment: gatewayPayment });
+
+      await run(ctx, dto({ amount: '9000' }), 'key-aaaa-0001');
+      const { code } = await codeOf(
+        run(ctx, dto({ amount: '3000' }), 'key-aaaa-0002'),
+      );
+
+      expect(code).toBe('REFUND_EXCEEDS_REFUNDABLE');
+      expect(ctx.dispatch).toHaveBeenCalledTimes(1);
     });
   });
 });

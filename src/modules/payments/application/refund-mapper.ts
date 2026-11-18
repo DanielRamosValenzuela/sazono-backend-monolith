@@ -33,6 +33,7 @@ export function mapRefund(refund: RefundRecord): RefundResponseDto {
     method: refund.method,
     reasonCode: refund.reasonCode,
     reasonText: refund.reasonText,
+    failureReason: refund.failureReason,
     requestedBy: refund.requestedBy
       ? {
           staffUserId: refund.requestedBy.id,

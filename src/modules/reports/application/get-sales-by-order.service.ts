@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatZonedDateTime } from '../../../common/time/restaurant-time';
+import { computeVatBreakdown } from '../../billing/domain/tax-policy';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import {
   ReportsPrismaRepository,
@@ -72,11 +73,15 @@ export type SalesByOrderRow = {
   payable: string;
   tip: string;
   paymentsCount: number;
+  billNumber: string | null;
   receipt: string | null;
   receiptNumber: string | null;
   refunded: string;
   tipRefunded: string;
   net: string;
+  netAmount: string;
+  exemptAmount: string;
+  vatAmount: string;
   refundStatus: 'NONE' | 'PARTIAL' | 'FULL';
   methods: MethodAmount[];
 };
@@ -91,6 +96,9 @@ export type SalesByOrderTotals = {
   refunded: string;
   tipRefunded: string;
   net: string;
+  netAmount: string;
+  exemptAmount: string;
+  vatAmount: string;
   methods: MethodAmount[];
   otherPeriod: {
     included: boolean;
@@ -134,6 +142,21 @@ export type CsvDownload = { filename: string; stream: Readable };
 const ZERO = new Prisma.Decimal(0);
 const money = (value: Prisma.Decimal.Value): string =>
   new Prisma.Decimal(value).toFixed(0);
+
+const RECEIPT_LABELS: Record<string, string> = {
+  BOLETA_AFECTA: 'Boleta afecta',
+  BOLETA_EXENTA: 'Boleta exenta',
+};
+
+function vatStrings(netOfRefunds: Prisma.Decimal) {
+  const vat = computeVatBreakdown(netOfRefunds);
+
+  return {
+    netAmount: money(vat.netAmount),
+    exemptAmount: money(vat.exemptAmount),
+    vatAmount: money(vat.vatAmount),
+  };
+}
 
 function emptyMethodSums(): Record<MethodKey, Prisma.Decimal> {
   return Object.fromEntries(
@@ -227,11 +250,15 @@ export function buildSalesByOrderRow(
     payable: money(total),
     tip: money(tip),
     paymentsCount: payments.length,
-    receipt: null,
-    receiptNumber: null,
+    billNumber: bill.bill_number?.toString() ?? null,
+    receipt: bill.receipt_type
+      ? (RECEIPT_LABELS[bill.receipt_type] ?? bill.receipt_type)
+      : null,
+    receiptNumber: bill.receipt_folio?.toString() ?? null,
     refunded: money(refunded),
     tipRefunded: money(tipRefunded),
     net: money(total.sub(refunded)),
+    ...vatStrings(total.sub(refunded)),
     refundStatus,
     methods: toMethodAmounts(sums),
   };
@@ -304,6 +331,7 @@ export function buildSalesByOrderTotals(
     refunded: money(refunded),
     tipRefunded: money(rowsTipRefunded.add(otherTipRefunded)),
     net: money(total.sub(refunded)),
+    ...vatStrings(total.sub(refunded)),
     methods: toMethodAmounts(sums),
     otherPeriod: {
       included: allRefundsByMethod !== null,
@@ -334,6 +362,10 @@ export const SALES_BY_ORDER_CSV_HEADERS = [
   'Reembolsado',
   'Propina reembolsada',
   'Neto',
+  'Neto sin IVA',
+  'Exento',
+  'IVA',
+  'N° cuenta',
   ...METHOD_KEYS.map((method) => METHOD_LABELS[method]),
 ];
 
@@ -358,6 +390,10 @@ function salesRowToCsv(row: SalesByOrderRow, timeZone: string): CsvCell[] {
     Number(row.refunded),
     Number(row.tipRefunded),
     Number(row.net),
+    Number(row.netAmount),
+    Number(row.exemptAmount),
+    Number(row.vatAmount),
+    row.billNumber,
     ...row.methods.map((entry) => Number(entry.amount)),
   ];
 }
@@ -394,6 +430,10 @@ function salesOtherPeriodToCsv(totals: SalesByOrderTotals): CsvCell[] | null {
     Number(other.refunded),
     Number(other.tipRefunded),
     -Number(other.refunded),
+    '',
+    '',
+    '',
+    '',
     ...other.methods.map((entry) => -Number(entry.amount)),
   ];
 }
@@ -419,6 +459,10 @@ function salesTotalsToCsv(totals: SalesByOrderTotals): CsvCell[] {
     Number(totals.refunded),
     Number(totals.tipRefunded),
     Number(totals.net),
+    Number(totals.netAmount),
+    Number(totals.exemptAmount),
+    Number(totals.vatAmount),
+    '',
     ...totals.methods.map((entry) => Number(entry.amount)),
   ];
 }

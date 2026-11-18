@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ReconcileMercadoPagoRefundsService } from './reconcile-mercado-pago-refunds.service';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import { ConfirmRedirectPaymentService } from './confirm-redirect-payment.service';
 import { FailPaymentService } from './fail-payment.service';
@@ -47,7 +48,6 @@ export type HandleMercadoPagoWebhookResult = {
 };
 
 const MERCADOPAGO_PAYMENT_EVENT_TYPES = new Set(['payment', 'order', 'orders']);
-const REVERSAL_STATUSES = new Set(['refunded', 'charged_back']);
 const NO_REAL_CHARGE_TIP_DELTA = new Prisma.Decimal(0);
 const WEBHOOK_REJECTED_FAILURE_REASON =
   'El pago fue rechazado por Mercado Pago (confirmado via webhook).';
@@ -78,6 +78,7 @@ export class HandleMercadoPagoWebhookService {
     private readonly failPaymentService: FailPaymentService,
     private readonly confirmRedirectPaymentService: ConfirmRedirectPaymentService,
     private readonly mercadoPagoConfig: MercadoPagoConfigService,
+    private readonly reconcileMercadoPagoRefundsService: ReconcileMercadoPagoRefundsService,
   ) {}
 
   async execute(
@@ -345,16 +346,12 @@ export class HandleMercadoPagoWebhookService {
     context: AttemptContext,
     snapshot: GatewayPaymentSnapshot,
   ): Promise<void> {
+    await this.reconcileMercadoPagoRefundsService.execute(snapshot);
+
     if (
       context.attempt.status !== PaymentAttemptStatus.PENDING ||
       snapshot.outcome === 'PENDING'
     ) {
-      if (REVERSAL_STATUSES.has(snapshot.rawStatus.toLowerCase())) {
-        this.logger.warn(
-          `Mercado Pago reporto ${snapshot.rawStatus} para el intento ${context.attempt.id} (estado local ${context.attempt.status}). Solo se registra, no se revierte ni se acredita automaticamente.`,
-        );
-      }
-
       await this.recordProviderStatus(context.attempt.id, snapshot);
       return;
     }
