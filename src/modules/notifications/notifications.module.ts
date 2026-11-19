@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
+import { DeviceTokenSoundService } from './application/device-token-sound.service';
 import { OrderCreatedListener } from './application/order-created.listener';
 import { PushNotificationService } from './application/push-notification.service';
 import { RegisterDeviceTokenService } from './application/register-device-token.service';
@@ -15,6 +16,7 @@ import { DeviceTokensController } from './presentation/http/device-tokens.contro
   providers: [
     PushNotificationService,
     RegisterDeviceTokenService,
+    DeviceTokenSoundService,
     UnregisterDeviceTokenService,
     OrderCreatedListener,
     StationTicketReadyListener,

@@ -64,8 +64,8 @@ describe('PushNotificationService', () => {
     service = new PushNotificationService(prisma, firebaseAdminService);
 
     staffDeviceTokenFindManyMock.mockResolvedValue([
-      { id: 'token-1', fcmToken: 'fcm-1' },
-      { id: 'token-2', fcmToken: 'fcm-2' },
+      { id: 'token-1', fcmToken: 'fcm-1', soundEnabled: true },
+      { id: 'token-2', fcmToken: 'fcm-2', soundEnabled: true },
     ]);
     sendEachForMulticastMock.mockResolvedValue({
       responses: [
@@ -91,6 +91,55 @@ describe('PushNotificationService', () => {
     );
     expect(staffDeviceTokenDeleteManyMock).toHaveBeenCalledWith({
       where: { id: { in: ['token-2'] } },
+    });
+  });
+
+  it('splits sound and silent tokens and cleans invalid ones from both', async () => {
+    const firebaseAdminService = {
+      isEnabled: true,
+      messaging: { sendEachForMulticast: sendEachForMulticastMock },
+    } as unknown as FirebaseAdminService;
+    service = new PushNotificationService(prisma, firebaseAdminService);
+
+    staffDeviceTokenFindManyMock.mockResolvedValue([
+      { id: 'token-1', fcmToken: 'fcm-1', soundEnabled: true },
+      { id: 'token-2', fcmToken: 'fcm-2', soundEnabled: false },
+      { id: 'token-3', fcmToken: 'fcm-3', soundEnabled: false },
+    ]);
+    sendEachForMulticastMock
+      .mockResolvedValueOnce({ responses: [{ success: true }] })
+      .mockResolvedValueOnce({
+        responses: [
+          { success: true },
+          {
+            success: false,
+            error: { code: 'messaging/registration-token-not-registered' },
+          },
+        ],
+      });
+
+    await service.sendToStaffUsers(['staff-1'], {
+      title: 'Nueva orden',
+      body: 'Hay una nueva orden.',
+    });
+
+    expect(sendEachForMulticastMock).toHaveBeenCalledTimes(2);
+    expect(sendEachForMulticastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokens: ['fcm-1'],
+        android: {
+          notification: { sound: 'default', channelId: 'sazono_alerts' },
+        },
+      }),
+    );
+    const silentCall = sendEachForMulticastMock.mock.calls[1][0];
+    expect(silentCall.tokens).toEqual(['fcm-2', 'fcm-3']);
+    expect(silentCall.android).toEqual({
+      notification: { channelId: 'sazono_silent' },
+    });
+    expect(silentCall.apns).toBeUndefined();
+    expect(staffDeviceTokenDeleteManyMock).toHaveBeenCalledWith({
+      where: { id: { in: ['token-3'] } },
     });
   });
 

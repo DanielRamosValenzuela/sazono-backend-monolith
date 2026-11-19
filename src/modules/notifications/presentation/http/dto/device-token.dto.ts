@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 const DEVICE_PLATFORMS = ['android', 'ios', 'web'] as const;
 
@@ -18,6 +24,26 @@ export class RegisterDeviceTokenDto {
 }
 
 export class UnregisterDeviceTokenDto {
+  @ApiProperty({ example: 'f7z9...' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4096)
+  fcmToken!: string;
+}
+
+export class UpdateDeviceTokenSoundDto {
+  @ApiProperty({ example: 'f7z9...' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4096)
+  fcmToken!: string;
+
+  @ApiProperty()
+  @IsBoolean()
+  soundEnabled!: boolean;
+}
+
+export class DeviceTokenSoundQueryDto {
   @ApiProperty({ example: 'f7z9...' })
   @IsString()
   @IsNotEmpty()

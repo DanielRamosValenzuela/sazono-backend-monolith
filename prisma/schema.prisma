@@ -347,13 +347,14 @@ model StaffUser {
 }
 
 model StaffDeviceToken {
-  id          String    @id @default(uuid()) @db.Uuid
-  staffUserId String    @map("staff_user_id") @db.Uuid
-  fcmToken    String    @map("fcm_token")
-  platform    String
-  staffUser   StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  lastSeenAt  DateTime  @updatedAt @map("last_seen_at") @db.Timestamptz(3)
+  id           String    @id @default(uuid()) @db.Uuid
+  staffUserId  String    @map("staff_user_id") @db.Uuid
+  fcmToken     String    @map("fcm_token")
+  platform     String
+  soundEnabled Boolean   @default(true) @map("sound_enabled")
+  staffUser    StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt   DateTime  @updatedAt @map("last_seen_at") @db.Timestamptz(3)
 
   @@unique([staffUserId, fcmToken])
   @@index([staffUserId])

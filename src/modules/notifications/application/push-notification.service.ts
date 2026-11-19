@@ -10,7 +10,14 @@ export interface PushNotificationPayload {
   data?: Record<string, string>;
 }
 
+const SOUND_CHANNEL_ID = 'sazono_alerts';
+const SILENT_CHANNEL_ID = 'sazono_silent';
 const INVALID_TOKEN_ERROR_CODE = 'messaging/registration-token-not-registered';
+
+interface TokenSendResult {
+  id: string;
+  response?: SendResponse;
+}
 
 @Injectable()
 export class PushNotificationService {
@@ -67,6 +74,7 @@ export class PushNotificationService {
       select: {
         id: true,
         fcmToken: true,
+        soundEnabled: true,
       },
     });
 
@@ -74,29 +82,58 @@ export class PushNotificationService {
       return;
     }
 
-    const response =
-      await this.firebaseAdminService.messaging.sendEachForMulticast({
-        tokens: deviceTokens.map((deviceToken) => deviceToken.fcmToken),
-        notification: {
-          title: payload.title,
-          body: payload.body,
-        },
-        data: payload.data,
-      });
+    const withSound = deviceTokens.filter((token) => token.soundEnabled);
+    const silent = deviceTokens.filter((token) => !token.soundEnabled);
+    const base = {
+      notification: { title: payload.title, body: payload.body },
+      data: payload.data,
+    };
+    const { messaging } = this.firebaseAdminService;
 
-    await this.cleanUpInvalidTokens(deviceTokens, response.responses);
+    const [soundResponse, silentResponse] = await Promise.all([
+      withSound.length > 0
+        ? messaging.sendEachForMulticast({
+            ...base,
+            tokens: withSound.map((token) => token.fcmToken),
+            android: {
+              notification: { sound: 'default', channelId: SOUND_CHANNEL_ID },
+            },
+            apns: { payload: { aps: { sound: 'default' } } },
+          })
+        : null,
+      silent.length > 0
+        ? messaging.sendEachForMulticast({
+            ...base,
+            tokens: silent.map((token) => token.fcmToken),
+            android: { notification: { channelId: SILENT_CHANNEL_ID } },
+          })
+        : null,
+    ]);
+
+    await this.cleanUpInvalidTokens([
+      ...this.pairResponses(withSound, soundResponse?.responses),
+      ...this.pairResponses(silent, silentResponse?.responses),
+    ]);
+  }
+
+  private pairResponses(
+    tokens: Array<{ id: string }>,
+    responses: SendResponse[] = [],
+  ): TokenSendResult[] {
+    return tokens.map((token, index) => ({
+      id: token.id,
+      response: responses[index],
+    }));
   }
 
   private async cleanUpInvalidTokens(
-    deviceTokens: Array<{ id: string; fcmToken: string }>,
-    responses: SendResponse[],
+    results: TokenSendResult[],
   ): Promise<void> {
-    const invalidTokenIds = deviceTokens
+    const invalidTokenIds = results
       .filter(
-        (_, index) =>
-          responses[index]?.error?.code === INVALID_TOKEN_ERROR_CODE,
+        (result) => result.response?.error?.code === INVALID_TOKEN_ERROR_CODE,
       )
-      .map((deviceToken) => deviceToken.id);
+      .map((result) => result.id);
 
     if (invalidTokenIds.length === 0) {
       return;
