@@ -9,9 +9,10 @@ export const STATION_TICKET_TRANSITIONS: Record<
   ],
   [StationTicketStatus.IN_PROGRESS]: [
     StationTicketStatus.READY,
+    StationTicketStatus.PENDING,
     StationTicketStatus.CANCELLED,
   ],
-  [StationTicketStatus.READY]: [],
+  [StationTicketStatus.READY]: [StationTicketStatus.IN_PROGRESS],
   [StationTicketStatus.CANCELLED]: [],
 };
 
@@ -20,4 +21,16 @@ export function canTransitionStationTicket(
   to: StationTicketStatus,
 ): boolean {
   return STATION_TICKET_TRANSITIONS[from].includes(to);
+}
+
+export function isStationTicketReturn(
+  from: StationTicketStatus,
+  to: StationTicketStatus,
+): boolean {
+  return (
+    (from === StationTicketStatus.IN_PROGRESS &&
+      to === StationTicketStatus.PENDING) ||
+    (from === StationTicketStatus.READY &&
+      to === StationTicketStatus.IN_PROGRESS)
+  );
 }

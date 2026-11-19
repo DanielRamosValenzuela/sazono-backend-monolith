@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../../common/audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileTypeGuard } from '../auth/guards/profile-type.guard';
@@ -7,7 +8,7 @@ import { UpdateStationTicketStatusService } from './application/update-station-t
 import { KitchenController } from './presentation/http/kitchen.controller';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AuditModule],
   controllers: [KitchenController],
   providers: [
     ListStationTicketsService,

@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -18,6 +18,8 @@ import { canTransitionStationTicket } from '../domain/station-ticket-transitions
 import { STATION_TICKET_READY_EVENT } from '../domain/station-ticket-events';
 import type { StationTicketReadyEvent } from '../domain/station-ticket-events';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
+import { AuditService } from '../../../common/audit/audit.service';
+import { isStationTicketReturn } from '../domain/station-ticket-transitions';
 import {
   STATION_TICKET_INCLUDE,
   mapStationTicket,
@@ -37,6 +39,7 @@ const ORDER_PRODUCTION_STATUSES: OrderStatus[] = [
 const ORDER_ITEM_STATUS_BY_TICKET_STATUS: Partial<
   Record<StationTicketStatus, OrderItemStatus>
 > = {
+  [StationTicketStatus.PENDING]: OrderItemStatus.PENDING,
   [StationTicketStatus.IN_PROGRESS]: OrderItemStatus.IN_PREPARATION,
   [StationTicketStatus.READY]: OrderItemStatus.READY,
   [StationTicketStatus.CANCELLED]: OrderItemStatus.CANCELLED,
@@ -48,6 +51,7 @@ export class UpdateStationTicketStatusService {
     private readonly prisma: PrismaService,
     private readonly branchAccessService: BranchAccessService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly auditService: AuditService,
   ) {}
 
   async execute(
@@ -90,7 +94,26 @@ export class UpdateStationTicketStatusService {
       );
     }
 
+    const isReturn = isStationTicketReturn(ticket.status, dto.status);
+
+    if (isReturn && !ORDER_PRODUCTION_STATUSES.includes(ticket.order.status)) {
+      throw new ConflictException(
+        'El pedido ya fue entregado o cerrado; no se puede devolver el ticket.',
+      );
+    }
+
+    const actorRole = context.roles.includes(Role.ADMIN)
+      ? Role.ADMIN
+      : context.roles.includes(Role.SUPERVISOR)
+        ? Role.SUPERVISOR
+        : context.roles.includes(Role.KITCHEN)
+          ? Role.KITCHEN
+          : context.roles.includes(Role.BAR)
+            ? Role.BAR
+            : null;
+
     let finalOrderStatus = ticket.order.status;
+    let alreadyApplied = false;
 
     await this.prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -103,20 +126,56 @@ export class UpdateStationTicketStatusService {
 
       finalOrderStatus = lockedOrder.status;
 
-      await tx.stationTicket.update({
+      const { count } = await tx.stationTicket.updateMany({
         where: {
           id: ticket.id,
+          status: ticket.status,
         },
         data: {
           status: dto.status,
+          ...(dto.status === StationTicketStatus.PENDING
+            ? { startedAt: null, completedAt: null }
+            : {}),
           ...(dto.status === StationTicketStatus.IN_PROGRESS
-            ? { startedAt: ticket.startedAt ?? now }
+            ? { startedAt: ticket.startedAt ?? now, completedAt: null }
             : {}),
           ...(dto.status === StationTicketStatus.READY
             ? { completedAt: now }
             : {}),
         },
       });
+
+      if (count === 0) {
+        const current = await tx.stationTicket.findUnique({
+          where: { id: ticket.id },
+          select: { status: true },
+        });
+
+        if (current?.status !== dto.status) {
+          throw new ConflictException(
+            'El ticket cambio de estado mientras tanto.',
+          );
+        }
+
+        alreadyApplied = true;
+        return;
+      }
+
+      if (isReturn || dto.status === StationTicketStatus.CANCELLED) {
+        await this.auditService.record(tx, {
+          restaurantId: context.restaurantId,
+          branchId: ticket.branchId,
+          actorStaffUserId: context.staffUserId,
+          actorRole,
+          action: isReturn
+            ? 'STATION_TICKET_RETURNED'
+            : 'STATION_TICKET_CANCELLED',
+          entityType: 'StationTicket',
+          entityId: ticket.id,
+          before: { status: ticket.status },
+          after: { status: dto.status },
+        });
+      }
 
       const orderItemStatus = ORDER_ITEM_STATUS_BY_TICKET_STATUS[dto.status];
 
@@ -190,6 +249,7 @@ export class UpdateStationTicketStatusService {
     });
 
     if (
+      !alreadyApplied &&
       dto.status === StationTicketStatus.READY &&
       finalOrderStatus === OrderStatus.READY
     ) {
