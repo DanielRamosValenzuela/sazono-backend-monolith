@@ -20,6 +20,7 @@ import type { BranchAccessService } from '../../../common/branch-access/branch-a
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { AuthService } from '../../auth/auth.service';
 import { LoginProfileType } from '../../auth/dto/login.dto';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import type { CreateRefundDto } from '../presentation/http/dto/refunds.dto';
 import { mapRefund, type RefundRecord } from './refund-mapper';
 import type { RefundGatewayService } from './refund-gateway.service';
@@ -365,8 +366,11 @@ const codeOf = async (promise: Promise<unknown>) => {
   return { error, code: response?.code };
 };
 
+jest.mock('../../billing/application/create-pending-credit-note.service');
+
 describe('RefundPaymentService', () => {
   beforeEach(() => {
+    jest.mocked(enqueueCreditNoteForRefund).mockClear();
     jest.useFakeTimers({ now: NOW });
   });
 
@@ -385,6 +389,12 @@ describe('RefundPaymentService', () => {
 
       const result = await run(ctx, dto({ amount: '11000', refundTip: true }));
 
+      expect(enqueueCreditNoteForRefund).toHaveBeenCalledTimes(1);
+      expect(enqueueCreditNoteForRefund).toHaveBeenCalledWith(
+        ctx.tx,
+        'refund-1',
+        expect.objectContaining({ id: 'refund-1' }),
+      );
       expect(result.idempotentReplay).toBe(false);
       expect(result.cashToHandOver).toBe('11000');
       expect(result.billActiveOrders).toBe(1);
@@ -1323,6 +1333,7 @@ describe('RefundPaymentService', () => {
       });
       expect(ctx.state.refundedAmount.toString()).toBe('3000');
       expect(ctx.cashMovements).toHaveLength(0);
+      expect(enqueueCreditNoteForRefund).not.toHaveBeenCalled();
       expect(actions(ctx)).toEqual(['REFUND_REQUESTED']);
       expect(ctx.dispatch).toHaveBeenCalledWith(
         'refund-1',

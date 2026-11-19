@@ -36,6 +36,7 @@ import type {
   RefundResultResponseDto,
 } from '../presentation/http/dto/refunds.dto';
 import { computeLineRefundAmount } from '../domain/refund-items';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import { lockBill } from '../../billing/application/lock-bill';
 import { findOpenCashSessionId } from './find-open-cash-session';
 import { RefundGatewayService } from './refund-gateway.service';
@@ -448,6 +449,10 @@ export class RefundPaymentService {
           data: { refundedAmount: { increment: amount } },
           select: { refundedAmount: true },
         });
+
+        if (!isGateway) {
+          await enqueueCreditNoteForRefund(tx, refund.id, refund);
+        }
 
         let cashMovementId: string | null = null;
 

@@ -48,6 +48,18 @@ export class UpdateRestaurantService {
       data.legalAddress = dto.legalAddress?.trim() || null;
     }
 
+    if (dto.legalCommune !== undefined) {
+      data.legalCommune = dto.legalCommune?.trim() || null;
+    }
+
+    if (dto.legalCity !== undefined) {
+      data.legalCity = dto.legalCity?.trim() || null;
+    }
+
+    if (dto.economicActivityCode !== undefined) {
+      data.economicActivityCode = dto.economicActivityCode;
+    }
+
     if (dto.slug !== undefined) {
       data.slug = dto.slug;
     }

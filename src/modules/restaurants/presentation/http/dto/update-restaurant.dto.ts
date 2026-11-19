@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -80,6 +81,25 @@ export class UpdateRestaurantDto {
   @IsString()
   @MaxLength(300)
   legalAddress?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: 'Providencia' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  legalCommune?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: 'Santiago' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  legalCity?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: 561000 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(999999)
+  economicActivityCode?: number | null;
 
   @ApiPropertyOptional({ example: 'es' })
   @IsOptional()

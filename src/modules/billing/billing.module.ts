@@ -12,8 +12,6 @@ import {
   ListBillDiscountsService,
   VoidBillDiscountService,
 } from './application/void-bill-discount.service';
-import { TAX_DOCUMENT_PROVIDER } from './application/ports/tax-document-provider.port';
-import { NoopTaxDocumentProvider } from './infrastructure/noop-tax-document.provider';
 import { BillDiscountsController } from './presentation/http/bill-discounts.controller';
 import { BillingController } from './presentation/http/billing.controller';
 
@@ -28,14 +26,9 @@ import { BillingController } from './presentation/http/billing.controller';
     ApplyBillDiscountService,
     VoidBillDiscountService,
     ListBillDiscountsService,
-    NoopTaxDocumentProvider,
-    {
-      provide: TAX_DOCUMENT_PROVIDER,
-      useExisting: NoopTaxDocumentProvider,
-    },
     JwtAuthGuard,
     ProfileTypeGuard,
   ],
-  exports: [CreatePendingCreditNoteService, TAX_DOCUMENT_PROVIDER],
+  exports: [CreatePendingCreditNoteService],
 })
 export class BillingModule {}

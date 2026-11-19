@@ -220,30 +220,34 @@ enum LeadStatus {
 }
 
 model Restaurant {
-  id                 String                     @id @default(uuid()) @db.Uuid
-  name               String
-  legalName          String?                    @map("legal_name")
-  slug               String                     @unique
-  branchQuota        Int                        @default(1) @map("branch_quota")
-  defaultLanguage    String                     @default("es") @map("default_language")
-  timezone           String                     @default("America/Santiago")
-  currency           String                     @default("CLP")
-  status             RestaurantStatus           @default(ACTIVE)
-  platformFeeBps     Int                        @default(100) @map("platform_fee_bps")
-  taxId              String?                    @map("tax_id")
-  businessActivity   String?                    @map("business_activity")
-  legalAddress       String?                    @map("legal_address")
-  feeStatements      PlatformFeeStatement[]
-  taxDocuments       TaxDocument[]
-  branches           Branch[]
-  staffUsers         StaffUser[]
-  paymentAccounts    RestaurantPaymentAccount[]
-  paymentOAuthStates PaymentOAuthState[]
-  refunds            Refund[]
-  cashSessions       CashSession[]
-  billDiscounts      BillDiscount[]
-  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                   String                         @id @default(uuid()) @db.Uuid
+  name                 String
+  legalName            String?                        @map("legal_name")
+  slug                 String                         @unique
+  branchQuota          Int                            @default(1) @map("branch_quota")
+  defaultLanguage      String                         @default("es") @map("default_language")
+  timezone             String                         @default("America/Santiago")
+  currency             String                         @default("CLP")
+  status               RestaurantStatus               @default(ACTIVE)
+  platformFeeBps       Int                            @default(100) @map("platform_fee_bps")
+  taxId                String?                        @map("tax_id")
+  businessActivity     String?                        @map("business_activity")
+  legalAddress         String?                        @map("legal_address")
+  economicActivityCode Int?                           @map("economic_activity_code")
+  legalCommune         String?                        @map("legal_commune")
+  legalCity            String?                        @map("legal_city")
+  taxProviderAccounts  RestaurantTaxProviderAccount[]
+  feeStatements        PlatformFeeStatement[]
+  taxDocuments         TaxDocument[]
+  branches             Branch[]
+  staffUsers           StaffUser[]
+  paymentAccounts      RestaurantPaymentAccount[]
+  paymentOAuthStates   PaymentOAuthState[]
+  refunds              Refund[]
+  cashSessions         CashSession[]
+  billDiscounts        BillDiscount[]
+  createdAt            DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("restaurants")
 }
@@ -1187,6 +1191,14 @@ model TaxDocument {
   receiverRut         String?           @map("receiver_rut")
   receiverName        String?           @map("receiver_name")
   rawResponse         Json?             @map("raw_response")
+  attempts            Int               @default(0)
+  nextAttemptAt       DateTime?         @map("next_attempt_at") @db.Timestamptz(3)
+  lastAttemptAt       DateTime?         @map("last_attempt_at") @db.Timestamptz(3)
+  lastError           String?           @map("last_error")
+  requestSnapshot     Json?             @map("request_snapshot")
+  idempotencyKey      String?           @map("idempotency_key")
+  providerStatus      String?           @map("provider_status")
+  xmlUrl              String?           @map("xml_url")
   restaurant          Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
   branch              Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
   bill                Bill              @relation(fields: [billId], references: [id], onDelete: Restrict)
@@ -1196,10 +1208,43 @@ model TaxDocument {
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@unique([branchId, type, folio])
+  @@unique([restaurantId, type, folio])
+  @@unique([restaurantId, idempotencyKey])
+  @@index([status, nextAttemptAt])
   @@index([billId])
   @@index([restaurantId, issuedAt])
   @@map("tax_documents")
+}
+
+enum TaxProvider {
+  OPENFACTURA
+}
+
+enum TaxProviderEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+enum TaxProviderAccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+model RestaurantTaxProviderAccount {
+  id               String                   @id @default(uuid()) @db.Uuid
+  restaurantId     String                   @map("restaurant_id") @db.Uuid
+  provider         TaxProvider
+  environment      TaxProviderEnvironment
+  status           TaxProviderAccountStatus @default(ACTIVE)
+  apiKeyCipher     String                   @map("api_key_cipher")
+  lastVerifiedAt   DateTime?                @map("last_verified_at") @db.Timestamptz(3)
+  lastErrorMessage String?                  @map("last_error_message")
+  restaurant       Restaurant               @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([restaurantId, provider, environment])
+  @@map("restaurant_tax_provider_accounts")
 }
 
 enum DiscountType {

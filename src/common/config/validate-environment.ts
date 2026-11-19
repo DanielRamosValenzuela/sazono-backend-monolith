@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  IsUrl,
   Max,
   IsString,
   Min,
@@ -281,6 +282,53 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   REFUND_RECONCILIATION_MAX_AGE_HOURS = 48;
+
+  @IsOptional()
+  @IsUrl({
+    require_protocol: true,
+    require_tld: false,
+    protocols: ['http', 'https'],
+  })
+  OPENFACTURA_SANDBOX_BASE_URL = 'https://dev-api.haulmer.com';
+
+  @IsOptional()
+  @IsUrl({
+    require_protocol: true,
+    require_tld: false,
+    protocols: ['http', 'https'],
+  })
+  OPENFACTURA_PRODUCTION_BASE_URL = 'https://api.haulmer.com';
+
+  @Transform(({ value }) => toNumber(value, 15000))
+  @IsInt()
+  @Min(1)
+  OPENFACTURA_TIMEOUT_MS = 15000;
+
+  @Transform(({ value }) => toBoolean(value, true))
+  @IsBoolean()
+  TAX_DOCUMENTS_WORKER_ENABLED = true;
+
+  @Transform(({ value }) => toNumber(value, 15000))
+  @IsInt()
+  @Min(1000)
+  TAX_DOCUMENTS_WORKER_INTERVAL_MS = 15000;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  TAX_DOCUMENTS_WORKER_BATCH_SIZE = 10;
+
+  @Transform(({ value }) => toNumber(value, 8))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  TAX_DOCUMENTS_MAX_ATTEMPTS = 8;
+
+  @Transform(({ value }) => toNumber(value, 30))
+  @IsInt()
+  @Min(1)
+  TAX_DOCUMENTS_RETRY_BASE_SECONDS = 30;
 
   @Transform(({ value }) => toNumber(value, 10))
   @IsInt()

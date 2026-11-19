@@ -8,6 +8,7 @@ import {
   type OrderDetailItemRecord,
   type OrderDetailPaymentRecord,
   type OrderDetailRefundRecord,
+  type OrderDetailTaxDocumentRecord,
 } from '../infrastructure/reports.prisma.repository';
 import {
   buildRefundItems,
@@ -119,6 +120,18 @@ export type OrderDetailRefund = {
   approvedBy: string | null;
   completedAt: string | null;
   creditNoteStatus: string;
+  creditNoteFolio: string | null;
+};
+
+export type OrderDetailTaxDocument = {
+  id: string;
+  type: string;
+  status: string;
+  folio: number | null;
+  issuedAt: string | null;
+  totalAmount: string;
+  refundId: string | null;
+  hasError: boolean;
 };
 
 export type OrderDetailResponse = {
@@ -145,6 +158,7 @@ export type OrderDetailResponse = {
   payments: OrderDetailPayment[];
   refunds: OrderDetailRefund[];
   discounts: OrderDetailDiscount[];
+  taxDocuments: OrderDetailTaxDocument[];
   totals: {
     itemsCount: number;
     itemsTotal: string;
@@ -282,6 +296,7 @@ function buildRefund(record: OrderDetailRefundRecord): OrderDetailRefund {
     approvedBy: record.approved_by_name,
     completedAt: record.completed_at?.toISOString() ?? null,
     creditNoteStatus: record.credit_note_status,
+    creditNoteFolio: record.credit_note_folio ?? null,
   };
 }
 
@@ -306,6 +321,7 @@ export function buildOrderDetail(
   timeZone: string,
   refundRecords: OrderDetailRefundRecord[] = [],
   discountRecords: OrderDetailDiscountRecord[] = [],
+  taxDocumentRecords: OrderDetailTaxDocumentRecord[] = [],
 ): OrderDetailResponse {
   const items = itemRecords.map(buildItem);
   const payments = paymentRecords.map(buildPayment);
@@ -391,6 +407,16 @@ export function buildOrderDetail(
       voidReason: record.void_reason,
       createdAt: record.created_at.toISOString(),
     })),
+    taxDocuments: taxDocumentRecords.map((record) => ({
+      id: record.id,
+      type: record.type,
+      status: record.status,
+      folio: record.folio,
+      issuedAt: record.issued_at?.toISOString() ?? null,
+      totalAmount: money(record.total_amount),
+      refundId: record.refund_id,
+      hasError: record.has_error,
+    })),
     totals: {
       itemsCount: items
         .filter((item) => item.counted)
@@ -469,6 +495,7 @@ export class GetOrderDetailService {
       access.timeZone,
       records.refunds,
       records.discounts,
+      records.taxDocuments,
     );
   }
 }

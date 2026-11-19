@@ -35,6 +35,9 @@
 31. [31 Estudio de velocidad del backend: mediciones, diagnóstico y plan](31-estudio-de-velocidad.md)
 32. [32 Reembolsos (M4): contrato de API, reglas y efectos en los reportes](32-reembolsos.md)
 33. [33 Reportería M3: ventas por medio, mesero, hora, propinas, cuentas abiertas y KPIs](33-reporteria-m3.md)
+43. [43 Integración OpenFactura (investigación)](43-openfactura-integracion.md)
+44. [44 Servicio DTE propio vs proveedor](44-servicio-dte-propio.md)
+45. [45 Documentos tributarios con OpenFactura: contrato y runbook](45-openfactura.md)
 
 Nota: dentro del bloque de pagos (12, 13, 21, 22, 23), lee primero el doc 24
 aunque quede numerado al final — es el mapa completo (flujos de dinero, por

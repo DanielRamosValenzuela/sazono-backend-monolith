@@ -31,6 +31,8 @@ jest.mock('../../billing/application/refresh-bill-discounts', () => ({
     ),
 }));
 
+jest.mock('../../billing/application/enqueue-boleta');
+
 describe('PayQrOrderService', () => {
   const tableFindUniqueMock = jest.fn();
   const orderFindUniqueMock = jest.fn();

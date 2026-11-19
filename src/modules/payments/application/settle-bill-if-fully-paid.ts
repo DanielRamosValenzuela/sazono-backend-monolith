@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { enqueueBoletaForPaidBill } from '../../billing/application/enqueue-boleta';
 import {
   OrderItemStatus,
   OrderStatus,
@@ -29,4 +30,5 @@ export async function settleBillIfFullyPaid(
       status: TableSessionStatus.PAYMENT_COMPLETED,
     },
   });
+  await enqueueBoletaForPaidBill(tx, bill.id);
 }

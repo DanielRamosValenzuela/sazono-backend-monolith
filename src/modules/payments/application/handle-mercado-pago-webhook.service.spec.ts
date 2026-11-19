@@ -31,6 +31,8 @@ jest.mock('../../billing/application/refresh-bill-discounts', () => ({
     ),
 }));
 
+jest.mock('../../billing/application/enqueue-boleta');
+
 describe('HandleMercadoPagoWebhookService', () => {
   const paymentWebhookEventFindUniqueMock = jest.fn();
   const paymentWebhookEventCreateMock = jest.fn();

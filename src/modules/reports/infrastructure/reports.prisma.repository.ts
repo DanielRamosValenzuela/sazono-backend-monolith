@@ -111,7 +111,19 @@ export type OrderDetailRefundRecord = {
   requested_by_name: string | null;
   approved_by_name: string | null;
   credit_note_status: string;
+  credit_note_folio?: string | null;
   completed_at: Date | null;
+};
+
+export type OrderDetailTaxDocumentRecord = {
+  id: string;
+  type: string;
+  status: string;
+  folio: number | null;
+  issued_at: Date | null;
+  total_amount: Prisma.Decimal.Value;
+  refund_id: string | null;
+  has_error: boolean;
 };
 
 export type PaymentsPageFilter = PaymentsReportFilter & {
@@ -311,6 +323,7 @@ export type OrderDetailRecords = {
   payments: OrderDetailPaymentRecord[];
   refunds?: OrderDetailRefundRecord[];
   discounts?: OrderDetailDiscountRecord[];
+  taxDocuments?: OrderDetailTaxDocumentRecord[];
 };
 
 export type FilterOptionsRecord = {
@@ -785,8 +798,9 @@ export class ReportsPrismaRepository {
     billId: string,
     refundsOnlyRequestedBy: string | null = null,
   ): Promise<OrderDetailRecords> {
-    const [headers, items, payments, refunds, discounts] = await Promise.all([
-      this.prisma.$queryRaw<OrderDetailHeaderRecord[]>(Prisma.sql`
+    const [headers, items, payments, refunds, discounts, taxDocuments] =
+      await Promise.all([
+        this.prisma.$queryRaw<OrderDetailHeaderRecord[]>(Prisma.sql`
         SELECT
           b.id::text AS id,
           b.status::text AS status,
@@ -828,7 +842,7 @@ export class ReportsPrismaRepository {
         LEFT JOIN staff_users ou ON ou.id = ts.opened_by_staff_user_id
         WHERE b.id = ${billId}::uuid AND b.branch_id = ${branchId}::uuid
       `),
-      this.prisma.$queryRaw<OrderDetailItemRecord[]>(Prisma.sql`
+        this.prisma.$queryRaw<OrderDetailItemRecord[]>(Prisma.sql`
         SELECT
           oi.id::text AS id,
           o.id::text AS order_id,
@@ -864,7 +878,7 @@ export class ReportsPrismaRepository {
         GROUP BY o.id, oi.id, ps.id
         ORDER BY o.created_at ASC, oi.created_at ASC, oi.id ASC
       `),
-      this.prisma.$queryRaw<OrderDetailPaymentRecord[]>(Prisma.sql`
+        this.prisma.$queryRaw<OrderDetailPaymentRecord[]>(Prisma.sql`
         SELECT
           p.id::text AS id,
           p.method::text AS method,
@@ -885,7 +899,7 @@ export class ReportsPrismaRepository {
         WHERE p.bill_id = ${billId}::uuid
         ORDER BY COALESCE(p.paid_at, p.created_at) ASC, p.id ASC
       `),
-      this.prisma.$queryRaw<OrderDetailRefundRecord[]>(Prisma.sql`
+        this.prisma.$queryRaw<OrderDetailRefundRecord[]>(Prisma.sql`
         SELECT
           r.id::text AS id,
           r.payment_id::text AS payment_id,
@@ -901,6 +915,7 @@ export class ReportsPrismaRepository {
           NULLIF(TRIM(CONCAT(ru.first_name, ' ', ru.last_name)), '') AS requested_by_name,
           NULLIF(TRIM(CONCAT(au.first_name, ' ', au.last_name)), '') AS approved_by_name,
           r.credit_note_status,
+          r.credit_note_folio,
           r.completed_at
         FROM refunds r
         JOIN bills rb ON rb.id = r.bill_id
@@ -915,7 +930,7 @@ export class ReportsPrismaRepository {
           }
         ORDER BY COALESCE(r.completed_at, r.created_at) ASC, r.id ASC
       `),
-      this.prisma.$queryRaw<OrderDetailDiscountRecord[]>(Prisma.sql`
+        this.prisma.$queryRaw<OrderDetailDiscountRecord[]>(Prisma.sql`
         SELECT
           d.id::text AS id,
           d.bill_item_id::text AS bill_item_id,
@@ -937,7 +952,21 @@ export class ReportsPrismaRepository {
         WHERE d.bill_id = ${billId}::uuid AND d.branch_id = ${branchId}::uuid
         ORDER BY d.created_at ASC, d.id ASC
       `),
-    ]);
+        this.prisma.$queryRaw<OrderDetailTaxDocumentRecord[]>(Prisma.sql`
+        SELECT
+          td.id::text AS id,
+          td.type::text AS type,
+          td.status::text AS status,
+          td.folio,
+          td.issued_at,
+          td.total_amount,
+          td.refund_id::text AS refund_id,
+          (td.last_error IS NOT NULL) AS has_error
+        FROM tax_documents td
+        WHERE td.bill_id = ${billId}::uuid AND td.branch_id = ${branchId}::uuid
+        ORDER BY td.created_at ASC, td.id ASC
+      `),
+      ]);
 
     return {
       header: headers[0] ?? null,
@@ -945,6 +974,7 @@ export class ReportsPrismaRepository {
       payments,
       refunds: await this.withRefundItems(refunds),
       discounts,
+      taxDocuments,
     };
   }
 

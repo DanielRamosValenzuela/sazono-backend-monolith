@@ -132,6 +132,9 @@ describe('SettleBillPaymentService', () => {
             findUniqueOrThrow: txBillFindUniqueOrThrowMock,
             update: txBillUpdateMock,
           },
+          restaurantTaxProviderAccount: {
+            findFirst: jest.fn().mockResolvedValue(null),
+          },
           tableSession: { updateMany: txSessionUpdateManyMock },
           order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
           orderItem: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
@@ -261,7 +264,9 @@ describe('SettleBillPaymentService', () => {
           bill: {
             findUniqueOrThrow: txBillFindUniqueOrThrowMock,
             update: txBillUpdateMock,
-            findUnique: jest.fn().mockResolvedValue(null),
+          },
+          restaurantTaxProviderAccount: {
+            findFirst: jest.fn().mockResolvedValue(null),
           },
           tableSession: { updateMany: txSessionUpdateManyMock },
           order: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },

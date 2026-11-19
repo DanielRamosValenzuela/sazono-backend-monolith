@@ -1,5 +1,6 @@
 import { Prisma, RefundStatus } from '@prisma/client';
 import type { AuditService } from '../../../common/audit/audit.service';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { GatewayPaymentSnapshot } from './ports/payment-gateway.port';
 import type { RefundGatewayService } from './refund-gateway.service';
@@ -105,6 +106,8 @@ const snapshot = (
   refunds: [{ reference: 'REF1', amount: '3000', outcome: 'APPROVED' }],
   ...overrides,
 });
+
+jest.mock('../../billing/application/create-pending-credit-note.service');
 
 describe('ReconcileMercadoPagoRefundsService', () => {
   it('ignores snapshots without refunds or chargebacks', async () => {
@@ -223,6 +226,11 @@ describe('ReconcileMercadoPagoRefundsService', () => {
       where: { id: 'bill-1' },
       data: { refundedAmount: { increment: d(3000) } },
     });
+    expect(enqueueCreditNoteForRefund).toHaveBeenCalledWith(
+      ctx.tx,
+      expect.anything(),
+      expect.anything(),
+    );
     expect(ctx.gateway.audit).toHaveBeenCalledWith(
       ctx.tx,
       expect.anything(),

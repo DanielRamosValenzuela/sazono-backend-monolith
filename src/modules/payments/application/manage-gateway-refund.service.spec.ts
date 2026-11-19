@@ -3,6 +3,7 @@ import { RefundMethod, RefundStatus, Role } from '@prisma/client';
 import type { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import { ManageGatewayRefundService } from './manage-gateway-refund.service';
 import type {
   GatewayRefundRecord,
@@ -51,6 +52,8 @@ function build(
 
   return { service, tx, refundGateway, ensureAccess };
 }
+
+jest.mock('../../billing/application/create-pending-credit-note.service');
 
 describe('ManageGatewayRefundService', () => {
   it('requires an ADMIN with fresh roles on the refund branch', async () => {
@@ -132,6 +135,7 @@ describe('ManageGatewayRefundService', () => {
     await ctx.service.markManual(authUser, 'refund-1', meta);
 
     expect(ctx.refundGateway.reserve).toHaveBeenCalledTimes(1);
+    expect(enqueueCreditNoteForRefund).toHaveBeenCalledWith(ctx.tx, 'refund-1');
     const data = (
       ctx.tx.refund.updateMany.mock.calls[0] as unknown as [
         { data: Record<string, unknown> },

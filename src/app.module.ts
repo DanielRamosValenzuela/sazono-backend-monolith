@@ -27,6 +27,7 @@ import { MenusModule } from './modules/menus/menus.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { TaxDocumentsModule } from './modules/tax-documents/tax-documents.module';
 import { PlatformBillingModule } from './modules/platform-billing/platform-billing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
@@ -87,6 +88,7 @@ import { StaffModule } from './modules/staff/staff.module';
     OrdersModule,
     KitchenModule,
     BillingModule,
+    TaxDocumentsModule,
     PaymentsModule,
     CashModule,
     PlatformBillingModule,

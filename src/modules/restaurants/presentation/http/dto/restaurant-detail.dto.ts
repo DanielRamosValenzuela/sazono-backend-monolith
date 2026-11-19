@@ -70,6 +70,15 @@ export class RestaurantDetailResponseDto {
   @ApiProperty({ nullable: true, required: false })
   legalAddress!: string | null;
 
+  @ApiProperty({ nullable: true, required: false })
+  legalCommune!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  legalCity!: string | null;
+
+  @ApiProperty({ nullable: true, required: false })
+  economicActivityCode!: number | null;
+
   @ApiProperty({ example: 'sazono-bistro' })
   slug!: string;
 

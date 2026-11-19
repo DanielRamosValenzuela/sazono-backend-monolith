@@ -1,5 +1,6 @@
 import { Prisma, RefundMethod, RefundStatus } from '@prisma/client';
 import type { AuditService } from '../../../common/audit/audit.service';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import type { PaymentGatewayResolverPort } from './ports/payment-gateway-resolver.port';
 import type {
@@ -113,7 +114,13 @@ const updateData = (ctx: ReturnType<typeof build>, call = 0) =>
     ]
   )[0].data;
 
+jest.mock('../../billing/application/create-pending-credit-note.service');
+
 describe('RefundGatewayService', () => {
+  beforeEach(() => {
+    jest.mocked(enqueueCreditNoteForRefund).mockClear();
+  });
+
   describe('dispatch', () => {
     it('calls the gateway with the refund id as idempotency key and the prior refunded amount', async () => {
       const ctx = build({
@@ -165,6 +172,10 @@ describe('RefundGatewayService', () => {
         'REFUND_SUCCEEDED',
       ]);
       expect(ctx.tx.$queryRaw).not.toHaveBeenCalled();
+      expect(enqueueCreditNoteForRefund).toHaveBeenCalledWith(
+        ctx.tx,
+        'refund-1',
+      );
     });
 
     it('marks FAILED, releases the reservation and audits when the gateway rejects', async () => {

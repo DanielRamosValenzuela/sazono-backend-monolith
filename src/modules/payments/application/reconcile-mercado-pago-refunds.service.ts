@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, RefundMethod, RefundStatus } from '@prisma/client';
 import { AuditService } from '../../../common/audit/audit.service';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { MERCADOPAGO_PROVIDER_NAME } from '../domain/mercado-pago-status';
 import { computeRefundNet, computeRefundable } from '../domain/refund-amounts';
@@ -330,6 +331,7 @@ export class ReconcileMercadoPagoRefundsService {
           where: { id: payment.billId },
           data: { refundedAmount: { increment: amount } },
         });
+        await enqueueCreditNoteForRefund(tx, refund.id, refund);
         await this.refundGateway.audit(
           tx,
           refund,

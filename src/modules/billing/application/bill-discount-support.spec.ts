@@ -1,10 +1,13 @@
 import { BillStatus, Prisma } from '@prisma/client';
+import { enqueueBoletaForPaidBill } from '../../billing/application/enqueue-boleta';
 import {
   writeBillTotals,
   type DiscountBillRecord,
 } from './bill-discount-support';
 
 const d = (value: number) => new Prisma.Decimal(value);
+
+jest.mock('../../billing/application/enqueue-boleta');
 
 describe('writeBillTotals', () => {
   it('marks an unpaid bill fully covered by a discount as PAID and settles the session', async () => {
@@ -41,5 +44,6 @@ describe('writeBillTotals', () => {
     expect(updated.status).toBe(BillStatus.PAID);
     expect(updated.remainingAmount.toString()).toBe('0');
     expect(tx.tableSession.updateMany).toHaveBeenCalled();
+    expect(enqueueBoletaForPaidBill).toHaveBeenCalledWith(tx, 'bill-1');
   });
 });

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { OrderStatus } from '@prisma/client';
+import { enqueueBoletaForPaidBill } from '../../billing/application/enqueue-boleta';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 
 jest.mock('../../billing/application/lock-bill', () => ({
@@ -40,6 +41,8 @@ function buildTx(remainingAmount: number) {
   return { tx, orderUpdateMany, orderItemUpdateMany };
 }
 
+jest.mock('../../billing/application/enqueue-boleta');
+
 describe('applyPaymentToBill', () => {
   it('marks READY orders as DELIVERED when the bill is fully paid', async () => {
     const { tx, orderUpdateMany, orderItemUpdateMany } = buildTx(1000);
@@ -52,6 +55,7 @@ describe('applyPaymentToBill', () => {
     );
 
     expect(result.status).toBe('PAID');
+    expect(enqueueBoletaForPaidBill).toHaveBeenCalledWith(tx, 'bill-1');
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: { billId: 'bill-1', status: OrderStatus.READY },
       data: { status: OrderStatus.DELIVERED },
@@ -59,7 +63,8 @@ describe('applyPaymentToBill', () => {
     expect(orderItemUpdateMany).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves orders untouched on a partial payment', async () => {
+  it('leaves orders untouched and enqueues no boleta on a partial payment', async () => {
+    jest.mocked(enqueueBoletaForPaidBill).mockClear();
     const { tx, orderUpdateMany, orderItemUpdateMany } = buildTx(1000);
 
     const result = await applyPaymentToBill(
@@ -70,6 +75,7 @@ describe('applyPaymentToBill', () => {
     );
 
     expect(result.status).toBe('PARTIALLY_PAID');
+    expect(enqueueBoletaForPaidBill).not.toHaveBeenCalled();
     expect(orderUpdateMany).not.toHaveBeenCalled();
     expect(orderItemUpdateMany).not.toHaveBeenCalled();
   });

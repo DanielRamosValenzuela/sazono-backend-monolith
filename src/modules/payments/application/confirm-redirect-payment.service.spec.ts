@@ -30,6 +30,8 @@ jest.mock('../../billing/application/refresh-bill-discounts', () => ({
     ),
 }));
 
+jest.mock('../../billing/application/enqueue-boleta');
+
 describe('ConfirmRedirectPaymentService', () => {
   const attemptFindFirstMock = jest.fn();
   const attemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });

@@ -423,6 +423,72 @@ describe('buildOrderDetail refunds', () => {
     );
   });
 
+  it('lists the tax documents with their folio and the credit note folio of a refund', () => {
+    const detail = buildOrderDetail(
+      header(),
+      [item()],
+      [payment()],
+      'America/Santiago',
+      [
+        {
+          id: 'rf-1',
+          payment_id: 'pay-1',
+          amount: 5000,
+          tip_amount: 0,
+          net_amount: 4202,
+          vat_amount: 798,
+          method: 'CASH_MANUAL',
+          status: 'SUCCEEDED',
+          reason_code: 'OTHER',
+          reason_text: 'Plato frio',
+          requested_by_staff_user_id: null,
+          requested_by_name: null,
+          approved_by_name: null,
+          credit_note_status: 'ISSUED',
+          credit_note_folio: '122605',
+          completed_at: null,
+        },
+      ],
+      [],
+      [
+        {
+          id: 'td-1',
+          type: 'BOLETA_AFECTA',
+          status: 'ISSUED',
+          folio: 734085,
+          issued_at: new Date('2026-11-19T15:00:00Z'),
+          total_amount: 10000,
+          refund_id: null,
+          has_error: false,
+        },
+      ],
+    );
+
+    expect(detail.taxDocuments).toEqual([
+      {
+        id: 'td-1',
+        type: 'BOLETA_AFECTA',
+        status: 'ISSUED',
+        folio: 734085,
+        issuedAt: '2026-11-19T15:00:00.000Z',
+        totalAmount: '10000',
+        refundId: null,
+        hasError: false,
+      },
+    ]);
+    expect(detail.refunds[0]).toMatchObject({
+      creditNoteStatus: 'ISSUED',
+      creditNoteFolio: '122605',
+    });
+  });
+
+  it('returns no tax documents when none were issued', () => {
+    expect(
+      buildOrderDetail(header(), [item()], [payment()], 'America/Santiago')
+        .taxDocuments,
+    ).toEqual([]);
+  });
+
   it('has no refunds block content when nothing was refunded', () => {
     const detail = buildOrderDetail(
       header(),

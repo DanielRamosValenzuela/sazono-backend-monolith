@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma, RefundMethod, RefundStatus, Role } from '@prisma/client';
 import { AuditService } from '../../../common/audit/audit.service';
+import { enqueueCreditNoteForRefund } from '../../billing/application/create-pending-credit-note.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type { RefundResultResponseDto } from '../presentation/http/dto/refunds.dto';
 import {
@@ -432,6 +433,8 @@ export class RefundGatewayService {
         if (result.count === 0) {
           return;
         }
+
+        await enqueueCreditNoteForRefund(tx, refund.id);
 
         await this.audit(tx, refund, actor, 'REFUND_SUCCEEDED', {
           method: refund.method,
