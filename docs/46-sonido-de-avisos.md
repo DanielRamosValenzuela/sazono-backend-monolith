@@ -32,3 +32,11 @@ No requiere recompilar: la app carga la web remota (`server.url`) y el plugin `@
 3. Ajustes del sistema > Apps > Sazono Staff > Notificaciones: deben existir "Avisos con sonido" y "Avisos silenciosos".
 4. Crear una orden desde otra sesion: suena. Pulsar el boton (toast "Sonido de avisos desactivado"), crear otra orden: la notificacion llega sin sonido.
 5. En un navegador de escritorio el boton aparece deshabilitado.
+
+## Eventos que producen el push "Nueva orden" (Role.KITCHEN / Role.BAR)
+El push sale del listener `OrderCreatedListener` ante el evento `order.created` (`ORDER_CREATED_EVENT`, payload `{ orderId, branchId }`). Se emite exactamente una vez por orden, siempre despues de que commitea la transaccion que la envia a estaciones, nunca dentro de ella:
+- Orden de mesero (`create-waiter-order.service.ts`): al crearla ya ruteada.
+- Orden QR prepagada pagada con tarjeta embebida de Mercado Pago (`pay-qr-order.service.ts`): al aprobarse el pago.
+- Orden QR pagada por redireccion (`confirm-redirect-payment.service.ts`): retorno de Transbank, webhook de Mercado Pago (`applySnapshotOutcome`) y reconciliacion programada (Transbank y Mercado Pago).
+
+Una vez-solo: la transaccion devuelve un marcador `routedOrder` solo cuando esa llamada roteo la orden. Los reintentos o la reconciliacion posterior ven la orden ya ruteada (guard `PAYABLE_ORDER_STATUSES`) y no emiten; tampoco se emite en pagos rechazados, en la rama de revision manual ("ya no admite ruteo automatico") ni si la transaccion falla. Un fallo del emisor o del listener se registra en el log y nunca afecta la confirmacion del pago.

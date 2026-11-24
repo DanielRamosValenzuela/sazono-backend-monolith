@@ -7,6 +7,7 @@ import {
   Prisma,
   TableStatus,
 } from '@prisma/client';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { ChargePaymentService } from './charge-payment.service';
 import { FailPaymentService } from './fail-payment.service';
@@ -94,6 +95,7 @@ describe('PayQrOrderService', () => {
       chargePaymentService,
       finalizePaymentService,
       failPaymentService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
     );
   });
 
@@ -144,6 +146,7 @@ describe('PayQrOrderService', () => {
       { execute: chargeExecuteMock } as unknown as ChargePaymentService,
       finalizePaymentService,
       failPaymentService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
     );
 
     await expect(
@@ -198,6 +201,7 @@ describe('PayQrOrderService', () => {
       } as unknown as ChargePaymentService,
       finalizePaymentService,
       failPaymentService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
     );
 
     await expect(
@@ -341,6 +345,7 @@ describe('PayQrOrderService', () => {
       rejectingChargePaymentService,
       finalizePaymentService,
       failPaymentService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
     );
 
     const txAttemptUpdateManyMock = jest.fn().mockResolvedValue({ count: 1 });

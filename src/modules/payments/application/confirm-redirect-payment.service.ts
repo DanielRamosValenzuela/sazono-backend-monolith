@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Bill, PaymentAttempt } from '@prisma/client';
 import {
   BillSplitParticipantStatus,
@@ -9,6 +10,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { applyOrderChargeToBill } from '../../orders/application/apply-order-charge-to-bill';
+import {
+  ORDER_CREATED_EVENT,
+  type OrderCreatedEvent,
+} from '../../orders/domain/order-events';
 import { routeOrderToStations } from '../../orders/application/route-order-to-stations';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import type { BillAfterPayment } from './apply-payment-to-bill';
@@ -76,6 +81,11 @@ const NOT_FOUND_AT_PROVIDER_FAILURE_REASON =
 const MISSING_PROVIDER_REFERENCE_FAILURE_REASON =
   'El intento de pago no tiene una referencia de la pasarela para reconciliarlo.';
 
+type ApprovedPayment = {
+  payment: PaymentResultResponseDto;
+  routedOrder?: OrderCreatedEvent;
+};
+
 type AttemptContext = {
   currency: string;
   restaurantId: string;
@@ -92,6 +102,7 @@ export class ConfirmRedirectPaymentService {
     private readonly paymentGatewayResolver: PaymentGatewayResolverPort,
     private readonly finalizePaymentService: FinalizePaymentService,
     private readonly failPaymentService: FailPaymentService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async execute(
@@ -481,9 +492,20 @@ export class ConfirmRedirectPaymentService {
       };
     }
 
-    const payment = await this.prisma.$transaction((tx) =>
+    const { payment, routedOrder } = await this.prisma.$transaction((tx) =>
       this.finalizeApproved(tx, attempt, context, outcome),
     );
+
+    if (routedOrder) {
+      try {
+        this.eventEmitter.emit(ORDER_CREATED_EVENT, routedOrder);
+      } catch (error) {
+        this.logger.error(
+          `No se pudo emitir ${ORDER_CREATED_EVENT} para la orden ${routedOrder.orderId}.`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
 
     return { status: 'APPROVED', payment };
   }
@@ -493,7 +515,7 @@ export class ConfirmRedirectPaymentService {
     attempt: PaymentAttempt,
     context: AttemptContext,
     outcome: Extract<GatewayChargeOutcome, { kind: 'SETTLED' }>,
-  ): Promise<PaymentResultResponseDto> {
+  ): Promise<ApprovedPayment> {
     const billId = attempt.billId as string;
     const amount = attempt.amount as Prisma.Decimal;
     const tipDelta = attempt.tipAmount ?? new Prisma.Decimal(0);
@@ -514,7 +536,22 @@ export class ConfirmRedirectPaymentService {
     }
 
     if (attempt.billSplitParticipantId) {
-      return this.finalizeSplitParticipantApproved(
+      return {
+        payment: await this.finalizeSplitParticipantApproved(
+          tx,
+          attempt,
+          billId,
+          amount,
+          tipDelta,
+          context.currency,
+          providerReference,
+          outcome,
+        ),
+      };
+    }
+
+    return {
+      payment: await this.finalizeBillApproved(
         tx,
         attempt,
         billId,
@@ -523,19 +560,8 @@ export class ConfirmRedirectPaymentService {
         context.currency,
         providerReference,
         outcome,
-      );
-    }
-
-    return this.finalizeBillApproved(
-      tx,
-      attempt,
-      billId,
-      amount,
-      tipDelta,
-      context.currency,
-      providerReference,
-      outcome,
-    );
+      ),
+    };
   }
 
   private async finalizeOrderApproved(
@@ -547,7 +573,7 @@ export class ConfirmRedirectPaymentService {
     currency: string,
     providerReference: string | undefined,
     details: GatewayPaymentDetails,
-  ): Promise<PaymentResultResponseDto> {
+  ): Promise<ApprovedPayment> {
     const orderId = attempt.orderId as string;
     const order = await tx.order.findUnique({
       where: { id: orderId },
@@ -578,11 +604,13 @@ export class ConfirmRedirectPaymentService {
         tipDelta,
       );
 
-      return mapPaymentResult(
-        payment,
-        billAfterPayment,
-        order ? { orderId: order.id, status: order.status } : null,
-      );
+      return {
+        payment: mapPaymentResult(
+          payment,
+          billAfterPayment,
+          order ? { orderId: order.id, status: order.status } : null,
+        ),
+      };
     }
 
     const bill = await tx.bill.findUniqueOrThrow({ where: { id: billId } });
@@ -611,10 +639,13 @@ export class ConfirmRedirectPaymentService {
       data: { status: OrderStatus.ROUTED },
     });
 
-    return mapPaymentResult(payment, billAfterPayment, {
-      orderId: updatedOrder.id,
-      status: updatedOrder.status,
-    });
+    return {
+      payment: mapPaymentResult(payment, billAfterPayment, {
+        orderId: updatedOrder.id,
+        status: updatedOrder.status,
+      }),
+      routedOrder: { orderId: order.id, branchId: order.branchId },
+    };
   }
 
   private async finalizeSplitParticipantApproved(

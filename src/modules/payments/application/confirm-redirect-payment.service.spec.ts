@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import type { PaymentAttempt } from '@prisma/client';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../../common/prisma/prisma.service';
 import { ConfirmRedirectPaymentService } from './confirm-redirect-payment.service';
 import { FailPaymentService } from './fail-payment.service';
@@ -110,6 +111,7 @@ describe('ConfirmRedirectPaymentService', () => {
       paymentGatewayResolver,
       finalizePaymentService,
       failPaymentService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
     );
   });
 

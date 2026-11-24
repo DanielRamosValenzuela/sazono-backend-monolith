@@ -3,8 +3,10 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   OrderStatus,
   PaymentAttemptStatus,
@@ -16,6 +18,10 @@ import {
   applyOrderChargeToBill,
   computeOrderChargeDelta,
 } from '../../orders/application/apply-order-charge-to-bill';
+import {
+  ORDER_CREATED_EVENT,
+  type OrderCreatedEvent,
+} from '../../orders/domain/order-events';
 import { routeOrderToStations } from '../../orders/application/route-order-to-stations';
 import { applyPaymentToBill } from './apply-payment-to-bill';
 import { buildCheckoutFromDto } from './build-checkout-from-dto';
@@ -48,6 +54,8 @@ const PAYABLE_ORDER_STATUSES: OrderStatus[] = [
 
 @Injectable()
 export class PayQrOrderService {
+  private readonly logger = new Logger(PayQrOrderService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(OFFLINE_PAYMENT_RECORDER)
@@ -55,6 +63,7 @@ export class PayQrOrderService {
     private readonly chargePaymentService: ChargePaymentService,
     private readonly finalizePaymentService: FinalizePaymentService,
     private readonly failPaymentService: FailPaymentService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
   async execute(
     qrToken: string,
@@ -237,6 +246,20 @@ export class PayQrOrderService {
 
       return { payment, billAfterPayment, updatedOrder };
     });
+
+    const event: OrderCreatedEvent = {
+      orderId: order.id,
+      branchId: order.branchId,
+    };
+
+    try {
+      this.eventEmitter.emit(ORDER_CREATED_EVENT, event);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo emitir ${ORDER_CREATED_EVENT} para la orden ${order.id}.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
 
     return mapPaymentResult(result.payment, result.billAfterPayment, {
       orderId: result.updatedOrder.id,
