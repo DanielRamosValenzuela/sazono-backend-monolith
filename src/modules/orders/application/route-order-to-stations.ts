@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { enqueueStationTicketPrints } from '../../printing/application/enqueue-station-ticket-print';
 
 export type RoutableOrderItem = {
   orderItemId: string;
@@ -19,9 +20,10 @@ export async function routeOrderToStations(
   }
 
   const sentAt = new Date();
+  const ticketIds: Array<string | undefined> = [];
 
   for (const [preparationStationId, stationItems] of itemsByStation) {
-    await tx.stationTicket.create({
+    const ticket = await tx.stationTicket.create({
       data: {
         orderId: order.id,
         branchId: order.branchId,
@@ -35,5 +37,9 @@ export async function routeOrderToStations(
         },
       },
     });
+
+    ticketIds.push(ticket?.id);
   }
+
+  await enqueueStationTicketPrints(tx, ticketIds);
 }

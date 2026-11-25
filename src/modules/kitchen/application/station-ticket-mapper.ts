@@ -7,7 +7,10 @@ import type {
 } from '@prisma/client';
 import { COUNTER_TABLE_CODE } from '../../floor/domain/counter-table';
 import { formatModifierLines } from '../../orders/domain/modifier-lines';
-import type { StationTicketResponseDto } from '../presentation/http/dto/kitchen.dto';
+import type {
+  StationTicketPrintDto,
+  StationTicketResponseDto,
+} from '../presentation/http/dto/kitchen.dto';
 
 export type StationTicketWithRelations = {
   id: string;
@@ -15,6 +18,7 @@ export type StationTicketWithRelations = {
   branchId: string;
   preparationStationId: string;
   status: StationTicketStatus;
+  displayNumber?: string | null;
   sentAt: Date | null;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -84,6 +88,11 @@ export const STATION_TICKET_INCLUDE = {
 
 export const mapStationTicket = (
   ticket: StationTicketWithRelations,
+  print: StationTicketPrintDto = {
+    status: 'NONE',
+    lastJobId: null,
+    printerOffline: false,
+  },
 ): StationTicketResponseDto => ({
   stationTicketId: ticket.id,
   orderId: ticket.orderId,
@@ -92,6 +101,8 @@ export const mapStationTicket = (
   stationName: ticket.preparationStation.name,
   stationType: ticket.preparationStation.stationType,
   status: ticket.status,
+  displayNumber: ticket.displayNumber ?? null,
+  print,
   orderSource: ticket.order.source,
   tableCode: ticket.order.tableSession.isCounter
     ? COUNTER_TABLE_CODE

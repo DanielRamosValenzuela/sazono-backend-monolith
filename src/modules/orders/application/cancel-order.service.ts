@@ -19,6 +19,7 @@ import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { lockBill } from '../../billing/application/lock-bill';
 import { refreshBillDiscounts } from '../../billing/application/refresh-bill-discounts';
 import { computeBillTotals } from '../../billing/domain/tax-policy';
+import { voidStationTicketPrint } from '../../printing/application/void-station-ticket-print';
 import { ORDER_INCLUDE, mapOrder } from './order-mapper';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import type {
@@ -108,7 +109,7 @@ export class CancelOrderService {
         throw new ConflictException(refundRequiredBody(order.billId));
       }
 
-      await this.cancelInProductionOrder(order, reason);
+      await this.cancelInProductionOrder(order, reason, context.staffUserId);
     } else {
       throw new ConflictException(
         'La orden indicada ya fue entregada o cancelada.',
@@ -155,6 +156,7 @@ export class CancelOrderService {
       orderItems: Array<{ id: string }>;
     },
     reason: string | null,
+    actorStaffUserId: string | null,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await lockBill(tx, order.billId);
@@ -242,6 +244,12 @@ export class CancelOrderService {
           status,
         },
       });
+
+      await voidStationTicketPrint(
+        tx,
+        { orderId: order.id },
+        { reason, actorStaffUserId },
+      );
 
       await tx.stationTicket.updateMany({
         where: {

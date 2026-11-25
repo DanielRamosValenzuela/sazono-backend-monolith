@@ -8,6 +8,7 @@ import {
   Max,
   IsString,
   Min,
+  MinLength,
   validateSync,
 } from 'class-validator';
 
@@ -77,6 +78,12 @@ class EnvironmentVariables {
   @IsString()
   CORS_ORIGIN = '*';
 
+  @Transform(({ value }) => toNumber(value, 0))
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  TRUST_PROXY_HOPS = 0;
+
   @Transform(({ value }) => toNumber(value, 60))
   @IsInt()
   @Min(1)
@@ -131,6 +138,21 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   DATABASE_URL?: string;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  DB_POOL_MAX = 10;
+
+  @Transform(({ value }) => toNumber(value, 10000))
+  @IsInt()
+  @Min(1)
+  DB_TX_MAX_WAIT_MS = 10000;
+
+  @Transform(({ value }) => toNumber(value, 15000))
+  @IsInt()
+  @Min(1)
+  DB_TX_TIMEOUT_MS = 15000;
 
   @IsOptional()
   @IsString()
@@ -330,6 +352,72 @@ class EnvironmentVariables {
   @Min(1)
   TAX_DOCUMENTS_RETRY_BASE_SECONDS = 30;
 
+  @Transform(({ value }) => toBoolean(value, true))
+  @IsBoolean()
+  PRINTING_WORKER_ENABLED = true;
+
+  @Transform(({ value }) => toNumber(value, 2000))
+  @IsInt()
+  @Min(500)
+  PRINTING_WORKER_INTERVAL_MS = 2000;
+
+  @Transform(({ value }) => toNumber(value, 60000))
+  @IsInt()
+  @Min(5000)
+  PRINTING_RECONCILE_INTERVAL_MS = 60000;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  PRINTING_WORKER_BATCH_SIZE = 10;
+
+  @Transform(({ value }) => toNumber(value, 6))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  PRINTING_MAX_ATTEMPTS = 6;
+
+  @Transform(({ value }) => toNumber(value, 5))
+  @IsInt()
+  @Min(1)
+  PRINTING_RETRY_BASE_SECONDS = 5;
+
+  @Transform(({ value }) => toBoolean(value, false))
+  @IsBoolean()
+  PRINTING_TCP_ENABLED = false;
+
+  @Transform(({ value }) => toNumber(value, 3000))
+  @IsInt()
+  @Min(500)
+  PRINTING_TCP_CONNECT_TIMEOUT_MS = 3000;
+
+  @Transform(({ value }) => toNumber(value, 5000))
+  @IsInt()
+  @Min(500)
+  PRINTING_TCP_WRITE_TIMEOUT_MS = 5000;
+
+  @Transform(({ value }) => toNumber(value, 10))
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  PRINTING_PAIRING_TTL_MINUTES = 10;
+
+  @Transform(({ value }) => toNumber(value, 25))
+  @IsInt()
+  @Min(1)
+  @Max(55)
+  PRINTING_LONGPOLL_MAX_SECONDS = 25;
+
+  @Transform(({ value }) => toBoolean(value, true))
+  @IsBoolean()
+  PRINTING_WAKE_PUSH_ENABLED = true;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(32)
+  PRINTING_PAIRING_SECRET?: string;
+
   @Transform(({ value }) => toNumber(value, 10))
   @IsInt()
   @Min(1)
@@ -408,6 +496,18 @@ function validateTransbankCrossFields(
   }
 }
 
+function validatePairingSecret(validatedConfig: EnvironmentVariables): void {
+  if (
+    validatedConfig.NODE_ENV === 'production' &&
+    !validatedConfig.PRINTING_PAIRING_SECRET &&
+    !validatedConfig.PAYMENTS_ENCRYPTION_KEY
+  ) {
+    throw new Error(
+      'En produccion se requiere PRINTING_PAIRING_SECRET (minimo 32 caracteres) o PAYMENTS_ENCRYPTION_KEY para firmar los codigos de emparejamiento de impresion.',
+    );
+  }
+}
+
 export function validateEnvironment(config: Record<string, unknown>) {
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: false,
@@ -423,6 +523,7 @@ export function validateEnvironment(config: Record<string, unknown>) {
 
   validateMercadoPagoCrossFields(validatedConfig);
   validateTransbankCrossFields(validatedConfig);
+  validatePairingSecret(validatedConfig);
 
   return validatedConfig;
 }

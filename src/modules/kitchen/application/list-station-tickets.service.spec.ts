@@ -12,6 +12,8 @@ describe('ListStationTicketsService', () => {
   const ensureAccessMock = jest.fn();
   const prisma = {
     stationTicket: { findMany: findManyMock },
+    printJob: { findMany: jest.fn().mockResolvedValue([]) },
+    printerStation: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
   const branchAccess = {
     ensureAccess: ensureAccessMock,

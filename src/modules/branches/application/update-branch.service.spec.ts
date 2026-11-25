@@ -222,6 +222,7 @@ describe('UpdateBranchService', () => {
         discountApprovalPercent: null,
         discountApprovalAmount: null,
         requireOpenCashSession: false,
+        businessDayStartHour: 4,
       },
     });
   });
@@ -413,6 +414,43 @@ describe('UpdateBranchService', () => {
       expect.objectContaining({ update: { cashierRefundLimit: null } }),
     );
     expect(result.settings.cashierRefundLimit).toBeNull();
+  });
+
+  it('stores businessDayStartHour and returns it', async () => {
+    getStaffContextMock.mockResolvedValue(adminContext);
+    branchFindFirstMock.mockResolvedValue({ id: 'branch-1' });
+    const settingsUpsertMock = jest
+      .fn()
+      .mockResolvedValue({ businessDayStartHour: 6 });
+
+    transactionMock.mockImplementation((callback) =>
+      callback({
+        branch: {
+          update: jest.fn(),
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'branch-1',
+            restaurantId: 'restaurant-1',
+            name: 'Providencia',
+            address: null,
+            status: BranchStatus.ACTIVE,
+            settings: { businessDayStartHour: 6 },
+          }),
+        },
+        branchSettings: { upsert: settingsUpsertMock },
+      }),
+    );
+
+    const result = await service.execute(authUser, 'branch-1', {
+      settings: { businessDayStartHour: 6 },
+    });
+
+    expect(settingsUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { businessDayStartHour: 6 },
+        create: expect.objectContaining({ businessDayStartHour: 6 }),
+      }),
+    );
+    expect(result.settings.businessDayStartHour).toBe(6);
   });
 
   it('stores requireOpenCashSession, audits it and returns it', async () => {

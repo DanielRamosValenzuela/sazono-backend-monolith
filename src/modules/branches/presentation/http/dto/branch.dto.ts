@@ -116,6 +116,18 @@ class UpdateBranchSettingsDto {
   @IsOptional()
   @IsBoolean()
   requireOpenCashSession?: boolean;
+
+  @ApiPropertyOptional({
+    example: 4,
+    description:
+      'Hora local (0 a 23) en que empieza el dia de negocio para numerar comandas. Con 4, de 04:00 a 03:59 es un dia.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(23)
+  businessDayStartHour?: number;
 }
 
 export class UpdateBranchDto {
@@ -182,6 +194,9 @@ class BranchSettingsResponseDto {
 
   @ApiProperty()
   requireOpenCashSession!: boolean;
+
+  @ApiProperty({ example: 4 })
+  businessDayStartHour!: number;
 }
 
 export class BranchResponseDto {

@@ -52,7 +52,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.ts', 'apps/**/*.ts', 'libs/**/*.ts', 'test/**/*.ts'],
+    files: [
+      'src/**/*.ts',
+      'apps/**/*.ts',
+      'libs/**/*.ts',
+      'test/**/*.ts',
+      'tools/**/*.ts',
+    ],
     plugins: {
       project: noProjectCommentsPlugin,
     },

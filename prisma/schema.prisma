@@ -274,6 +274,9 @@ model Branch {
   cashSessions        CashSession[]
   billDiscounts       BillDiscount[]
   taxDocuments        TaxDocument[]
+  printers            Printer[]
+  printDevices        PrintDevice[]
+  printJobs           PrintJob[]
   billSequence        Int                   @default(0) @map("bill_sequence")
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -297,6 +300,7 @@ model BranchSettings {
   discountApprovalPercent Decimal? @default(10) @map("discount_approval_percent") @db.Decimal(5, 2)
   discountApprovalAmount  Decimal? @map("discount_approval_amount") @db.Decimal(12, 2)
   requireOpenCashSession  Boolean  @default(false) @map("require_open_cash_session")
+  businessDayStartHour    Int      @default(4) @map("business_day_start_hour")
   branch                  Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   defaultMenu             Menu?    @relation("BranchDefaultMenu", fields: [defaultMenuId], references: [id], onDelete: SetNull)
   createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -516,10 +520,14 @@ model PreparationStation {
   menuItems      MenuItem[]
   orderItems     OrderItem[]
   stationTickets StationTicket[]
+  printCode      String?                  @map("print_code")
+  printers       PrinterStation[]
+  ticketCounters PrintTicketCounter[]
   createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([branchId, name])
+  @@unique([branchId, printCode])
   @@index([branchId, stationType])
   @@map("preparation_stations")
 }
@@ -756,6 +764,9 @@ model StationTicket {
   branch               Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
   preparationStation   PreparationStation  @relation(fields: [preparationStationId], references: [id], onDelete: Restrict)
   stationTicketItems   StationTicketItem[]
+  displayNumber        String?             @map("display_number")
+  businessDate         DateTime?           @map("business_date") @db.Date
+  printJobs            PrintJob[]
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -1357,4 +1368,156 @@ model RefundItem {
   @@index([billItemId])
   @@index([kitchenWaste, createdAt])
   @@map("refund_items")
+}
+
+enum PrinterTransport {
+  SIMULATED
+  TCP
+  APP_BRIDGE
+  BROWSER
+  AGENT
+  CLOUDPRNT
+}
+
+enum PrinterStatus {
+  UNKNOWN
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum PrintJobStatus {
+  PENDING
+  CLAIMED
+  PRINTED
+  FAILED
+  CANCELLED
+}
+
+enum PrintJobKind {
+  COMANDA
+  VOID
+  TEST
+}
+
+enum PrintDeviceKind {
+  ANDROID_APP
+  BROWSER
+  AGENT
+}
+
+model Printer {
+  id        String           @id @default(uuid()) @db.Uuid
+  branchId  String           @map("branch_id") @db.Uuid
+  name      String
+  transport PrinterTransport
+
+  connection     Json                 @default("{}")
+  paperWidthMm   Int                  @default(58) @map("paper_width_mm")
+  columns        Int                  @default(32)
+  codepage       String               @default("cp858")
+  escTCodepageId Int?                 @map("esc_t_codepage_id")
+  copies         Int                  @default(1)
+  autoCut        Boolean              @default(true) @map("auto_cut")
+  cashDrawer     Boolean              @default(false) @map("cash_drawer")
+  printVoidSlips Boolean              @default(true) @map("print_void_slips")
+  active         Boolean              @default(true)
+  status         PrinterStatus        @default(UNKNOWN)
+  lastSeenAt     DateTime?            @map("last_seen_at") @db.Timestamptz(3)
+  lastError      String?              @map("last_error")
+  branch         Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  stations       PrinterStation[]
+  devices        PrintDevicePrinter[]
+  jobs           PrintJob[]
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([branchId, name])
+  @@index([branchId, active])
+  @@map("printers")
+}
+
+model PrinterStation {
+  printerId            String             @map("printer_id") @db.Uuid
+  preparationStationId String             @map("preparation_station_id") @db.Uuid
+  printer              Printer            @relation(fields: [printerId], references: [id], onDelete: Cascade)
+  preparationStation   PreparationStation @relation(fields: [preparationStationId], references: [id], onDelete: Cascade)
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([printerId, preparationStationId])
+  @@index([preparationStationId])
+  @@map("printer_stations")
+}
+
+model PrintDevice {
+  id               String               @id @default(uuid()) @db.Uuid
+  branchId         String               @map("branch_id") @db.Uuid
+  kind             PrintDeviceKind
+  name             String
+  tokenHash        String?              @unique @map("token_hash")
+  pairingCodeHash  String?              @map("pairing_code_hash")
+  pairingExpiresAt DateTime?            @map("pairing_expires_at") @db.Timestamptz(3)
+  appVersion       String?              @map("app_version")
+  active           Boolean              @default(true)
+  lastSeenAt       DateTime?            @map("last_seen_at") @db.Timestamptz(3)
+  branch           Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  printers         PrintDevicePrinter[]
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([branchId, active])
+  @@map("print_devices")
+}
+
+model PrintDevicePrinter {
+  deviceId  String      @map("device_id") @db.Uuid
+  printerId String      @map("printer_id") @db.Uuid
+  device    PrintDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  printer   Printer     @relation(fields: [printerId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, printerId])
+  @@index([printerId])
+  @@map("print_device_printers")
+}
+
+model PrintJob {
+  id                String         @id @default(uuid()) @db.Uuid
+  branchId          String         @map("branch_id") @db.Uuid
+  printerId         String         @map("printer_id") @db.Uuid
+  stationTicketId   String?        @map("station_ticket_id") @db.Uuid
+  kind              PrintJobKind   @default(COMANDA)
+  status            PrintJobStatus @default(PENDING)
+  idempotencyKey    String         @unique @map("idempotency_key")
+  reprintOfId       String?        @map("reprint_of_id") @db.Uuid
+  document          Json
+  attempts          Int            @default(0)
+  nextAttemptAt     DateTime       @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  claimedByDeviceId String?        @map("claimed_by_device_id") @db.Uuid
+  claimedBy         String?        @map("claimed_by")
+  leaseUntil        DateTime?      @map("lease_until") @db.Timestamptz(3)
+  printedAt         DateTime?      @map("printed_at") @db.Timestamptz(3)
+  duplicateAcks     Int            @default(0) @map("duplicate_acks")
+  lastError         String?        @map("last_error")
+  branch            Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  printer           Printer        @relation(fields: [printerId], references: [id], onDelete: Cascade)
+  stationTicket     StationTicket? @relation(fields: [stationTicketId], references: [id], onDelete: SetNull)
+  reprintOf         PrintJob?      @relation("PrintJobReprint", fields: [reprintOfId], references: [id], onDelete: SetNull)
+  reprints          PrintJob[]     @relation("PrintJobReprint")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([printerId, status, nextAttemptAt])
+  @@index([branchId, createdAt])
+  @@index([stationTicketId])
+  @@map("print_jobs")
+}
+
+model PrintTicketCounter {
+  preparationStationId String             @map("preparation_station_id") @db.Uuid
+  businessDate         DateTime           @map("business_date") @db.Date
+  lastSeq              Int                @default(0) @map("last_seq")
+  preparationStation   PreparationStation @relation(fields: [preparationStationId], references: [id], onDelete: Cascade)
+
+  @@id([preparationStationId, businessDate])
+  @@map("print_ticket_counters")
 }

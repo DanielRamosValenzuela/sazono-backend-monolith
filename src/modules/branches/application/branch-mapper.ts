@@ -30,6 +30,7 @@ export function mapBranchToResponse(
       discountApprovalAmount:
         branch.settings?.discountApprovalAmount?.toString() ?? null,
       requireOpenCashSession: branch.settings?.requireOpenCashSession ?? false,
+      businessDayStartHour: branch.settings?.businessDayStartHour ?? 4,
     },
   };
 }

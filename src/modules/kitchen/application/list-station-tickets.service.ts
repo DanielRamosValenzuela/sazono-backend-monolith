@@ -8,6 +8,7 @@ import {
   STATION_TICKET_INCLUDE,
   mapStationTicket,
 } from './station-ticket-mapper';
+import { loadTicketPrintStates } from './ticket-print-status';
 import type {
   ListStationTicketsQueryDto,
   StationTicketResponseDto,
@@ -69,6 +70,10 @@ export class ListStationTicketsService {
       include: STATION_TICKET_INCLUDE,
     });
 
-    return tickets.map(mapStationTicket);
+    const states = await loadTicketPrintStates(this.prisma, tickets);
+
+    return tickets.map((ticket) =>
+      mapStationTicket(ticket, states.get(ticket.id)),
+    );
   }
 }

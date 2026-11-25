@@ -116,6 +116,48 @@ export class PushNotificationService {
     ]);
   }
 
+  async sendDataToBranchRoles(
+    branchId: string,
+    roles: Role[],
+    data: Record<string, string>,
+  ): Promise<void> {
+    if (!this.firebaseAdminService.isEnabled) {
+      return;
+    }
+
+    const branchRoles = await this.prisma.staffUserBranchRole.findMany({
+      where: { branchId, role: { in: roles }, status: 'ACTIVE' },
+      select: { staffUserId: true },
+    });
+    const staffUserIds = Array.from(
+      new Set(branchRoles.map((branchRole) => branchRole.staffUserId)),
+    );
+
+    if (staffUserIds.length === 0) {
+      return;
+    }
+
+    const deviceTokens = await this.prisma.staffDeviceToken.findMany({
+      where: { staffUserId: { in: staffUserIds } },
+      select: { id: true, fcmToken: true },
+    });
+
+    if (deviceTokens.length === 0) {
+      return;
+    }
+
+    const response =
+      await this.firebaseAdminService.messaging.sendEachForMulticast({
+        tokens: deviceTokens.map((token) => token.fcmToken),
+        data,
+        android: { priority: 'high' },
+      });
+
+    await this.cleanUpInvalidTokens(
+      this.pairResponses(deviceTokens, response.responses),
+    );
+  }
+
   private pairResponses(
     tokens: Array<{ id: string }>,
     responses: SendResponse[] = [],

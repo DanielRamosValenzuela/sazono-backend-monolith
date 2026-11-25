@@ -19,11 +19,13 @@ import { STATION_TICKET_READY_EVENT } from '../domain/station-ticket-events';
 import type { StationTicketReadyEvent } from '../domain/station-ticket-events';
 import { BranchAccessService } from '../../../common/branch-access/branch-access.service';
 import { AuditService } from '../../../common/audit/audit.service';
+import { voidStationTicketPrint } from '../../printing/application/void-station-ticket-print';
 import { isStationTicketReturn } from '../domain/station-ticket-transitions';
 import {
   STATION_TICKET_INCLUDE,
   mapStationTicket,
 } from './station-ticket-mapper';
+import { loadTicketPrintStates } from './ticket-print-status';
 import type {
   StationTicketResponseDto,
   UpdateStationTicketStatusDto,
@@ -177,6 +179,14 @@ export class UpdateStationTicketStatusService {
         });
       }
 
+      if (dto.status === StationTicketStatus.CANCELLED) {
+        await voidStationTicketPrint(
+          tx,
+          { stationTicketId: ticket.id },
+          { reason: null, actorStaffUserId: context.staffUserId },
+        );
+      }
+
       const orderItemStatus = ORDER_ITEM_STATUS_BY_TICKET_STATUS[dto.status];
 
       if (orderItemStatus) {
@@ -270,6 +280,8 @@ export class UpdateStationTicketStatusService {
       this.eventEmitter.emit(STATION_TICKET_READY_EVENT, event);
     }
 
-    return mapStationTicket(updatedTicket);
+    const states = await loadTicketPrintStates(this.prisma, [updatedTicket]);
+
+    return mapStationTicket(updatedTicket, states.get(updatedTicket.id));
   }
 }

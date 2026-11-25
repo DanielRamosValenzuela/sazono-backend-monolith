@@ -141,6 +141,11 @@ export class UpdateBranchService {
             dto.settings.requireOpenCashSession;
         }
 
+        if (dto.settings.businessDayStartHour !== undefined) {
+          settingsUpdate.businessDayStartHour =
+            dto.settings.businessDayStartHour;
+        }
+
         const cashSettingsTouched =
           dto.settings.requireOpenCashSession !== undefined;
         const cashSettingsBefore = cashSettingsTouched
@@ -200,6 +205,9 @@ export class UpdateBranchService {
               : {}),
             ...(dto.settings.requireOpenCashSession !== undefined
               ? { requireOpenCashSession: dto.settings.requireOpenCashSession }
+              : {}),
+            ...(dto.settings.businessDayStartHour !== undefined
+              ? { businessDayStartHour: dto.settings.businessDayStartHour }
               : {}),
           },
         });

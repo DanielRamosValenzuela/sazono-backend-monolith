@@ -27,8 +27,13 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') ?? 3000;
   const apiPrefix = configService.get<string>('API_PREFIX') ?? 'api';
   const swaggerEnabled = configService.get<boolean>('SWAGGER_ENABLED') ?? true;
+  const trustProxyHops = configService.get<number>('TRUST_PROXY_HOPS') ?? 0;
   const corsEnabled = configService.get<boolean>('CORS_ENABLED') ?? true;
   const corsOrigin = configService.get<string>('CORS_ORIGIN') ?? '*';
+
+  if (trustProxyHops > 0) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxyHops);
+  }
 
   if (corsEnabled) {
     const origin =

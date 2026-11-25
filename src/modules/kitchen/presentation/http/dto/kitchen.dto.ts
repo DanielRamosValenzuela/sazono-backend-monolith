@@ -58,6 +58,20 @@ class StationTicketItemResponseDto {
   modifiers!: string[];
 }
 
+export type StationTicketPrintStatus =
+  'NONE' | 'PENDING' | 'PRINTED' | 'FAILED';
+
+export class StationTicketPrintDto {
+  @ApiProperty({ enum: ['NONE', 'PENDING', 'PRINTED', 'FAILED'] })
+  status!: StationTicketPrintStatus;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
+  lastJobId!: string | null;
+
+  @ApiProperty({ example: false })
+  printerOffline!: boolean;
+}
+
 export class StationTicketResponseDto {
   @ApiProperty({ format: 'uuid' })
   stationTicketId!: string;
@@ -82,6 +96,9 @@ export class StationTicketResponseDto {
 
   @ApiProperty({ enum: StationTicketStatus, enumName: 'StationTicketStatus' })
   status!: StationTicketStatus;
+
+  @ApiProperty({ nullable: true, example: '#01-023' })
+  displayNumber!: string | null;
 
   @ApiProperty({ enum: OrderSource, enumName: 'OrderSource' })
   orderSource!: OrderSource;
@@ -109,6 +126,9 @@ export class StationTicketResponseDto {
 
   @ApiProperty({ nullable: true, required: false })
   completedAt!: string | null;
+
+  @ApiProperty({ type: StationTicketPrintDto })
+  print!: StationTicketPrintDto;
 
   @ApiProperty({ type: [StationTicketItemResponseDto] })
   items!: StationTicketItemResponseDto[];

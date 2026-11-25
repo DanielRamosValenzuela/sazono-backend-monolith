@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
+import { throttleTracker } from './common/http/throttle-tracker';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
@@ -28,6 +29,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { TaxDocumentsModule } from './modules/tax-documents/tax-documents.module';
+import { PrintingModule } from './modules/printing/printing.module';
 import { PlatformBillingModule } from './modules/platform-billing/platform-billing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
@@ -71,6 +73,7 @@ import { StaffModule } from './modules/staff/staff.module';
           name: 'default',
           ttl: (configService.get<number>('THROTTLE_TTL_SECONDS') ?? 60) * 1000,
           limit: configService.get<number>('THROTTLE_LIMIT') ?? 100,
+          getTracker: throttleTracker,
         },
       ],
     }),
@@ -89,6 +92,7 @@ import { StaffModule } from './modules/staff/staff.module';
     KitchenModule,
     BillingModule,
     TaxDocumentsModule,
+    PrintingModule,
     PaymentsModule,
     CashModule,
     PlatformBillingModule,
